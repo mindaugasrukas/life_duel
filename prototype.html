@@ -6,10 +6,9 @@
 <style>
 body{font-family:sans-serif;text-align:center;margin:0;padding:0}
 #container{display:flex;justify-content:center;align-items:center;margin-top:10px}
-canvas{border:1px solid #555}
-.sideinfo{width:120px;font-size:0.9rem;line-height:1.4}
+canvas{border:1px solid #555;cursor:pointer}
+.sideinfo{width:140px;font-size:0.9rem;line-height:1.4;text-align:left;padding:0 6px}
 .sideinfo span.player{font-weight:bold;font-size:1.1rem}
-#info,#guide{margin-top:10px}
 #guide{max-width:640px;margin:10px auto;text-align:left;background:#f9f9f9;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem}
 #guide h3{margin:5px 0}
 </style>
@@ -21,20 +20,13 @@ canvas{border:1px solid #555}
    <canvas id="board" width="600" height="600"></canvas>
    <div id="rightInfo" class="sideinfo"></div>
 </div>
-<div id="info"></div>
 <section id="guide">
 <h3>How the World Changes (Easy Guide)</h3>
 <ul>
- <li><b>Happy squares</b>: A colored square has 8 little spots around it. If <b>2 or 3</b> of those spots are also colored, the square stays happy (alive) next turn. If fewer than 2 friends (lonely) or more than 3 friends (crowded) are around, it disappears and we mark it with an <span style="color:#ff4d4d;font-weight:bold">X</span>.</li>
- <li><b>Baby squares</b>: An empty spot with <b>exactly 3</b> colored neighbors gets a new baby square. We show a tiny <span style="color:#1e90ff;font-weight:bold">O</span> where the baby will appear.</li>
- <li><b>What color?</b> Count the colors of the 3 neighbors:
-   <ul>
-     <li>More blues than reds ➜ baby or disappearing mark is <span style="color:#1e90ff;font-weight:bold">Blue</span>.</li>
-     <li>More reds than blues ➜ marker is <span style="color:#ff4d4d;font-weight:bold">Red</span>.</li>
-     <li>Same number ➜ marker is <span style="color:#888;font-weight:bold">Grey</span> (neutral).</li>
-   </ul>
- </li>
- <li>We show these <b>X</b>/<b>O</b> hints live, so you can plan your next click!</li>
+ <li><b>Happy squares</b>: If a colored square has <b>2&nbsp;or&nbsp;3</b> colored neighbors, it stays. Otherwise it disappears and shows a <span style="color:#000;font-weight:bold">X</span>.</li>
+ <li><b>Baby squares</b>: An empty spot with <b>exactly 3</b> neighbors gets a baby square. We show a tiny colored <span style="font-weight:bold">O</span> there.</li>
+ <li><b>Baby color</b>: More blues ⇒ baby is <span style="color:#1e90ff;font-weight:bold">Blue</span>. More reds ⇒ baby is <span style="color:#ff4d4d;font-weight:bold">Red</span>. Same ⇒ <span style="color:#888;font-weight:bold">Grey</span>.</li>
+ <li>These <b>X/O</b> hints update live so you can plan.</li>
 </ul>
 </section>
 <script>
@@ -47,6 +39,7 @@ let currentPlayer=1; //1 blue, 2 red
 let placements=0;
 let round=0;
 const maxRounds=10;
+let hover={x:-1,y:-1};
 
 const leftDiv=document.getElementById('leftInfo');
 const rightDiv=document.getElementById('rightInfo');
@@ -58,7 +51,7 @@ function computeNextGrid(){
    let counts=[0,0,0,0];
    for(let dy=-1;dy<=1;dy++){
     for(let dx=-1;dx<=1;dx++){
-     if(dx==0&&dy==0)continue;
+     if(dx===0&&dy===0)continue;
      let nx=x+dx, ny=y+dy;
      if(nx>=0&&ny>=0&&nx<size&&ny<size){counts[ grid[ny][nx] ]++;}
     }
@@ -111,24 +104,29 @@ function draw(){
    }
   }
  }
- updateSideInfo();
- if(round<maxRounds){
-  document.getElementById("info").innerHTML=`Round ${round+1}/${maxRounds} – Player <span style='color:${currentPlayer===1?"#1e90ff":"#ff4d4d"}'><b>${currentPlayer===1?"Blue":"Red"}</b></span>: place cell ${placements+1}/3`;
+
+ // hover highlight
+ if(hover.x>=0&&hover.y>=0&&round<maxRounds&&placements<3){
+   if(grid[hover.y][hover.x]===0){
+     ctx.globalAlpha=0.3;
+     ctx.fillStyle=currentPlayer===1?"#1e90ff":"#ff4d4d";
+     ctx.fillRect(hover.x*cellSize,hover.y*cellSize,cellSize,cellSize);
+     ctx.globalAlpha=1.0;
+   }
  }
+ updateSideInfo();
 }
 
 function updateSideInfo(){
  let blueMoves=currentPlayer===1?3-placements:0;
  let redMoves=currentPlayer===2?3-placements:0;
  leftDiv.innerHTML=`<span class='player' style='color:#1e90ff'>Blue</span><br>Moves left: ${blueMoves}`;
- rightDiv.innerHTML=`<span class='player' style='color:#ff4d4d'>Red</span><br>Moves left: ${redMoves}`;
+ rightDiv.innerHTML=`Round ${round+1}/${maxRounds}<br><span class='player' style='color:#ff4d4d'>Red</span><br>Moves left: ${redMoves}<br><br><b>${currentPlayer===1?'Blue':'Red'}'s turn</b><br>Place square ${placements+1}/3`;
 }
 
 canvas.addEventListener("click",e=>{
  if(round>=maxRounds)return;
- const rect=canvas.getBoundingClientRect();
- const x=Math.floor((e.clientX-rect.left)/cellSize);
- const y=Math.floor((e.clientY-rect.top)/cellSize);
+ const {x,y}=eventToCell(e);
  if(x<0||x>=size||y<0||y>=size)return;
  if(grid[y][x]!==0)return; //occupied
  grid[y][x]=currentPlayer;
@@ -149,6 +147,20 @@ canvas.addEventListener("click",e=>{
  draw();
 });
 
+canvas.addEventListener("mousemove",e=>{
+ const {x,y}=eventToCell(e);
+ if(x!==hover.x||y!==hover.y){hover={x,y};draw();}
+});
+
+canvas.addEventListener("mouseleave",()=>{hover={x:-1,y:-1};draw();});
+
+function eventToCell(e){
+ const rect=canvas.getBoundingClientRect();
+ const x=Math.floor((e.clientX-rect.left)/cellSize);
+ const y=Math.floor((e.clientY-rect.top)/cellSize);
+ return {x,y};
+}
+
 function endGame(){
  let blue=0,red=0;
  for(let y=0;y<size;y++){
@@ -157,9 +169,8 @@ function endGame(){
    else if(grid[y][x]===2)red++;
   }
  }
- document.getElementById("info").innerText=`Game Over! Blue: ${blue} – Red: ${red}. ` + (blue===red?"It's a tie!":blue>red?"Blue wins!":"Red wins!");
+ rightDiv.innerHTML=`<b>Game Over</b><br>Blue: ${blue}<br>Red: ${red}<br><br>${blue===red?"It's a tie!":blue>red?"Blue wins!":"Red wins!"}`;
  leftDiv.innerHTML="";
- rightDiv.innerHTML="";
  draw();
 }
 
