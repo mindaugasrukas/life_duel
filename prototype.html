@@ -6,14 +6,32 @@
 <style>
 body{font-family:sans-serif;text-align:center}
 canvas{border:1px solid #555}
-#info{margin-top:10px}
+#info,#guide{margin-top:10px}
 button{margin:5px}
+#guide{max-width:600px;margin-left:auto;margin-right:auto;text-align:left;background:#f9f9f9;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem}
+#guide h3{margin:5px 0}
 </style>
 </head>
 <body>
 <h2>Life Duel – Quick Prototype</h2>
 <canvas id="board" width="600" height="600"></canvas>
 <div id="info"></div>
+<section id="guide">
+<h3>How the World Changes (Easy Guide)</h3>
+<ul>
+ <li><b>Happy squares</b>: A colored square has 8 little spots around it. If <b>2 or 3</b> of those spots are also colored, the square stays happy (alive) next turn. If fewer than 2 friends (lonely) or more than 3 friends (crowded) are around, it disappears.</li>
+ <li><b>Baby squares</b>: An empty spot looks at its 8 neighbors. If it sees <b>exactly 3</b> colored squares, a new baby square pops up there.</li>
+ <li><b>What color?</b> Count the colors of the 3 neighbors that made the baby:
+   <ul>
+     <li>More blues than reds ➜ baby is <span style="color:#1e90ff;font-weight:bold">Blue</span>.</li>
+     <li>More reds than blues ➜ baby is <span style="color:#ff4d4d;font-weight:bold">Red</span>.</li>
+     <li>Same number of blues and reds ➜ baby is <span style="color:#888;font-weight:bold">Grey</span> (neutral).</li>
+   </ul>
+ </li>
+ <li>After every player is done placing their 3 squares, we let the world change once using these rules. That change is called an <b>evolution</b>.</li>
+ <li>We play 10 rounds of placing → evolution. When we finish, count how many Blue and Red squares are on the board. The bigger number wins!</li>
+</ul>
+</section>
 <script>
 const size=15;
 const cellSize=40; // 600/15=40
@@ -39,7 +57,9 @@ for(let y=0;y<size;y++){
   ctx.strokeRect(x*cellSize,y*cellSize,cellSize,cellSize);
  }
 }
-document.getElementById("info").innerHTML=`Round ${round+1}/${maxRounds} – Player ${currentPlayer==1?"Blue":"Red"} place cell (${placements+1}/3)`;
+if(round<maxRounds){
+ document.getElementById("info").innerHTML=`Round ${round+1}/${maxRounds} – Player <span style='color:${currentPlayer==1?"#1e90ff":"#ff4d4d"}'>${currentPlayer==1?"Blue":"Red"}</span>: place cell ${placements+1}/3`;
+}
 }
 
 canvas.addEventListener("click",e=>{
