@@ -2,132 +2,165 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Life Duel Prototype</title>
+<title>Life Duel Prototype – Preview Edition</title>
 <style>
-body{font-family:sans-serif;text-align:center}
+body{font-family:sans-serif;text-align:center;margin:0;padding:0}
+#container{display:flex;justify-content:center;align-items:center;margin-top:10px}
 canvas{border:1px solid #555}
+.sideinfo{width:120px;font-size:0.9rem;line-height:1.4}
+.sideinfo span.player{font-weight:bold;font-size:1.1rem}
 #info,#guide{margin-top:10px}
-button{margin:5px}
-#guide{max-width:600px;margin-left:auto;margin-right:auto;text-align:left;background:#f9f9f9;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem}
+#guide{max-width:640px;margin:10px auto;text-align:left;background:#f9f9f9;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:0.9rem}
 #guide h3{margin:5px 0}
 </style>
 </head>
 <body>
-<h2>Life Duel – Quick Prototype</h2>
-<canvas id="board" width="600" height="600"></canvas>
+<h2>Life Duel – Preview Edition</h2>
+<div id="container">
+   <div id="leftInfo" class="sideinfo"></div>
+   <canvas id="board" width="600" height="600"></canvas>
+   <div id="rightInfo" class="sideinfo"></div>
+</div>
 <div id="info"></div>
 <section id="guide">
 <h3>How the World Changes (Easy Guide)</h3>
 <ul>
- <li><b>Happy squares</b>: A colored square has 8 little spots around it. If <b>2 or 3</b> of those spots are also colored, the square stays happy (alive) next turn. If fewer than 2 friends (lonely) or more than 3 friends (crowded) are around, it disappears.</li>
- <li><b>Baby squares</b>: An empty spot looks at its 8 neighbors. If it sees <b>exactly 3</b> colored squares, a new baby square pops up there.</li>
- <li><b>What color?</b> Count the colors of the 3 neighbors that made the baby:
+ <li><b>Happy squares</b>: A colored square has 8 little spots around it. If <b>2 or 3</b> of those spots are also colored, the square stays happy (alive) next turn. If fewer than 2 friends (lonely) or more than 3 friends (crowded) are around, it disappears and we mark it with an <span style="color:#ff4d4d;font-weight:bold">X</span>.</li>
+ <li><b>Baby squares</b>: An empty spot with <b>exactly 3</b> colored neighbors gets a new baby square. We show a tiny <span style="color:#1e90ff;font-weight:bold">O</span> where the baby will appear.</li>
+ <li><b>What color?</b> Count the colors of the 3 neighbors:
    <ul>
-     <li>More blues than reds ➜ baby is <span style="color:#1e90ff;font-weight:bold">Blue</span>.</li>
-     <li>More reds than blues ➜ baby is <span style="color:#ff4d4d;font-weight:bold">Red</span>.</li>
-     <li>Same number of blues and reds ➜ baby is <span style="color:#888;font-weight:bold">Grey</span> (neutral).</li>
+     <li>More blues than reds ➜ baby or disappearing mark is <span style="color:#1e90ff;font-weight:bold">Blue</span>.</li>
+     <li>More reds than blues ➜ marker is <span style="color:#ff4d4d;font-weight:bold">Red</span>.</li>
+     <li>Same number ➜ marker is <span style="color:#888;font-weight:bold">Grey</span> (neutral).</li>
    </ul>
  </li>
- <li>After every player is done placing their 3 squares, we let the world change once using these rules. That change is called an <b>evolution</b>.</li>
- <li>We play 10 rounds of placing → evolution. When we finish, count how many Blue and Red squares are on the board. The bigger number wins!</li>
+ <li>We show these <b>X</b>/<b>O</b> hints live, so you can plan your next click!</li>
 </ul>
 </section>
 <script>
 const size=15;
-const cellSize=40; // 600/15=40
+const cellSize=40; // 600/15
 const canvas=document.getElementById("board");
 const ctx=canvas.getContext("2d");
-let grid=[];
-for(let y=0;y<size;y++){grid[y]=Array(size).fill(0);} //0 empty,1 blue,2 red,3 grey
+let grid=Array.from({length:size},()=>Array(size).fill(0)); //0 empty,1 blue,2 red,3 grey
 let currentPlayer=1; //1 blue, 2 red
 let placements=0;
 let round=0;
 const maxRounds=10;
 
-function draw(){
-ctx.clearRect(0,0,canvas.width,canvas.height);
-for(let y=0;y<size;y++){
- for(let x=0;x<size;x++){
-  let v=grid[y][x];
-  if(v){
-   ctx.fillStyle=v==1?"#1e90ff":v==2?"#ff4d4d":"#cccccc";
-   ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+const leftDiv=document.getElementById('leftInfo');
+const rightDiv=document.getElementById('rightInfo');
+
+function computeNextGrid(){
+ let next=Array.from({length:size},()=>Array(size).fill(0));
+ for(let y=0;y<size;y++){
+  for(let x=0;x<size;x++){
+   let counts=[0,0,0,0];
+   for(let dy=-1;dy<=1;dy++){
+    for(let dx=-1;dx<=1;dx++){
+     if(dx==0&&dy==0)continue;
+     let nx=x+dx, ny=y+dy;
+     if(nx>=0&&ny>=0&&nx<size&&ny<size){counts[ grid[ny][nx] ]++;}
+    }
+   }
+   let live=counts[1]+counts[2]+counts[3];
+   let cell=grid[y][x];
+   if(cell!==0){
+     if(live===2||live===3) next[y][x]=cell; //survive
+   } else {
+     if(live===3){
+        if(counts[1]>counts[2]) next[y][x]=1;
+        else if(counts[2]>counts[1]) next[y][x]=2;
+        else next[y][x]=3;
+     }
+   }
   }
-  ctx.strokeStyle="#888";
-  ctx.strokeRect(x*cellSize,y*cellSize,cellSize,cellSize);
+ }
+ return next;
+}
+
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ const preview=computeNextGrid();
+ for(let y=0;y<size;y++){
+  for(let x=0;x<size;x++){
+   let v=grid[y][x];
+   if(v){
+     ctx.fillStyle=v===1?"#1e90ff":v===2?"#ff4d4d":"#cccccc";
+     ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+   }
+   ctx.strokeStyle="#888";
+   ctx.strokeRect(x*cellSize,y*cellSize,cellSize,cellSize);
+
+   // preview markers
+   let next=preview[y][x];
+   if(v!==0){ //currently alive
+     if(next===0){ //dies
+       ctx.fillStyle="#000";
+       ctx.font="bold 24px sans-serif";
+       ctx.textAlign="center";ctx.textBaseline="middle";
+       ctx.fillText("X", x*cellSize+cellSize/2, y*cellSize+cellSize/2);
+     }
+   } else { //currently empty
+     if(next!==0){ //will be born
+       ctx.fillStyle=next===1?"#1e90ff":next===2?"#ff4d4d":"#888";
+       ctx.font="bold 24px sans-serif";
+       ctx.textAlign="center";ctx.textBaseline="middle";
+       ctx.fillText("O", x*cellSize+cellSize/2, y*cellSize+cellSize/2);
+     }
+   }
+  }
+ }
+ updateSideInfo();
+ if(round<maxRounds){
+  document.getElementById("info").innerHTML=`Round ${round+1}/${maxRounds} – Player <span style='color:${currentPlayer===1?"#1e90ff":"#ff4d4d"}'><b>${currentPlayer===1?"Blue":"Red"}</b></span>: place cell ${placements+1}/3`;
  }
 }
-if(round<maxRounds){
- document.getElementById("info").innerHTML=`Round ${round+1}/${maxRounds} – Player <span style='color:${currentPlayer==1?"#1e90ff":"#ff4d4d"}'>${currentPlayer==1?"Blue":"Red"}</span>: place cell ${placements+1}/3`;
-}
+
+function updateSideInfo(){
+ let blueMoves=currentPlayer===1?3-placements:0;
+ let redMoves=currentPlayer===2?3-placements:0;
+ leftDiv.innerHTML=`<span class='player' style='color:#1e90ff'>Blue</span><br>Moves left: ${blueMoves}`;
+ rightDiv.innerHTML=`<span class='player' style='color:#ff4d4d'>Red</span><br>Moves left: ${redMoves}`;
 }
 
 canvas.addEventListener("click",e=>{
-if(round>=maxRounds)return;
-const rect=canvas.getBoundingClientRect();
-const x=Math.floor((e.clientX-rect.left)/cellSize);
-const y=Math.floor((e.clientY-rect.top)/cellSize);
-if(x<0||x>=size||y<0||y>=size)return;
-if(grid[y][x]!=0)return; //occupied
-grid[y][x]=currentPlayer==1?1:2;
-placements++;
-if(placements>=3){
- placements=0;
- if(currentPlayer==1){currentPlayer=2;draw();return;}else{
-  currentPlayer=1;
-  runGeneration();
-  round++;
-  if(round>=maxRounds)endGame();
+ if(round>=maxRounds)return;
+ const rect=canvas.getBoundingClientRect();
+ const x=Math.floor((e.clientX-rect.left)/cellSize);
+ const y=Math.floor((e.clientY-rect.top)/cellSize);
+ if(x<0||x>=size||y<0||y>=size)return;
+ if(grid[y][x]!==0)return; //occupied
+ grid[y][x]=currentPlayer;
+ placements++;
+ if(placements>=3){
+  placements=0;
+  if(currentPlayer===1){
+    currentPlayer=2;
+    draw();
+    return;
+  } else {
+    currentPlayer=1;
+    grid=computeNextGrid(); //apply evolution
+    round++;
+    if(round>=maxRounds){endGame();return;}
+  }
  }
-}
-draw();
+ draw();
 });
 
-function runGeneration(){
-let newGrid=[];
-for(let y=0;y<size;y++){
- newGrid[y]=Array(size).fill(0);
- for(let x=0;x<size;x++){
-  let counts=[0,0,0,0]; // index by cell value
-  for(let dy=-1;dy<=1;dy++){
-   for(let dx=-1;dx<=1;dx++){
-    if(dx==0&&dy==0)continue;
-    let nx=x+dx,ny=y+dy;
-    if(nx>=0&&ny>=0&&nx<size&&ny<size){
-      counts[ grid[ny][nx] ]++;
-    }
-   }
-  }
-  let live=counts[1]+counts[2]+counts[3];
-  let cell=grid[y][x];
-  if(cell!=0){
-   if(live==2||live==3){
-     newGrid[y][x]=cell; //survives same color
-   }
-  }else{
-   if(live==3){
-     let blue=counts[1];
-     let red=counts[2];
-     if(blue>red)newGrid[y][x]=1;
-     else if(red>blue)newGrid[y][x]=2;
-     else newGrid[y][x]=3;
-   }
-  }
- }
-}
-grid=newGrid;
-}
-
 function endGame(){
-let blue=0,red=0;
-for(let y=0;y<size;y++){
- for(let x=0;x<size;x++){
-  if(grid[y][x]==1)blue++;
-  else if(grid[y][x]==2)red++;
+ let blue=0,red=0;
+ for(let y=0;y<size;y++){
+  for(let x=0;x<size;x++){
+   if(grid[y][x]===1)blue++;
+   else if(grid[y][x]===2)red++;
+  }
  }
-}
-let msg=`Game Over! Blue: ${blue} cells, Red: ${red} cells. ${blue==red?"It's a tie!":blue>red?"Blue wins!":"Red wins!"}`;
-document.getElementById("info").innerText=msg;
+ document.getElementById("info").innerText=`Game Over! Blue: ${blue} – Red: ${red}. ` + (blue===red?"It's a tie!":blue>red?"Blue wins!":"Red wins!");
+ leftDiv.innerHTML="";
+ rightDiv.innerHTML="";
+ draw();
 }
 
 draw();
