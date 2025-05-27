@@ -1,246 +1,395 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <title>Life Duel – Smooth Fade Edition</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            margin-top: 10px
-        }
-
-        #container {
-            display: flex;
-            justify-content: center;
-            align-items: flex-start
-        }
-
-        canvas {
-            border: 1px solid #555;
-            cursor: pointer;
-            display: block
-        }
-
-        .sideinfo {
-            width: 220px;
-            font-size: 0.9rem;
-            line-height: 1.4;
-            text-align: left;
-            padding: 0 10px
-        }
-
-        .sideinfo .player {
-            font-weight: bold;
-            font-size: 1.1rem
-        }
-
-        .guide {
-            background: #f9f9f9;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            padding: 10px;
-            font-size: 0.85rem;
-            margin-top: 10px
-        }
-
-        button,
-        select {
-            margin-top: 6px;
-            padding: 6px 12px;
-            font-size: 0.92rem;
-            cursor: pointer
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>Life Duel – Smooth Fade Edition</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      margin-top: 10px;
+    }
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    canvas {
+      border: 1px solid #555;
+      cursor: pointer;
+      display: block;
+    }
+    .sideinfo {
+      width: 230px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      text-align: left;
+      padding: 0 10px;
+    }
+    .player {
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+    .guide {
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 0.85rem;
+      margin-top: 10px;
+    }
+    button,
+    select {
+      margin-top: 6px;
+      padding: 6px 12px;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
-
 <body>
-    <div id="container">
-        <div id="leftPanel" class="sideinfo">
-            <label for="boardSize">Board size:</label>
-            <select id="boardSize">
-                <option value="7">7 × 7</option>
-                <option value="10">10 × 10</option>
-                <option value="15" selected>15 × 15</option>
-            </select>
-            <button id="newGameBtn">New Game</button>
-            <div id="stats" style="margin-top:10px"></div>
-            <button id="evolveBtn" disabled style="background:#4caf50;color:#fff">Evolve!</button>
-        </div>
+  <div id="container">
+    <!--‑‑ LEFT PANEL ‑‑-->
+    <div class="sideinfo" id="leftPanel">
+      <label for="boardSize">Board size:</label>
+      <select id="boardSize">
+        <option value="7" selected>7 × 7</option>
+        <option value="10">10 × 10</option>
+        <option value="15">15 × 15</option>
+      </select>
+      <button id="newGameBtn">New Game</button>
 
-        <canvas id="board"></canvas>
-
-        <div id="guide" class="sideinfo guide"></div>
+      <div id="stats" style="margin-top:10px"></div>
+      <button id="evolveBtn" style="background:#4caf50;color:#fff" disabled>Evolve!</button>
     </div>
 
-    <script>
-        const canvas = document.getElementById('board');
-        const ctx = canvas.getContext('2d');
-        const sizeSelect = document.getElementById('boardSize');
-        const newGameBtn = document.getElementById('newGameBtn');
-        const evolveBtn = document.getElementById('evolveBtn');
-        const statsDiv = document.getElementById('stats');
-        const guideDiv = document.getElementById('guide');
+    <!--‑‑ CANVAS ‑‑-->
+    <canvas id="board"></canvas>
 
-        guideDiv.innerHTML = `<h3>Animated Evolution</h3><p>Squares fade out and babies fade in so you can watch the change happen.</p>`;
+    <!--‑‑ RIGHT GUIDE ‑‑-->
+    <div class="sideinfo guide" id="guide"></div>
+  </div>
 
-        let size = 15, cellSize = 40, maxRounds = 10;
-        let grid, nextGrid, currentPlayer, placements, round, gameOver, animating, waitingEvolution;
+  <script>
+    /* --------------------------------------------------------------------
+       1.  DOM references & helper styling text
+    -------------------------------------------------------------------- */
+    const canvas      = document.getElementById("board");
+    const ctx         = canvas.getContext("2d");
+    const sizeSelect  = document.getElementById("boardSize");
+    const newGameBtn  = document.getElementById("newGameBtn");
+    const evolveBtn   = document.getElementById("evolveBtn");
+    const statsDiv    = document.getElementById("stats");
+    const guideDiv    = document.getElementById("guide");
 
-        function setBoardSize(n) {
-            size = n; cellSize = Math.floor(600 / size); canvas.width = cellSize * size; canvas.height = cellSize * size;
+    guideDiv.innerHTML = `
+      <h3>Animated Evolution</h3>
+      <ul>
+        <li>Squares <b>fade out</b> when they die.</li>
+        <li>Baby squares <b>fade in</b> so you can watch them grow.</li>
+        <li>After both players place 3 squares, press <b>Evolve!</b></li>
+      </ul>`;
+
+    /* --------------------------------------------------------------------
+       2.  Game‑wide constants & state variables
+    -------------------------------------------------------------------- */
+    const COLORS = {
+      1: "#1e90ff",   // Blue
+      2: "#ff4d4d",   // Red
+      3: "#cccccc"    // Grey / neutral
+    };
+
+    let size        = 15;   // board side length
+    let cellSize    = 40;   // pixels (updated with board size)
+    const maxRounds = 10;
+
+    let grid, currentPlayer, placements, round;
+    let gameOver, waitingEvolution, animating;
+
+    /* --------------------------------------------------------------------
+       3.  Utility functions
+    -------------------------------------------------------------------- */
+    function setBoardSize(newSize) {
+      size = newSize;
+      cellSize = Math.floor(600 / size);
+      canvas.width  = cellSize * size;
+      canvas.height = cellSize * size;
+    }
+
+    function eventToCell(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: Math.floor((e.clientX - rect.left) / cellSize),
+        y: Math.floor((e.clientY - rect.top)  / cellSize)
+      };
+    }
+
+    function createEmptyGrid() {
+      return Array.from({ length: size }, () => Array(size).fill(0));
+    }
+
+    /* Conway next‑state calculation (8‑neighbor version) */
+    function computeNext(state) {
+      const next = createEmptyGrid();
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const counts = [0, 0, 0, 0];
+
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < size && ny < size) {
+                counts[state[ny][nx]]++;
+              }
+            }
+          }
+
+          const live = counts[1] + counts[2] + counts[3];
+          const cell = state[y][x];
+
+          if (cell !== 0) {
+            if (live === 2 || live === 3) next[y][x] = cell; // survives
+          } else if (live === 3) {
+            next[y][x] = counts[1] > counts[2] ? 1 : counts[2] > counts[1] ? 2 : 3; // new baby
+          }
         }
-        function resetGame() {
-            grid = Array.from({ length: size }, () => Array(size).fill(0)); currentPlayer = 1; placements = 0; round = 0; gameOver = false; animating = false; waitingEvolution = false; nextGrid = null; evolveBtn.disabled = true; draw();
+      }
+      return next;
+    }
+
+    /* --------------------------------------------------------------------
+       4.  Rendering helpers
+    -------------------------------------------------------------------- */
+    function drawBaseBoard(state) {
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const v = state[y][x];
+          if (v !== 0) {
+            ctx.fillStyle = COLORS[v];
+            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          }
+          ctx.strokeStyle = "#888";
+          ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
         }
-        newGameBtn.addEventListener('click', () => {
-            setBoardSize(parseInt(sizeSelect.value, 10)); resetGame();
-        });
-        function computeNext(g) {
-            const n = Array.from({ length: size }, () => Array(size).fill(0)); for (let y = 0; y < size; y++) { for (let x = 0; x < size; x++) { const c = [0, 0, 0, 0]; for (let dy = -1; dy <= 1; dy++) { for (let dx = -1; dx <= 1; dx++) { if (dx || dy) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < size && ny < size) c[g[ny][nx]]++; } } } const live = c[1] + c[2] + c[3]; const v = g[y][x]; if (v) { if (live === 2 || live === 3) n[y][x] = v; } else if (live === 3) { n[y][x] = c[1] > c[2] ? 1 : c[2] > c[1] ? 2 : 3; } } } return n;
+      }
+    }
+
+    function drawPreviewMarkers(preview) {
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const current = grid[y][x];
+          const next    = preview[y][x];
+
+          if (current !== 0 && next === 0) {
+            // X marker – dying
+            ctx.fillStyle = "#000";
+            ctx.font = `bold ${cellSize * 0.6}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("X", x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+          } else if (current === 0 && next !== 0) {
+            // O marker – baby
+            ctx.fillStyle = COLORS[next] || "#888";
+            ctx.font = `bold ${cellSize * 0.6}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("O", x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+          }
+        }
+      }
+    }
+
+    /* --------------------------------------------------------------------
+       5.  Main draw() routine (non‑animating frames)
+    -------------------------------------------------------------------- */
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1) Normal grid
+      drawBaseBoard(grid);
+
+      // 2) Preview X/O if not animating & not game over
+      if (!animating && !gameOver) {
+        const preview = computeNext(grid);
+        drawPreviewMarkers(preview);
+      }
+
+      // 3) Hover highlight
+      if (!animating && !waitingEvolution && placements < 3 && hover.x >= 0 && hover.y >= 0 && !grid[hover.y][hover.x]) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle   = COLORS[currentPlayer];
+        ctx.fillRect(hover.x * cellSize, hover.y * cellSize, cellSize, cellSize);
+        ctx.globalAlpha = 1;
+      }
+
+      updateStats();
+    }
+
+    /* --------------------------------------------------------------------
+       6.  Stats panel update
+    -------------------------------------------------------------------- */
+    function updateStats() {
+      let blue = 0, red = 0;
+      for (let row of grid) {
+        for (let v of row) {
+          if (v === 1) blue++; else if (v === 2) red++;
+        }
+      }
+
+      statsDiv.innerHTML = `
+        <b>Round ${round + 1} / ${maxRounds}</b><br>
+        <span class="player" style="color:${COLORS[1]}">Blue</span>: ${blue}${currentPlayer === 1 ? " ←" : ""}<br>
+        <span class="player" style="color:${COLORS[2]}">Red</span>: ${red}${currentPlayer === 2 ? " ←" : ""}<br><br>
+        ${gameOver ? "<b>Game Over!</b>" : waitingEvolution ? "Press <b>Evolve!</b>" : `Place square ${placements + 1} / 3`}`;
+    }
+
+    /* --------------------------------------------------------------------
+       7.  Evolution animation (fade‑out + fade‑in)
+    -------------------------------------------------------------------- */
+    function startEvolutionAnimation() {
+      animating = true;
+      nextGrid  = computeNext(grid);
+
+      // Pre‑compute dying & baby lists
+      const dying  = [];
+      const babies = [];
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          if (grid[y][x] !== 0 && nextGrid[y][x] === 0) dying.push({ x, y, color: grid[y][x] });
+          if (grid[y][x] === 0 && nextGrid[y][x] !== 0) babies.push({ x, y, color: nextGrid[y][x] });
+        }
+      }
+
+      // Animation loop
+      const duration = 1200; // ms
+      let startTime  = null;
+
+      function frame(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = (timestamp - startTime) / duration; // 0 → 1
+        if (progress > 1) progress = 1;
+
+        // Clear & redraw base board (without dying / baby cells)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBaseBoard(grid);
+
+        // Fade dying squares (opacity = 1 - progress)
+        ctx.save();
+        ctx.globalAlpha = 1 - progress;
+        for (let d of dying) {
+          ctx.fillStyle = COLORS[d.color];
+          ctx.fillRect(d.x * cellSize, d.y * cellSize, cellSize, cellSize);
+        }
+        ctx.restore();
+
+        // Fade‑in babies (opacity = progress)
+        ctx.save();
+        ctx.globalAlpha = progress;
+        for (let b of babies) {
+          ctx.fillStyle = COLORS[b.color];
+          ctx.fillRect(b.x * cellSize, b.y * cellSize, cellSize, cellSize);
+        }
+        ctx.restore();
+
+        // Grid lines always on top
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            ctx.strokeStyle = "#888";
+            ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          }
         }
 
-        let hover = { x: -1, y: -1 };
-        canvas.addEventListener('mousemove', e => {
-            hover = eventToCell(e); draw();
-        }); canvas.addEventListener('mouseleave', () => {
-            hover = { x: -1, y: -1 }; draw();
-        });
-        canvas.addEventListener('click', e => {
-            if (gameOver || animating || waitingEvolution) return; const { x, y } = eventToCell(e); if (x < 0 || y < 0 || x >= size || y >= size) return; if (grid[y][x]) return; grid[y][x] = currentPlayer; placements++; if (placements === 3) { placements = 0; if (currentPlayer === 1) { currentPlayer = 2; } else { currentPlayer = 1; waitingEvolution = true; evolveBtn.disabled = false; } } draw();
-        });
-        evolveBtn.addEventListener('click', () => {
-            if (!waitingEvolution || animating) return; waitingEvolution = false; evolveBtn.disabled = true; startAnimation();
-        });
-
-        function startAnimation() {
-            animating = true;
-            nextGrid = computeNext(grid);
-            const dying = [];
-            const babies = [];
-            for (let y = 0; y < size; y++) {
-                for (let x = 0; x < size; x++) {
-                    if (grid[y][x] && nextGrid[y][x] == 0)
-                        dying.push({ x, y, color: grid[y][x] });
-                    if (!grid[y][x] && nextGrid[y][x] != 0)
-                        babies.push({ x, y, color: nextGrid[y][x] });
-                }
-            }
-            let fade = 0;
-            const fadeSteps = 96;
-            function animate() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawBoardBase();
-                drawBoardOverlays();
-                fade += 1;
-                drawDying(fade / fadeSteps);
-                drawBabies(Math.max(0, (fade - (fadeSteps / 2)) / (fadeSteps / 2)));
-                if (fade < fadeSteps) {
-                    requestAnimationFrame(animate);
-                } else {
-                    grid = nextGrid;
-                    round++;
-                    if (round >= maxRounds) gameOver = true; animating = false; draw();
-                }
-            }
-            function drawDying(alpha) {
-                ctx.save();
-                ctx.globalAlpha = 1 - alpha;
-                dying.forEach(d => {
-                    ctx.fillStyle = d.color === 1 ? "#1e90ff" : d.color === 2 ? "#ff4d4d" : "#cccccc";
-                    ctx.fillRect(d.x * cellSize, d.y * cellSize, cellSize, cellSize);
-                });
-                ctx.restore();
-            }
-            function drawBabies(alpha) {
-                if (alpha <= 0) return;
-                ctx.save();
-                ctx.globalAlpha = alpha > 1 ? 1 : alpha;
-                babies.forEach(b => {
-                    ctx.fillStyle = b.color === 1 ? "#1e90ff" : b.color === 2 ? "#ff4d4d" : "#888";
-                    ctx.fillRect(b.x * cellSize, b.y * cellSize, cellSize, cellSize);
-                });
-                ctx.restore();
-            }
-            function drawBoardBase() {
-                for (let y = 0; y < size; y++) {
-                    for (let x = 0; x < size; x++) {
-                        const v = grid[y][x];
-                        if (v) {
-                            ctx.fillStyle = v === 1 ? "#1e90ff" : v === 2 ? "#ff4d4d" : "#cccccc";
-                            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                        }
-                        ctx.strokeStyle = "#888";
-                        ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                    }
-                }
-            }
-            function drawBoardOverlays() {/* no X/O markers during fade */ }
-            animate();
+        if (progress < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          // Animation done → commit state
+          grid       = nextGrid;
+          round      += 1;
+          animating   = false;
+          gameOver    = round >= maxRounds;
+          draw();
         }
+      }
+      requestAnimationFrame(frame);
+    }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const preview = (!animating && !gameOver) ? computeNext(grid) : null;
-            let blue = 0, red = 0;
-            for (let y = 0; y < size; y++) {
-                for (let x = 0; x < size; x++) {
-                    const v = grid[y][x];
-                    if (v) {
-                        ctx.fillStyle = v === 1 ? "#1e90ff" : v === 2 ? "#ff4d4d" : "#cccccc";
-                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                        if (v === 1) blue++;
-                        else if (v === 2) red++;
-                    }
-                    ctx.strokeStyle = "#888";
-                    ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                    if (preview) {
-                        const next = preview[y][x];
-                        if (v && next == 0) {
-                            ctx.fillStyle = "#000";
-                            ctx.font = `bold ${cellSize * 0.6}px sans-serif`;
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText('X', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
-                        } else if (!v && next != 0) {
-                            ctx.fillStyle = next == 1 ? "#1e90ff" : next == 2 ? "#ff4d4d" : "#888";
-                            ctx.font = `bold ${cellSize * 0.6}px sans-serif`;
-                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                            ctx.fillText('O', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
-                        }
-                    }
-                }
-            }
-            if (!gameOver && !animating && !waitingEvolution && placements < 3 && hover.x >= 0 && hover.y >= 0 && !grid[hover.y][hover.x]) {
-                ctx.globalAlpha = 0.3;
-                ctx.fillStyle = currentPlayer === 1 ? "#1e90ff" : "#ff4d4d";
-                ctx.fillRect(hover.x * cellSize, hover.y * cellSize, cellSize, cellSize); ctx.globalAlpha = 1;
-            }
-            statsDiv.innerHTML = `<b>Round ${round + 1}/${maxRounds}</b><br><span class='player' style='color:#1e90ff'>Blue</span> Cells: ${blue}${currentPlayer === 1 ? " ←" : ""}
-                <br><span class='player' style='color:#ff4d4d'>Red</span> Cells: ${red}${currentPlayer === 2 ? " ←" : ""}<br>
-                <br>${gameOver ? "<b>Game Over!</b>" : waitingEvolution ? "Press ▲ Evolve! ▲" : "Place square " + (placements + 1) + " / 3"}`;
+    /* --------------------------------------------------------------------
+       8.  Event handlers & game flow
+    -------------------------------------------------------------------- */
+    let hover = { x: -1, y: -1 };
+
+    canvas.addEventListener("mousemove", e => {
+      hover = eventToCell(e);
+      draw();
+    });
+    canvas.addEventListener("mouseleave", () => {
+      hover = { x: -1, y: -1 };
+      draw();
+    });
+
+    canvas.addEventListener("click", e => {
+      if (gameOver || animating || waitingEvolution) return;
+
+      const { x, y } = eventToCell(e);
+      if (x < 0 || y < 0 || x >= size || y >= size) return;
+      if (grid[y][x] !== 0) return; // already occupied
+
+      grid[y][x] = currentPlayer;
+      placements += 1;
+
+      if (placements === 3) {
+        placements = 0;
+        if (currentPlayer === 1) {
+          currentPlayer = 2;
+        } else {
+          currentPlayer = 1;
+          waitingEvolution = true;
+          evolveBtn.disabled = false;
         }
+      }
+      draw();
+    });
 
-        function eventToCell(e) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: Math.floor((e.clientX - rect.left) / cellSize),
-                y: Math.floor((e.clientY - rect.top) / cellSize)
-            };
-        }
+    evolveBtn.addEventListener("click", () => {
+      if (waitingEvolution && !animating) {
+        waitingEvolution = false;
+        evolveBtn.disabled = true;
+        startEvolutionAnimation();
+      }
+    });
 
-        setBoardSize(15); resetGame();
-    </script>
+    newGameBtn.addEventListener("click", () => {
+      setBoardSize(parseInt(sizeSelect.value, 10));
+      resetGame();
+    });
+
+    /* --------------------------------------------------------------------
+       9.  Initial game setup
+    -------------------------------------------------------------------- */
+    function resetGame() {
+      grid              = createEmptyGrid();
+      currentPlayer     = 1;
+      placements        = 0;
+      round             = 0;
+      gameOver          = false;
+      waitingEvolution  = false;
+      animating         = false;
+      evolveBtn.disabled = true;
+      draw();
+    }
+
+    setBoardSize(size);  // default 15
+    resetGame();
+  </script>
 </body>
-
 </html>
