@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Life Duel – Kid‑Friendly Edition</title>
+<title>Life Duel – Kid‑Friendly Edition (Animated)</title>
 <style>
 body{font-family:sans-serif;margin:0;padding:0;display:flex;justify-content:center;align-items:flex-start;margin-top:10px}
 #container{display:flex;justify-content:center;align-items:flex-start}
@@ -26,7 +26,6 @@ button:disabled{opacity:0.5;cursor:not-allowed}
     <button id="newGameBtn">New Game</button>
     <div id="stats" style="margin-top:10px"></div>
     <button id="evolveBtn" disabled style="background:#4caf50;color:#fff">Evolve!</button>
-    <button id="restartBtn">Restart Round</button>
   </div>
 
   <canvas id="board"></canvas>
@@ -39,24 +38,20 @@ const boardCanvas=document.getElementById('board');
 const ctx=boardCanvas.getContext('2d');
 const sizeSelect=document.getElementById('boardSize');
 const newGameBtn=document.getElementById('newGameBtn');
-const restartBtn=document.getElementById('restartBtn');
 const evolveBtn=document.getElementById('evolveBtn');
 const statsDiv=document.getElementById('stats');
 const guideDiv=document.getElementById('guide');
 
-// Guide text
-guideDiv.innerHTML=`<h3>How the World Changes (Step‑by‑Step)</h3>
+guideDiv.innerHTML=`<h3>How the World Changes (Animated)</h3>
 <ol style='padding-left:18px'>
-  <li><b>1. X time</b> – Squares that will disappear show a big <span style='color:#000;font-weight:bold'>X</span>.</li>
-  <li><b>2. Goodbye</b> – Those X squares fade away.</li>
-  <li><b>3. O time</b> – Empty places that get a baby blink with a colored <b>O</b>.</li>
-  <li><b>4. Hello</b> – Babies grow into full squares. Then it’s the next round!</li>
+<li><b>X time</b> – Squares that will disappear show an <span style='color:#000;font-weight:bold'>X</span>.</li>
+<li><b>Fade</b> – X squares fade away.</li>
+<li><b>O time</b> – Empty spots that get a baby show a colored <b>O</b> then grow.</li>
 </ol>
-<p>Press the green <b>Evolve!</b> button after both players have placed their 3 squares.</p>`;
+<p>Press <b>Evolve!</b> after both players place 3 squares.</p>`;
 
-// Game state vars
 let size=15, cellSize=40, maxRounds=10;
-let grid, currentPlayer, placements, round, gameOver, animating;
+let grid, currentPlayer, placements, round, gameOver, animating, waitingEvolution;
 
 function setBoardSize(newSize){
   size=newSize;
@@ -67,41 +62,41 @@ function setBoardSize(newSize){
 
 function initGame(){
   grid=Array.from({length:size},()=>Array(size).fill(0));
-  currentPlayer=1; // 1 blue, 2 red
+  currentPlayer=1;
   placements=0;
   round=0;
   gameOver=false;
   animating=false;
+  waitingEvolution=false;
   evolveBtn.disabled=true;
   draw();
 }
 
 function newGame(){
-  const newSize=parseInt(sizeSelect.value,10);
-  setBoardSize(newSize);
+  setBoardSize(parseInt(sizeSelect.value,10));
   initGame();
 }
 newGameBtn.addEventListener('click',newGame);
-restartBtn.addEventListener('click',initGame);
 
-// Compute next grid based on Conway rules (8 neighbors)
-function computeNextGrid(){
+// Conway rules
+function nextGridFrom(g){
   const next=Array.from({length:size},()=>Array(size).fill(0));
   for(let y=0;y<size;y++){
     for(let x=0;x<size;x++){
       const counts=[0,0,0,0];
       for(let dy=-1;dy<=1;dy++){
         for(let dx=-1;dx<=1;dx++){
-          if(dx===0&&dy===0)continue;
-          const nx=x+dx,ny=y+dy;
-          if(nx>=0&&ny>=0&&nx<size&&ny<size) counts[grid[ny][nx]]++;
+          if(dx||dy){
+            const nx=x+dx,ny=y+dy;
+            if(nx>=0&&ny>=0&&nx<size&&ny<size) counts[g[ny][nx]]++;
+          }
         }
       }
       const live=counts[1]+counts[2]+counts[3];
-      const cell=grid[y][x];
+      const cell=g[y][x];
       if(cell!==0){
         if(live===2||live===3) next[y][x]=cell;
-      }else if(live===3){
+      } else if(live===3){
         next[y][x]=counts[1]>counts[2]?1:counts[2]>counts[1]?2:3;
       }
     }
@@ -110,70 +105,96 @@ function computeNextGrid(){
 }
 
 let hover={x:-1,y:-1};
-
-boardCanvas.addEventListener('mousemove',e=>{
-  const {x,y}=eventToCell(e);
-  hover={x,y};
-  draw();
-});
+boardCanvas.addEventListener('mousemove',e=>{hover=eventToCell(e);draw();});
 boardCanvas.addEventListener('mouseleave',()=>{hover={x:-1,y:-1};draw();});
 
 boardCanvas.addEventListener('click',e=>{
-  if(gameOver||animating) return;
+  if(gameOver||animating||waitingEvolution) return;
   const {x,y}=eventToCell(e);
   if(x<0||y<0||x>=size||y>=size) return;
   if(grid[y][x]!==0) return;
   grid[y][x]=currentPlayer;
   placements++;
-  if(placements>=3){
+  if(placements===3){
     placements=0;
     if(currentPlayer===1){
       currentPlayer=2;
     }else{
       currentPlayer=1;
-      evolveBtn.disabled=false; // allow evolution
+      waitingEvolution=true;
+      evolveBtn.disabled=false;
     }
   }
   draw();
 });
 
-evolveBtn.addEventListener('click',()=>{
-  if(animating||gameOver) return;
-  evolveBtn.disabled=true;
-  startEvolutionAnimation();
-});
+evolveBtn.addEventListener('click',()=>{if(!waitingEvolution||animating) return; evolveBtn.disabled=true; waitingEvolution=false; animateEvolution();});
 
-function startEvolutionAnimation(){
+function animateEvolution(){
   animating=true;
-  const nextGrid=computeNextGrid();
-  // Stage A: show Xs and Os already drawn by draw(); wait 1s
-  draw();
-  setTimeout(()=>{
-    // Stage B: remove cells that will die
-    for(let y=0;y<size;y++){
-      for(let x=0;x<size;x++){
-        if(grid[y][x]!==0 && nextGrid[y][x]===0){
-          grid[y][x]=0;
-        }
-      }
+  const nextGrid=nextGridFrom(grid);
+  const dying=[]; const babies=[];
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      if(grid[y][x]!==0 && nextGrid[y][x]===0) dying.push({x,y});
+      if(grid[y][x]===0 && nextGrid[y][x]!==0) babies.push({x,y,color:nextGrid[y][x]});
     }
-    draw();
-    setTimeout(()=>{
-      // Stage C: add baby O markers visually, but not yet fully grow (they already appear as O in draw preview)
-      // We'll just wait another second
+  }
+  // Stage 1: show markers (already in draw)
+  draw();
+  // Stage 2: fade dying squares
+  fadeOut(dying,()=>{
+    // Stage 3: blink babies
+    blinkBabies(babies,()=>{
+      // Commit new grid
+      grid=nextGrid;
+      round++;
+      if(round>=maxRounds) gameOver=true;
+      animating=false;
       draw();
-      setTimeout(()=>{
-        // Stage D: commit full nextGrid
-        grid=nextGrid;
-        round++;
-        if(round>=maxRounds){
-          gameOver=true;
-        }
-        animating=false;
-        draw();
-      },800);
-    },800);
-  },800);
+    });
+  });
+}
+
+function fadeOut(cells,done){
+  const steps=10, interval=50; let step=0;
+  const fadeInt=setInterval(()=>{
+    step++;
+    ctx.save();
+    ctx.globalAlpha=1-step/steps;
+    cells.forEach(({x,y})=>{
+      const v=grid[y][x];
+      ctx.fillStyle=v===1?"#1e90ff":v===2?"#ff4d4d":"#cccccc";
+      ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+    });
+    ctx.restore();
+    if(step>=steps){
+      clearInterval(fadeInt);
+      cells.forEach(({x,y})=>grid[y][x]=0);
+      draw();
+      done();
+    }
+  },interval);
+}
+
+function blinkBabies(cells,done){
+  let visible=true, count=0; const maxBlinks=4, interval=200;
+  const blinkInt=setInterval(()=>{
+    visible=!visible; count++;
+    draw();
+    if(visible){
+      cells.forEach(({x,y,color})=>{
+        ctx.fillStyle=color===1?"#1e90ff":color===2?"#ff4d4d":"#888";
+        ctx.font=`bold ${cellSize*0.6}px sans-serif`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('O',x*cellSize+cellSize/2,y*cellSize+cellSize/2);
+      });
+    }
+    if(count>=maxBlinks){
+      clearInterval(blinkInt);
+      done();
+    }
+  },interval);
 }
 
 function eventToCell(e){
@@ -183,7 +204,7 @@ function eventToCell(e){
 
 function draw(){
   ctx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
-  const preview=computeNextGrid();
+  const preview=animating?null:nextGridFrom(grid);
   let blue=0,red=0;
   for(let y=0;y<size;y++){
     for(let x=0;x<size;x++){
@@ -191,13 +212,12 @@ function draw(){
       if(v){
         ctx.fillStyle=v===1?"#1e90ff":v===2?"#ff4d4d":"#cccccc";
         ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-        if(v===1) blue++; else if(v===2) red++;
+        if(v===1)blue++; else if(v===2)red++;
       }
       ctx.strokeStyle="#888";
       ctx.strokeRect(x*cellSize,y*cellSize,cellSize,cellSize);
 
-      // Preview markers for current static board (not during animation Stage B or D)
-      if(!animating){
+      if(!animating && preview){
         const next=preview[y][x];
         if(v!==0 && next===0){
           ctx.fillStyle="#000";
@@ -214,13 +234,12 @@ function draw(){
     }
   }
 
-  if(!gameOver && !animating && placements<3 && hover.x>=0 && hover.y>=0 && grid[hover.y][hover.x]===0){
+  if(!gameOver && !animating && !waitingEvolution && placements<3 && hover.x>=0 && hover.y>=0 && grid[hover.y][hover.x]===0){
     ctx.globalAlpha=0.3;
     ctx.fillStyle=currentPlayer===1?"#1e90ff":"#ff4d4d";
     ctx.fillRect(hover.x*cellSize,hover.y*cellSize,cellSize,cellSize);
     ctx.globalAlpha=1.0;
   }
-
   updateStats(blue,red);
 }
 
@@ -230,13 +249,12 @@ function updateStats(blue,red){
   statsDiv.innerHTML=`<b>Round ${round+1}/${maxRounds}</b>`+
     `<br><span class='player' style='color:#1e90ff'>Blue</span> – Cells: ${blue}, Moves: ${blueMoves}`+
     `<br><span class='player' style='color:#ff4d4d'>Red</span> – Cells: ${red}, Moves: ${redMoves}`+
-    `<br><br><b>${gameOver?"Game Over!":animating?"Evolving…":"Turn: "+(currentPlayer===1?"Blue":"Red")}</b>`+
-    (gameOver?"<br>Press New Game to play again.":"");
+    `<br><br><b>${gameOver?"Game Over!":animating?"Evolving…":waitingEvolution?"Press Evolve!":"Turn: "+(currentPlayer===1?"Blue":"Red")}</b>`;
+  evolveBtn.disabled=waitingEvolution?false:true; // but during animating it's disabled already
 }
 
-// Initial board size & game setup
-setBoardSize(size);
-initGame();
+// initialize
+newGame();
 </script>
 </body>
 </html>
