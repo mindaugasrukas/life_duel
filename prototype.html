@@ -24,11 +24,16 @@
       display: block;
     }
     .sideinfo {
-      width: 230px;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      margin-right: 10px;
+
+      width: 300px;
       font-size: 0.9rem;
       line-height: 1.4;
       text-align: left;
-      padding: 0 10px;
     }
     .player {
       font-weight: bold;
@@ -40,7 +45,7 @@
       border-radius: 6px;
       padding: 10px;
       font-size: 0.85rem;
-      margin-top: 10px;
+      margin-left: 10px;
     }
     button,
     select {
@@ -91,12 +96,37 @@
     const guideDiv    = document.getElementById("guide");
 
     guideDiv.innerHTML = `
-      <h3>Animated Evolution</h3>
+      <h3>Life Duel Rules</h3>
+
+      <h4>Game Overview</h4>
+      <p>Life Duel is a strategic two-player game based on Conway's Game of Life. Players compete by placing colored squares that evolve according to cellular automaton rules over 10 rounds.</p>
+
+      <h4>How Turns Work</h4>
       <ul>
-        <li>Squares <b>fade out</b> when they die.</li>
-        <li>Baby squares <b>fade in</b> so you can watch them grow.</li>
-        <li>After both players place 3 squares, press <b>Evolve!</b></li>
-      </ul>`;
+        <li><span style="color:#1e90ff"><b>Blue player</b></span> places 3 squares first</li>
+        <li>Then <span style="color:#ff4d4d"><b>Red player</b></span> places 3 squares</li>
+        <li>After both players finish, press <b>"Evolve!"</b></li>
+        <li>Repeat for 10 rounds total</li>
+      </ul>
+
+      <h4>Preview Markers</h4>
+      <ul>
+        <li><b>X</b> marks squares that will die next evolution</li>
+        <li><b>O</b> marks empty spaces where new squares will be born</li>
+        <li>Use these to plan your strategy!</li>
+      </ul>
+
+      <h4>Evolution Rules</h4>
+      <ul>
+        <li>Squares with 2-3 neighbors <b>survive</b></li>
+        <li>Squares with 0-1 or 4+ neighbors <b>die</b></li>
+        <li>Empty spaces with exactly 3 neighbors get a <b>new square</b></li>
+        <li>New square color depends on neighbor majority</li>
+        <li>Watch smooth <b>fade animations</b> during evolution!</li>
+      </ul>
+
+      <h4>Game Ending</h4>
+      <p>After 10 rounds, the player with the most squares on the board wins!</p>`;
 
     /* --------------------------------------------------------------------
        2.  Game‑wide constants & state variables
@@ -107,7 +137,7 @@
       3: "#cccccc"    // Grey / neutral
     };
 
-    let size        = 15;   // board side length
+    let size        = 7;    // board side length
     let cellSize    = 40;   // pixels (updated with board size)
     const maxRounds = 10;
 
@@ -279,9 +309,21 @@
         let progress = (timestamp - startTime) / duration; // 0 → 1
         if (progress > 1) progress = 1;
 
-        // Clear & redraw base board (without dying / baby cells)
+        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBaseBoard(grid);
+
+        // Draw base board excluding dying cells
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const v = grid[y][x];
+            // Only draw if cell is not dying
+            const isDying = dying.some(d => d.x === x && d.y === y);
+            if (v !== 0 && !isDying) {
+              ctx.fillStyle = COLORS[v];
+              ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+            }
+          }
+        }
 
         // Fade dying squares (opacity = 1 - progress)
         ctx.save();
