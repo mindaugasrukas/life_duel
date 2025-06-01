@@ -66,9 +66,9 @@
     <div class="sideinfo" id="leftPanel">
       <label for="boardSize">Board size:</label>
       <select id="boardSize">
-        <option value="7" selected>7 × 7</option>
+        <option value="7">7 × 7</option>
         <option value="10">10 × 10</option>
-        <option value="15">15 × 15</option>
+        <option value="15" selected>15 × 15</option>
       </select>
       <button id="newGameBtn">New Game</button>
 
@@ -150,12 +150,13 @@
       8: "#666666"    // Grey rocks (darker grey)
     };
 
-    let size        = 7;    // board side length
+    let size        = 15;   // default board side length
     let cellSize    = 40;   // pixels (updated with board size)
     const maxRounds = 10;
 
     let grid, currentPlayer, placements, round;
     let gameOver, waitingEvolution, animating;
+    let rockCache = {}; // Cache for pre-drawn rock patterns
 
     /* --------------------------------------------------------------------
        3.  Utility functions
@@ -191,20 +192,25 @@
         for (let x = 0; x < size; x++) {
           if (!visited[y][x] && (state[y][x] === 1 || state[y][x] === 2 || state[y][x] === 3)) {
 
-            // Flood fill to find all cells in this connected group (any color)
+            // Flood fill to find all cells in this connected group (any color, 8-connected)
             const group = [];
             const stack = [{x, y}];
 
             while (stack.length > 0) {
               const {x: cx, y: cy} = stack.pop();
               if (cx < 0 || cy < 0 || cx >= size || cy >= size || visited[cy][cx]) continue;
-              if (state[cy][cx] === 0 || state[cy][cx] === 6 || state[cy][cx] === 7) continue; // Skip empty and rocks
+              if (state[cy][cx] === 0 || state[cy][cx] === 6 || state[cy][cx] === 7 || state[cy][cx] === 8) continue; // Skip empty and rocks
 
               visited[cy][cx] = 1;
               group.push({x: cx, y: cy, color: state[cy][cx]});
 
-              // Add 4-connected neighbors (orthogonal only)
-              stack.push({x: cx+1, y: cy}, {x: cx-1, y: cy}, {x: cx, y: cy+1}, {x: cx, y: cy-1});
+              // Add 8-connected neighbors (orthogonal AND diagonal)
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  if (dx === 0 && dy === 0) continue;
+                  stack.push({x: cx + dx, y: cy + dy});
+                }
+              }
             }
 
             // Check if this group is stable (remains exactly the same)
@@ -223,7 +229,7 @@
               if (isStable) {
                 const adjacentCells = new Set();
 
-                // Find all empty cells adjacent to the group
+                // Find all empty cells adjacent to the group (8-connected)
                 for (let cell of group) {
                   for (let dy = -1; dy <= 1; dy++) {
                     for (let dx = -1; dx <= 1; dx++) {
@@ -268,11 +274,124 @@
           if (v !== 0) {
             ctx.fillStyle = COLORS[v];
             ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+
+            // Only draw rock patterns for newly created rocks
+            if (v === 6 || v === 7 || v === 8) {
+              const cacheKey = `${x},${y},${v},${cellSize}`;
+              if (!rockCache[cacheKey]) {
+                // Create off-screen canvas for this rock
+                const rockCanvas = document.createElement('canvas');
+                rockCanvas.width = cellSize;
+                rockCanvas.height = cellSize;
+                const rockCtx = rockCanvas.getContext('2d');
+
+                // Draw rock pattern on off-screen canvas
+                drawRockPatternToCanvas(rockCtx, cellSize/2, cellSize/2, v);
+                rockCache[cacheKey] = rockCanvas;
+              }
+
+              // Draw cached rock
+              ctx.drawImage(rockCache[cacheKey], x * cellSize, y * cellSize);
+            }
           }
           ctx.strokeStyle = "#888";
           ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
         }
       }
+    }
+
+    function drawRockPatternToCanvas(rockCtx, centerX, centerY, rockType) {
+      const radius = cellSize * 0.4;
+      const x = Math.floor(centerX / cellSize);
+      const y = Math.floor(centerY / cellSize);
+
+      rockCtx.save();
+
+      // Set base rock color
+      let baseColor, lightColor, darkColor;
+      if (rockType === 6) { // Blue rock
+        baseColor = "#4682b4";
+        lightColor = "#6495ed";
+        darkColor = "#2f4f4f";
+      } else if (rockType === 7) { // Red rock
+        baseColor = "#8b0000";
+        lightColor = "#cd5c5c";
+        darkColor = "#4b0000";
+      } else { // Grey rock
+        baseColor = "#666666";
+        lightColor = "#999999";
+        darkColor = "#333333";
+      }
+
+      // Draw main rock shape (irregular circle)
+      rockCtx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const radiusVariation = radius * (0.7 + 0.3 * Math.sin(x * 7 + y * 5 + i * 3));
+        const rockX = centerX + Math.cos(angle) * radiusVariation;
+        const rockY = centerY + Math.sin(angle) * radiusVariation;
+
+        if (i === 0) {
+          rockCtx.moveTo(rockX, rockY);
+        } else {
+          rockCtx.lineTo(rockX, rockY);
+        }
+      }
+      rockCtx.closePath();
+      rockCtx.fillStyle = baseColor;
+      rockCtx.fill();
+
+      // Add highlight (top-left lighting)
+      rockCtx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI + Math.PI * 1.25;
+        const radiusVariation = radius * 0.5 * (0.8 + 0.2 * Math.sin(x * 3 + y * 4 + i * 2));
+        const rockX = centerX + Math.cos(angle) * radiusVariation;
+        const rockY = centerY + Math.sin(angle) * radiusVariation;
+
+        if (i === 0) {
+          rockCtx.moveTo(rockX, rockY);
+        } else {
+          rockCtx.lineTo(rockX, rockY);
+        }
+      }
+      rockCtx.closePath();
+      rockCtx.fillStyle = lightColor;
+      rockCtx.fill();
+
+      // Add shadow/crack lines
+      rockCtx.strokeStyle = darkColor;
+      rockCtx.lineWidth = Math.max(1, cellSize / 20);
+      rockCtx.lineCap = "round";
+
+      // Draw 2-3 crack lines
+      for (let i = 0; i < 3; i++) {
+        const startAngle = (i / 3) * Math.PI * 2 + (x + y) * 0.5;
+        const length = radius * (0.3 + 0.4 * Math.sin(x * 2 + y * 3 + i));
+        const startX = centerX + Math.cos(startAngle) * radius * 0.3;
+        const startY = centerY + Math.sin(startAngle) * radius * 0.3;
+        const endX = startX + Math.cos(startAngle + 0.5) * length;
+        const endY = startY + Math.sin(startAngle + 0.5) * length;
+
+        rockCtx.beginPath();
+        rockCtx.moveTo(startX, startY);
+        rockCtx.lineTo(endX, endY);
+        rockCtx.stroke();
+      }
+
+      // Add small pebble details
+      for (let i = 0; i < 4; i++) {
+        const pebbleX = centerX + (Math.sin(x * 4 + y * 2 + i) * radius * 0.6);
+        const pebbleY = centerY + (Math.cos(x * 3 + y * 4 + i) * radius * 0.6);
+        const pebbleSize = cellSize / 15;
+
+        rockCtx.beginPath();
+        rockCtx.arc(pebbleX, pebbleY, pebbleSize, 0, Math.PI * 2);
+        rockCtx.fillStyle = darkColor;
+        rockCtx.fill();
+      }
+
+      rockCtx.restore();
     }
 
     function drawPreviewMarkers(preview) {
@@ -340,11 +459,29 @@
         }
       }
 
+      const blueTotal = blue + blueRocks;
+      const redTotal = red + redRocks;
+      let statusText = "";
+
+      if (gameOver) {
+        if (blueTotal > redTotal) {
+          statusText = `<b style="color:${COLORS[1]}">🏆 BLUE WINS!</b><br>Blue: ${blueTotal} vs Red: ${redTotal}`;
+        } else if (redTotal > blueTotal) {
+          statusText = `<b style="color:${COLORS[2]}">🏆 RED WINS!</b><br>Red: ${redTotal} vs Blue: ${blueTotal}`;
+        } else {
+          statusText = `<b style="color:#888">🤝 TIE GAME!</b><br>Both players: ${blueTotal}`;
+        }
+      } else if (waitingEvolution) {
+        statusText = "Press <b>Evolve!</b>";
+      } else {
+        statusText = `Place square ${placements + 1} / 3`;
+      }
+
       statsDiv.innerHTML = `
         <b>Round ${round + 1} / ${maxRounds}</b><br>
         <span class="player" style="color:${COLORS[1]}">Blue</span>: ${blue} + 🗿${blueRocks}${currentPlayer === 1 ? " ←" : ""}<br>
         <span class="player" style="color:${COLORS[2]}">Red</span>: ${red} + 🗿${redRocks}${currentPlayer === 2 ? " ←" : ""}<br><br>
-        ${gameOver ? "<b>Game Over!</b>" : waitingEvolution ? "Press <b>Evolve!</b>" : `Place square ${placements + 1} / 3`}`;
+        ${statusText}`;
     }
 
     /* --------------------------------------------------------------------
@@ -523,6 +660,7 @@
       waitingEvolution  = false;
       animating         = false;
       evolveBtn.disabled = true;
+      rockCache         = {}; // Clear rock cache for new game
       draw();
     }
 
