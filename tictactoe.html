@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Tic-Tac-Toe vs AI</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 5px;
+            margin: 50px auto;
+            width: max-content;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            font-size: 2em;
+            cursor: pointer;
+            border: 2px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #message {
+            font-size: 1.5em;
+            margin-top: 20px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Tic-Tac-Toe: You (X) vs AI (O)</h1>
+    <div id="board"></div>
+    <div id="message"></div>
+    <button onclick="resetGame()">Restart</button>
+
+    <script>
+        const HUMAN = 'X';
+        const AI = 'O';
+        const winning_positions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Horizontal
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Vertical
+            [0, 4, 8], [2, 4, 6] // Diagonal
+        ];
+        let board = Array(9).fill(null);
+
+        const boardDiv = document.getElementById('board');
+        const messageDiv = document.getElementById('message');
+
+        function createBoard() {
+            boardDiv.innerHTML = '';
+            board.forEach((cell, idx) => {
+                const cellDiv = document.createElement('div');
+                cellDiv.className = 'cell';
+                cellDiv.textContent = cell || '';
+                cellDiv.addEventListener('click', () => humanMove(idx));
+                boardDiv.appendChild(cellDiv);
+            });
+        }
+
+        function humanMove(idx) {
+            if (board[idx] || checkWinner(board)) return;
+            board[idx] = HUMAN;
+            createBoard();
+            const result = checkWinner(board);
+            if (result) {
+                endGame(result);
+            } else {
+                setTimeout(aiMiniMaxMove, 200); // slight delay for realism
+            }
+        }
+
+        function aiRandomMove() {
+            let availableMoves = board.map((cell, idx) => cell === null ? idx : null).filter(idx => idx !== null);
+            if (availableMoves.length > 0) {
+                const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                board[randomMove] = AI;
+                createBoard();
+                const result = checkWinner(board);
+                if (result) {
+                    endGame(result);
+                }
+            }
+        }
+
+        function aiMiniMaxMove() {
+            let bestScore = -Infinity;
+            let move;
+            for (let i = 0; i < 9; i++) {
+                if (!board[i]) {
+                    board[i] = AI;
+                    let score = minimax(board, false);
+                    board[i] = null;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            board[move] = AI;
+            createBoard();
+            const result = checkWinner(board);
+            if (result) {
+                endGame(result);
+            }
+        }
+
+        function minimax(board, isMaximizing) {
+            const result = checkWinner(board);
+            if (result === AI) return 1;
+            if (result === HUMAN) return -1;
+            if (result === 'tie') return 0;
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (!board[i]) {
+                        board[i] = AI;
+                        let score = minimax(board, false);
+                        board[i] = null;
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (!board[i]) {
+                        board[i] = HUMAN;
+                        let score = minimax(board, true);
+                        board[i] = null;
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function checkWinner(board) {
+            for (const [a, b, c] of winning_positions) {
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+            }
+            if (board.every(cell => cell)) return 'tie';
+            return null;
+        }
+
+        function endGame(result) {
+            if (result === 'tie') {
+                messageDiv.textContent = "It's a tie!";
+            } else {
+                messageDiv.textContent = `${result} wins!`;
+            }
+        }
+
+        function resetGame() {
+            board = Array(9).fill(null);
+            messageDiv.textContent = '';
+            createBoard();
+        }
+
+        createBoard();
+    </script>
+</body>
+
+</html>
