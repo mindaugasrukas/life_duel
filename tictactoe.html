@@ -51,12 +51,14 @@
     <script>
         const HUMAN = 'X';
         const AI = 'O';
+        const TIE = 'tie';
+        const EMPTY = null;
         const winning_positions = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8], // Horizontal
             [0, 3, 6], [1, 4, 7], [2, 5, 8], // Vertical
             [0, 4, 8], [2, 4, 6] // Diagonal
         ];
-        let board = Array(9).fill(null);
+        let board = Array(9).fill(EMPTY);
 
         const boardDiv = document.getElementById('board');
         const messageDiv = document.getElementById('message');
@@ -80,12 +82,12 @@
             if (result) {
                 endGame(result);
             } else {
-                setTimeout(aiMiniMaxMove, 200); // slight delay for realism
+                setTimeout(aiRandomMove, 200); // slight delay for realism
             }
         }
 
         function aiRandomMove() {
-            let availableMoves = board.map((cell, idx) => cell === null ? idx : null).filter(idx => idx !== null);
+            let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
             if (availableMoves.length > 0) {
                 const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
                 board[randomMove] = AI;
@@ -104,7 +106,7 @@
                 if (!board[i]) {
                     board[i] = AI;
                     let score = minimax(board, false);
-                    board[i] = null;
+                    board[i] = EMPTY;
                     if (score > bestScore) {
                         bestScore = score;
                         move = i;
@@ -123,7 +125,7 @@
             const result = checkWinner(board);
             if (result === AI) return 1;
             if (result === HUMAN) return -1;
-            if (result === 'tie') return 0;
+            if (result === TIE) return 0;
 
             if (isMaximizing) {
                 let bestScore = -Infinity;
@@ -131,7 +133,7 @@
                     if (!board[i]) {
                         board[i] = AI;
                         let score = minimax(board, false);
-                        board[i] = null;
+                        board[i] = EMPTY;
                         bestScore = Math.max(score, bestScore);
                     }
                 }
@@ -142,7 +144,7 @@
                     if (!board[i]) {
                         board[i] = HUMAN;
                         let score = minimax(board, true);
-                        board[i] = null;
+                        board[i] = EMPTY;
                         bestScore = Math.min(score, bestScore);
                     }
                 }
@@ -154,12 +156,12 @@
             for (const [a, b, c] of winning_positions) {
                 if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
             }
-            if (board.every(cell => cell)) return 'tie';
-            return null;
+            if (board.every(cell => cell)) return TIE;
+            return EMPTY;
         }
 
         function endGame(result) {
-            if (result === 'tie') {
+            if (result === TIE) {
                 messageDiv.textContent = "It's a tie!";
             } else {
                 messageDiv.textContent = `${result} wins!`;
@@ -167,7 +169,7 @@
         }
 
         function resetGame() {
-            board = Array(9).fill(null);
+            board = Array(9).fill(EMPTY);
             messageDiv.textContent = '';
             createBoard();
         }
