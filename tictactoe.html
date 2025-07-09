@@ -39,11 +39,28 @@
             padding: 10px 20px;
             font-size: 1em;
         }
+
+        #ai-mode {
+            margin: 20px 0;
+        }
+
+        #aiMode {
+            padding: 5px 10px;
+            font-size: 1em;
+            margin-left: 10px;
+        }
     </style>
 </head>
 
 <body>
     <h1>Tic-Tac-Toe: You (X) vs AI (O)</h1>
+    <div id="ai-mode">
+        <label for="aiMode">AI Difficulty:</label>
+        <select id="aiMode" onchange="updateAIMode()">
+            <option selected value="random">Random (Easy)</option>
+            <option value="minimax">Minimax (Impossible)</option>
+        </select>
+    </div>
     <div id="board"></div>
     <div id="message"></div>
     <button onclick="resetGame()">Restart</button>
@@ -59,10 +76,12 @@
             [0, 4, 8], [2, 4, 6] // Diagonal
         ];
         let board = Array(9).fill(EMPTY);
+        let aiMode = 'random'; // Default AI mode
 
         const boardDiv = document.getElementById('board');
         const messageDiv = document.getElementById('message');
 
+        // Initialize the game board and display it
         function createBoard() {
             boardDiv.innerHTML = '';
             board.forEach((cell, idx) => {
@@ -74,6 +93,7 @@
             });
         }
 
+        // Handle human move
         function humanMove(idx) {
             if (board[idx] || checkWinner(board)) return;
             board[idx] = HUMAN;
@@ -82,10 +102,26 @@
             if (result) {
                 endGame(result);
             } else {
-                setTimeout(aiRandomMove, 200); // slight delay for realism
+                setTimeout(makeAIMove, 200); // slight delay for realism
             }
         }
 
+        // Make AI move based on selected mode
+        function makeAIMove() {
+            if (aiMode === 'minimax') {
+                aiMiniMaxMove();
+            } else {
+                aiRandomMove();
+            }
+        }
+
+        // Update AI mode when dropdown changes
+        function updateAIMode() {
+            aiMode = document.getElementById('aiMode').value;
+            resetGame();
+        }
+
+        // AI makes a random move
         function aiRandomMove() {
             let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
             if (availableMoves.length > 0) {
@@ -99,6 +135,7 @@
             }
         }
 
+        // AI makes a move using the MiniMax algorithm
         function aiMiniMaxMove() {
             let bestScore = -Infinity;
             let move;
@@ -121,6 +158,7 @@
             }
         }
 
+        // MiniMax algorithm to choose the best move
         function minimax(board, isMaximizing) {
             const result = checkWinner(board);
             if (result === AI) return 1;
@@ -152,6 +190,7 @@
             }
         }
 
+        // Check for a winner or tie
         function checkWinner(board) {
             for (const [a, b, c] of winning_positions) {
                 if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
@@ -160,6 +199,7 @@
             return EMPTY;
         }
 
+        // End the game and display the result
         function endGame(result) {
             if (result === TIE) {
                 messageDiv.textContent = "It's a tie!";
@@ -168,12 +208,14 @@
             }
         }
 
+        // Reset the game
         function resetGame() {
             board = Array(9).fill(EMPTY);
             messageDiv.textContent = '';
             createBoard();
         }
 
+        // Initialize the game board
         createBoard();
     </script>
 </body>
