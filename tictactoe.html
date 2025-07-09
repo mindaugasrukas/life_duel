@@ -88,18 +88,23 @@
                 const cellDiv = document.createElement('div');
                 cellDiv.className = 'cell';
                 cellDiv.textContent = cell || '';
+                // Add click event listener to each cell to handle human moves
                 cellDiv.addEventListener('click', () => humanMove(idx));
                 boardDiv.appendChild(cellDiv);
             });
         }
 
         // Handle human move
+        // This function is called when a human player clicks on a cell
+        // It checks if the cell is empty and if the game is still ongoing
+        // If valid, it places the human's mark and checks for a winner
+        // If no winner, it triggers the AI to make a move
         function humanMove(idx) {
             if (board[idx] || checkWinner(board)) return;
             board[idx] = HUMAN;
             createBoard();
             const result = checkWinner(board);
-            if (result) {
+            if (result !== null) {
                 endGame(result);
             } else {
                 setTimeout(makeAIMove, 200); // slight delay for realism
@@ -122,6 +127,9 @@
         }
 
         // AI makes a random move
+        // This function finds all available moves (empty cells) and randomly selects one
+        // It then places the AI's mark in that cell and checks for a winner
+        // If a winner is found, it ends the game
         function aiRandomMove() {
             let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
             if (availableMoves.length > 0) {
@@ -129,13 +137,17 @@
                 board[randomMove] = AI;
                 createBoard();
                 const result = checkWinner(board);
-                if (result) {
+                if (result !== null) {
                     endGame(result);
                 }
             }
         }
 
         // AI makes a move using the MiniMax algorithm
+        // This function evaluates all possible moves using the MiniMax algorithm
+        // It finds the best move for the AI and places its mark in that cell
+        // After making the move, it checks for a winner
+        // If a winner is found, it ends the game
         function aiMiniMaxMove() {
             let bestScore = -Infinity;
             let move;
@@ -153,7 +165,7 @@
             board[move] = AI;
             createBoard();
             const result = checkWinner(board);
-            if (result) {
+            if (result !== null) {
                 endGame(result);
             }
         }
@@ -165,6 +177,11 @@
             if (result === HUMAN) return -1;
             if (result === TIE) return 0;
 
+            // if no winner yet, continue the search
+            // if maximizing, AI is trying to maximize its score
+            // if minimizing, human is trying to minimize AI's score
+            // recursively call minimax for each possible move
+            // and return the best score for the current player
             if (isMaximizing) {
                 let bestScore = -Infinity;
                 for (let i = 0; i < 9; i++) {
@@ -191,12 +208,16 @@
         }
 
         // Check for a winner or tie
+        // This function checks all winning positions to see if there's a winner
+        // If a winner is found, it returns the winner's mark (HUMAN or AI)
+        // If all cells are filled and no winner, it returns TIE
+        // If no winner yet, it returns null
         function checkWinner(board) {
             for (const [a, b, c] of winning_positions) {
                 if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
             }
             if (board.every(cell => cell)) return TIE;
-            return EMPTY;
+            return null; // No winner yet
         }
 
         // End the game and display the result
