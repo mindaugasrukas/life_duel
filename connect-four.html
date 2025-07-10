@@ -5,24 +5,6 @@
     <meta charset="UTF-8" />
     <title>Connect Four: You (🔴) vs AI (🟡)</title>
     <style>
-        .dropping-piece {
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            z-index: 1;
-            pointer-events: none;
-            border: 2px solid rgba(0,0,0,0.2);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        .dropping-piece.red {
-            background: linear-gradient(135deg, #ff4444, #cc0000);
-        }
-
-        .dropping-piece.yellow {
-            background: linear-gradient(135deg, #ffdd44, #ccaa00);
-        }
         body {
             font-family: sans-serif;
             text-align: center;
@@ -40,6 +22,24 @@
             cursor: none;
         }
 
+        .dropping-piece {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            z-index: 1;
+            pointer-events: none;
+            border: 2px solid rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .dropping-piece.red {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+        }
+
+        .dropping-piece.yellow {
+            background: linear-gradient(135deg, #ffdd44, #ccaa00);
+        }
+
         .hover-piece {
             position: absolute;
             width: 60px;
@@ -53,15 +53,12 @@
             z-index: 20;
             top: 10px;
         }
-
         .hover-piece.visible {
             opacity: 0.8;
         }
-
         .hover-piece.red {
             background: linear-gradient(135deg, #ff4444, #cc0000) !important;
         }
-
         .hover-piece.yellow {
             background: linear-gradient(135deg, #ffdd44, #ccaa00) !important;
         }
@@ -212,6 +209,7 @@
         const hoverPiece = document.getElementById('hoverPiece');
         const messageDiv = document.getElementById('message');
 
+        // Initialize the game board
         function createBoard() {
             // Create board holes
             boardDiv.innerHTML = '';
@@ -242,6 +240,11 @@
             setupHoverEffects();
         }
 
+        // Set up hover effects for the drop zone
+        // This function tracks mouse movements over the drop zone and allows the player to drop pieces
+        // It also handles the click event to drop the piece in the selected column
+        // The hover piece is shown above the board to indicate where the next piece will be dropped
+        // The hover piece color is set to red for the human player
         function setupHoverEffects() {
             // Set hover piece color for current player (red for human)
             hoverPiece.className = 'hover-piece red';
@@ -289,6 +292,9 @@
             });
         }
 
+        // Handle human move
+        // This function checks if the column is full and if not, drops the piece
+        // It also checks for a winner after the move
         function humanMove(col) {
             // Check if column is full
             if (board[0][col]) {
@@ -307,6 +313,9 @@
             }
         }
 
+        // AI makes a move using the MiniMax algorithm
+        // This function evaluates all possible moves using the MiniMax algorithm with the given depth
+        // It finds the best move for the AI and places its piece in that cell
         function aiMove() {
             const [score, col] = minimax(board, 6, -Infinity, +Infinity, true);
             dropPiece(col, AI);
@@ -320,6 +329,7 @@
             }, 800); // Wait for animation to complete
         }
 
+        // Drop a piece in the selected column
         function dropPiece(col, player) {
             for (let r = ROWS - 1; r >= 0; r--) {
                 if (!board[r][col]) {
@@ -331,6 +341,8 @@
             return false;
         }
 
+        // Animate the dropping piece
+        // This function drops the piece in the selected column and animates it falling into place
         function animateDrop(targetRow, col, player) {
             // Calculate position relative to the board
             const boardRect = boardDiv.getBoundingClientRect();
@@ -385,30 +397,39 @@
             }, animationDuration * 1000);
         }
 
+        // Check if the board is full
         function isFull() {
             return board[0].every(cell => cell);
         }
 
+        // Check for a winner
+        // This function checks all possible winning conditions (horizontal, vertical, diagonal)
+        // It returns the winning positions if a player has won, otherwise returns false
         function checkWinner(b, p) {
-            // Horizontal, Vertical, Diagonal checks
+            // Horizontal check
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS - 3; c++)
                     if (b[r][c] === p && b[r][c + 1] === p && b[r][c + 2] === p && b[r][c + 3] === p) {
                         return [[r, c], [r, c + 1], [r, c + 2], [r, c + 3]];
                     }
             }
+            // Vertical check
             for (let r = 0; r < ROWS - 3; r++) {
                 for (let c = 0; c < COLS; c++)
                     if (b[r][c] === p && b[r + 1][c] === p && b[r + 2][c] === p && b[r + 3][c] === p) {
                         return [[r, c], [r + 1, c], [r + 2, c], [r + 3, c]];
                     }
             }
+            // Diagonal check
+            // This checks for diagonals going from bottom-left to top-right
             for (let r = 0; r < ROWS - 3; r++) {
                 for (let c = 0; c < COLS - 3; c++)
                     if (b[r][c] === p && b[r + 1][c + 1] === p && b[r + 2][c + 2] === p && b[r + 3][c + 3] === p) {
                         return [[r, c], [r + 1, c + 1], [r + 2, c + 2], [r + 3, c + 3]];
                     }
             }
+            // Diagonal check
+            // This checks for diagonals going from top-left to bottom-right
             for (let r = 3; r < ROWS; r++) {
                 for (let c = 0; c < COLS - 3; c++)
                     if (b[r][c] === p && b[r - 1][c + 1] === p && b[r - 2][c + 2] === p && b[r - 3][c + 3] === p) {
@@ -418,6 +439,14 @@
             return false;
         }
 
+        // Minimax algorithm with alpha-beta pruning
+        // This function recursively evaluates the game tree to find the best move for the AI
+        // It uses alpha-beta pruning to optimize the search and avoid unnecessary calculations
+        // The depth parameter controls how many moves ahead the AI will look
+        // The maximizing parameter indicates whether the current player is the AI (maximizing) or
+        // the human player (minimizing)
+        // It returns the best score and the column to play
+        // The AI will try to maximize its score while minimizing the human player's score
         function minimax(b, depth, alpha, beta, maximizing) {
             if (checkWinner(b, AI)) return [1000, null];
             if (checkWinner(b, HUMAN)) return [-1000, null];
@@ -460,6 +489,9 @@
             }
         }
 
+        // Get the next open row in the specified column
+        // This function checks from the bottom of the column upwards to find the first empty row
+        // It returns the row index if found, otherwise returns -1 if the column is full
         function getNextOpenRow(b, c) {
             for (let r = ROWS - 1; r >= 0; r--) {
                 if (!b[r][c]) return r;
@@ -467,6 +499,12 @@
             return -1;
         }
 
+        // Score the position based on the number of pieces for each player
+        // This function counts the number of pieces for each player on the board
+        // It returns a score where positive values favor the AI and negative values favor the human player
+        // The score is simply the difference between the number of AI pieces and human pieces
+        // This is a simple heuristic and can be improved with more complex scoring strategies
+        // For example, you could add weights for positions, check for potential winning moves, etc
         function scorePosition(b) {
             let score = 0;
             for (let r = 0; r < ROWS; r++) {
@@ -478,6 +516,11 @@
             return score;
         }
 
+        // End the game with a message and highlight the winner
+        // This function displays a message indicating the game result (win, lose, tie)
+        // It also highlights the winning pieces and draws a line connecting them
+        // The hover piece is hidden and the game is paused until the player restarts
+        // If there's a winner, it highlights the winning pieces and draws a line connecting them
         function endGame(msg, winner) {
             messageDiv.textContent = msg;
             isPlayerTurn = false;
@@ -502,6 +545,9 @@
             }
         }
 
+        // Draw a line connecting the winning pieces
+        // This function calculates the start and end positions of the winning pieces
+        // It creates a line element that connects the center points of the first and last pieces in the winning sequence
         function drawWinningLine(positions) {
             const startPos = positions[0];
             const endPos = positions[3];
@@ -532,6 +578,7 @@
             boardDiv.appendChild(line);
         }
 
+        // Reset the game state
         function resetGame() {
             board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
             messageDiv.textContent = '';
@@ -540,6 +587,7 @@
             createBoard();
         }
 
+        // Initialize the game board on page load
         createBoard();
     </script>
 </body>
