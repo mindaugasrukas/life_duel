@@ -3,8 +3,26 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Connect Four AI</title>
+    <title>Connect Four: You (🔴) vs AI (🟡)</title>
     <style>
+        .dropping-piece {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            z-index: 1;
+            pointer-events: none;
+            border: 2px solid rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .dropping-piece.red {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+        }
+
+        .dropping-piece.yellow {
+            background: linear-gradient(135deg, #ffdd44, #ccaa00);
+        }
         body {
             font-family: sans-serif;
             text-align: center;
@@ -27,8 +45,7 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: red;
-            border: 3px solid darkred;
+            border: 2px solid rgba(0,0,0,0.2);
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             pointer-events: none;
             opacity: 0;
@@ -41,44 +58,107 @@
             opacity: 0.8;
         }
 
+        .hover-piece.red {
+            background: linear-gradient(135deg, #ff4444, #cc0000) !important;
+        }
+
+        .hover-piece.yellow {
+            background: linear-gradient(135deg, #ffdd44, #ccaa00) !important;
+        }
+
         #board {
             display: grid;
             grid-template-columns: repeat(7, 60px);
             grid-gap: 5px;
             position: relative;
-            background: #2c5aa0;
             padding: 10px;
             border-radius: 10px;
-        }
-
-        .cell {
-            width: 60px;
-            height: 60px;
-            background: #ddd;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 2em;
-            position: relative;
-            overflow: visible;
-        }
-
-        .cell.filled {
             z-index: 10;
         }
 
-        .cell.empty {
+        /* Create the board frame with holes */
+        #board::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #2c5aa0;
+            border-radius: 10px;
+            z-index: 2;
+            /* Create holes using mask */
+            mask:
+                radial-gradient(circle at 40px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 40px, transparent 28px, black 30px),
+                radial-gradient(circle at 40px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 105px, transparent 28px, black 30px),
+                radial-gradient(circle at 40px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 170px, transparent 28px, black 30px),
+                radial-gradient(circle at 40px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 235px, transparent 28px, black 30px),
+                radial-gradient(circle at 40px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 300px, transparent 28px, black 30px),
+                radial-gradient(circle at 40px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 105px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 170px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 235px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 300px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 365px 365px, transparent 28px, black 30px),
+                radial-gradient(circle at 430px 365px, transparent 28px, black 30px);
+            mask-composite: intersect;
+        }
+
+        .board-hole {
+            width: 60px;
+            height: 60px;
+            position: relative;
             z-index: 1;
         }
 
-        .dropping-piece {
+        .piece {
             position: absolute;
             width: 60px;
             height: 60px;
             border-radius: 50%;
+            top: 0;
+            left: 0;
             z-index: 5;
-            pointer-events: none;
+            border: 2px solid rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .piece.red {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+        }
+
+        .piece.yellow {
+            background: linear-gradient(135deg, #ffdd44, #ccaa00);
         }
 
         @keyframes drop {
@@ -125,25 +205,29 @@
         const messageDiv = document.getElementById('message');
 
         function createBoard() {
-            // Create board cells
+            // Create board holes
             boardDiv.innerHTML = '';
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
+                    const hole = document.createElement('div');
+                    hole.className = 'board-hole';
+                    hole.dataset.row = r;
+                    hole.dataset.col = c;
 
+                    // Add piece if this position is filled
                     if (board[r][c] === 'R') {
-                        cell.style.background = 'red';
-                        cell.classList.add('filled');
+                        hole.classList.add('filled');
+                        const piece = document.createElement('div');
+                        piece.className = 'piece red';
+                        hole.appendChild(piece);
                     } else if (board[r][c] === 'Y') {
-                        cell.style.background = 'yellow';
-                        cell.classList.add('filled');
-                    } else {
-                        cell.style.background = '#ddd';
-                        cell.classList.add('empty');
+                        hole.classList.add('filled');
+                        const piece = document.createElement('div');
+                        piece.className = 'piece yellow';
+                        hole.appendChild(piece);
                     }
 
-                    boardDiv.appendChild(cell);
+                    boardDiv.appendChild(hole);
                 }
             }
 
@@ -151,6 +235,9 @@
         }
 
         function setupHoverEffects() {
+            // Set hover piece color for current player (red for human)
+            hoverPiece.className = 'hover-piece red';
+
             // Mouse move tracking
             dropZoneDiv.addEventListener('mousemove', (e) => {
                 if (!isPlayerTurn) return;
@@ -213,13 +300,15 @@
         }
 
         function aiMove() {
-            const [score, col] = minimax(board, 10, -Infinity, +Infinity, true);
+            const [score, col] = minimax(board, 6, -Infinity, +Infinity, true);
             dropPiece(col, AI);
             setTimeout(() => {
                 if (checkWinner(board, AI)) return endGame("AI wins!");
                 if (isFull()) return endGame("It's a tie!");
 
                 isPlayerTurn = true;
+                // Reset hover piece color to red for player's turn
+                hoverPiece.className = 'hover-piece red';
             }, 800); // Wait for animation to complete
         }
 
@@ -235,53 +324,55 @@
         }
 
         function animateDrop(targetRow, col, player) {
-            // Create the dropping piece
+            // Calculate position relative to the board
+            const boardRect = boardDiv.getBoundingClientRect();
+            const startX = col * 65 + 10; // Column position within board
+            const startY = -80; // Start above the board
+            const endY = targetRow * 65 + 10; // Final position within board
+
+            // Create the dropping piece that will animate across the entire board
             const droppingPiece = document.createElement('div');
-            droppingPiece.className = 'dropping-piece';
-            droppingPiece.style.background = player === 'R' ? 'red' : 'yellow';
+            droppingPiece.className = `dropping-piece ${player === 'R' ? 'red' : 'yellow'}`;
+            droppingPiece.style.left = startX + 'px';
+            droppingPiece.style.top = startY + 'px';
+            droppingPiece.style.zIndex = '1'; // Behind board frame so only visible through holes
 
-            // Position it at the top of the correct column (accounting for board padding)
-            const colPosition = 10 + col * 65; // 10px board padding + col * (60px cell + 5px gap)
-            droppingPiece.style.left = colPosition + 'px';
-            droppingPiece.style.top = '-60px';
-
-            // Calculate the final position (accounting for board padding)
-            const finalPosition = 10 + targetRow * 65; // 10px board padding + row * (60px cell + 5px gap)
-
-            // Add to the board container (not individual cell)
+            // Add to the board container
             boardDiv.appendChild(droppingPiece);
 
-            // Create and apply the animation
+            // Calculate animation duration based on drop distance
             const animationDuration = Math.sqrt(targetRow + 1) * 0.2 + 0.3;
 
-            // Create a unique keyframe for this drop
+            // Create unique keyframe for this drop
             const animationName = `drop-${Date.now()}`;
             const keyframes = `
                 @keyframes ${animationName} {
-                    from { top: -60px; }
-                    to { top: ${finalPosition}px; }
+                    from { top: ${startY}px; }
+                    to { top: ${endY}px; }
                 }
             `;
 
-            // Add the keyframes to the document
+            // Add keyframes to document
             const style = document.createElement('style');
             style.textContent = keyframes;
             document.head.appendChild(style);
 
-            // Apply the animation
-            droppingPiece.style.animation = `${animationName} ${animationDuration}s ease-in forwards`;            // Update the target cell and clean up after animation
-            setTimeout(() => {
-                const targetCell = boardDiv.children[targetRow * COLS + col];
-                if (targetCell && targetCell.classList.contains('cell')) {
-                    targetCell.style.background = player === 'R' ? 'red' : 'yellow';
-                    targetCell.classList.remove('empty');
-                    targetCell.classList.add('filled');
-                }
+            // Apply animation
+            droppingPiece.style.animation = `${animationName} ${animationDuration}s ease-in forwards`;
 
-                // Remove the dropping piece and style
-                if (boardDiv.contains(droppingPiece)) {
-                    boardDiv.removeChild(droppingPiece);
-                }
+            // After animation completes, remove dropping piece and add static piece
+            setTimeout(() => {
+                // Remove the animated piece
+                boardDiv.removeChild(droppingPiece);
+
+                // Add the static piece to the target hole
+                const targetHole = boardDiv.children[targetRow * COLS + col];
+                targetHole.classList.add('filled');
+                const staticPiece = document.createElement('div');
+                staticPiece.className = `piece ${player === 'R' ? 'red' : 'yellow'}`;
+                targetHole.appendChild(staticPiece);
+
+                // Clean up
                 document.head.removeChild(style);
             }, animationDuration * 1000);
         }
@@ -381,6 +472,7 @@
             board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
             messageDiv.textContent = '';
             isPlayerTurn = true;
+            hoverPiece.className = 'hover-piece red'; // Set to red for player
             createBoard();
         }
 
