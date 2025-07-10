@@ -317,7 +317,7 @@
         // This function evaluates all possible moves using the MiniMax algorithm with the given depth
         // It finds the best move for the AI and places its piece in that cell
         function aiMove() {
-            const [score, col] = minimax(board, 6, -Infinity, +Infinity, true);
+            const [score, col] = minimax(board, 7, -Infinity, +Infinity, true);
             dropPiece(col, AI);
             setTimeout(() => {
                 if (checkWinner(board, AI)) return endGame("AI wins!", AI);
@@ -453,7 +453,8 @@
             if (isFull() || depth === 0) return [scorePosition(b), null];
 
             if (maximizing) {
-                let maxEval = -Infinity, bestCol = null;
+                let maxEval = -Infinity;
+                let bestCols = []; // Store all columns with the best score
                 for (let c = 0; c < COLS; c++) {
                     let r = getNextOpenRow(b, c);
                     if (r !== -1) {
@@ -462,15 +463,20 @@
                         let [evalScore] = minimax(temp, depth - 1, alpha, beta, false);
                         if (evalScore > maxEval) {
                             maxEval = evalScore;
-                            bestCol = c;
+                            bestCols = [c]; // Reset with new best column
+                        } else if (evalScore === maxEval) {
+                            bestCols.push(c); // Add to list of equally good columns
                         }
                         alpha = Math.max(alpha, evalScore);
                         if (beta <= alpha) break;
                     }
                 }
+                // Randomly select from best columns
+                const bestCol = bestCols[Math.floor(Math.random() * bestCols.length)];
                 return [maxEval, bestCol];
             } else {
-                let minEval = +Infinity, bestCol = null;
+                let minEval = +Infinity;
+                let bestCols = []; // Store all columns with the best score
                 for (let c = 0; c < COLS; c++) {
                     let r = getNextOpenRow(b, c);
                     if (r !== -1) {
@@ -479,12 +485,16 @@
                         let [evalScore] = minimax(temp, depth - 1, alpha, beta, true);
                         if (evalScore < minEval) {
                             minEval = evalScore;
-                            bestCol = c;
+                            bestCols = [c]; // Reset with new best column
+                        } else if (evalScore === minEval) {
+                            bestCols.push(c); // Add to list of equally good columns
                         }
                         beta = Math.min(beta, evalScore);
                         if (beta <= alpha) break;
                     }
                 }
+                // Randomly select from best columns
+                const bestCol = bestCols[Math.floor(Math.random() * bestCols.length)];
                 return [minEval, bestCol];
             }
         }
