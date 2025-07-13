@@ -11,13 +11,53 @@
             background: #f8f8f8;
         }
 
-        #game {
-            display: inline-block;
+        #game-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 30px;
             margin: 40px auto;
+            max-width: 800px;
+        }
+
+        #game {
             background: #fff;
             border-radius: 12px;
             box-shadow: 0 2px 12px #ccc;
             padding: 24px 32px;
+        }
+
+        #rules {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 20px;
+            width: 250px;
+            font-size: 0.9em;
+            text-align: left;
+        }
+
+        #rules h3 {
+            margin-top: 0;
+            color: #1976d2;
+            font-size: 1.2em;
+        }
+
+        #rules ul {
+            padding-left: 18px;
+            margin-bottom: 15px;
+        }
+
+        #rules li {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        #rules .strategy {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
         }
 
         canvas {
@@ -52,18 +92,39 @@
 
 <body>
     <h1>Dots and Boxes</h1>
-    <div id="game">
-        <div id="score"></div>
-        <div style="margin-bottom: 12px;">
-            <label for="gameMode">Game Mode:</label>
-            <select id="gameMode" onchange="changeGameMode()">
-                <option value="human">Human vs Human</option>
-                <option value="ai">Human vs AI</option>
-            </select>
+    <div id="game-container">
+        <div id="game">
+            <div id="score"></div>
+            <div style="margin-bottom: 12px;">
+                <label for="gameMode">Game Mode:</label>
+                <select id="gameMode" onchange="changeGameMode()">
+                    <option value="human">Human vs Human</option>
+                    <option value="ai">Human vs AI</option>
+                </select>
+            </div>
+            <canvas id="board" width="400" height="400"></canvas>
+            <br>
+            <button onclick="resetGame()">Restart</button>
         </div>
-        <canvas id="board" width="400" height="400"></canvas>
-        <br>
-        <button onclick="resetGame()">Restart</button>
+        <div id="rules">
+            <h3>How to Play</h3>
+            <ul>
+                <li><strong>Goal:</strong> Complete more boxes than your opponent</li>
+                <li><strong>Turn:</strong> Click between dots to draw a line</li>
+                <li><strong>Complete Box:</strong> When you draw the 4th line around a square, you claim it and get another turn</li>
+                <li><strong>Chain:</strong> Completing one box often leads to completing more</li>
+                <li><strong>Winner:</strong> Player with most boxes when all lines are drawn</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li>Avoid creating "3-line boxes" early - they give your opponent easy points</li>
+                    <li>Try to force your opponent to create opportunities</li>
+                    <li>Control the endgame by managing chains</li>
+                </ul>
+            </div>
+        </div>
     </div>
     <script>
         // --- Game config ---
