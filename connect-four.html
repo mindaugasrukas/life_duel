@@ -317,7 +317,7 @@
         // This function evaluates all possible moves using the MiniMax algorithm with the given depth
         // It finds the best move for the AI and places its piece in that cell
         function aiMove() {
-            const [score, col] = minimax(board, 7, -Infinity, +Infinity, true);
+            const [score, col] = minimax(board, 5, true);
             dropPiece(col, AI);
             setTimeout(() => {
                 if (checkWinner(board, AI)) return endGame("AI wins!", AI);
@@ -447,28 +447,40 @@
         // the human player (minimizing)
         // It returns the best score and the column to play
         // The AI will try to maximize its score while minimizing the human player's score
-        function minimax(b, depth, alpha, beta, maximizing) {
+        function minimax(b, depth, maximizing) {
             if (checkWinner(b, AI)) return [1000, null];
             if (checkWinner(b, HUMAN)) return [-1000, null];
-            if (isFull() || depth === 0) return [scorePosition(b), null];
+            if (isFull()) return [0, null];
 
             if (maximizing) {
                 let maxEval = -Infinity;
                 let bestCols = []; // Store all columns with the best score
+                const colScores = []; // For debugging
+
                 for (let c = 0; c < COLS; c++) {
                     let r = getNextOpenRow(b, c);
                     if (r !== -1) {
                         const temp = b.map(row => [...row]);
                         temp[r][c] = AI;
-                        let [evalScore] = minimax(temp, depth - 1, alpha, beta, false);
+
+                        // Check for immediate win after making this move
+                        if (checkWinner(temp, AI)) {
+                            return [1000, c]; // Immediate win, return this column
+                        }
+
+                        let evalScore;
+                        if (depth - 1 == 0)
+                            evalScore = scorePosition(temp, c);
+                        else
+                            [evalScore] = minimax(temp, depth - 1, false);
+                        colScores.push({col: c, score: evalScore});
+
                         if (evalScore > maxEval) {
                             maxEval = evalScore;
                             bestCols = [c]; // Reset with new best column
                         } else if (evalScore === maxEval) {
                             bestCols.push(c); // Add to list of equally good columns
                         }
-                        alpha = Math.max(alpha, evalScore);
-                        if (beta <= alpha) break;
                     }
                 }
                 // Randomly select from best columns
@@ -482,15 +494,24 @@
                     if (r !== -1) {
                         const temp = b.map(row => [...row]);
                         temp[r][c] = HUMAN;
-                        let [evalScore] = minimax(temp, depth - 1, alpha, beta, true);
+
+                        // Check for immediate win after making this move
+                        if (checkWinner(temp, HUMAN)) {
+                            return [-1000, c]; // Immediate loss for AI, return this column
+                        }
+
+                        let evalScore;
+                        if (depth - 1 == 0)
+                            evalScore = -1 * scorePosition(temp, c);
+                        else
+                            [evalScore] = minimax(temp, depth - 1, true);
+
                         if (evalScore < minEval) {
                             minEval = evalScore;
                             bestCols = [c]; // Reset with new best column
                         } else if (evalScore === minEval) {
                             bestCols.push(c); // Add to list of equally good columns
                         }
-                        beta = Math.min(beta, evalScore);
-                        if (beta <= alpha) break;
                     }
                 }
                 // Randomly select from best columns
@@ -515,14 +536,55 @@
         // The score is simply the difference between the number of AI pieces and human pieces
         // This is a simple heuristic and can be improved with more complex scoring strategies
         // For example, you could add weights for positions, check for potential winning moves, etc
-        function scorePosition(b) {
-            let score = 0;
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    if (b[r][c] === AI) score += 1;
-                    else if (b[r][c] === HUMAN) score -= 1;
+        function scorePosition(b, col) {
+            // Find the row where the last piece was placed in this column
+            let row = -1;
+            let player = null;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (b[r][col]) {
+                    row = r;
+                    player = b[r][col];
+                    break;
                 }
             }
+            if (row === -1 || !player) return 0;
+
+            let score = 0;
+
+            // Directions: [rowDelta, colDelta]
+            const directions = [
+                [0, 1],   // Horizontal
+                [1, 0],   // Vertical
+                [1, 1],   // Diagonal down-right
+                [1, -1],  // Diagonal down-left
+            ];
+
+            // For each direction, count consecutive pieces of the same player
+            for (const [dr, dc] of directions) {
+                let count = 1;
+
+                // Check forward
+                let r = row + dr, c = col + dc;
+                while (r >= 0 && r < ROWS && c >= 0 && c < COLS && b[r][c] === player) {
+                    count++;
+                    r += dr;
+                    c += dc;
+                }
+
+                // Check backward
+                r = row - dr, c = col - dc;
+                while (r >= 0 && r < ROWS && c >= 0 && c < COLS && b[r][c] === player) {
+                    count++;
+                    r -= dr;
+                    c -= dc;
+                }
+
+                // Score: more consecutive pieces = higher score
+                if (count >= 4) score += 100; // Winning move - should not happen as it's handled in checkWinner
+                else if (count === 3) score += 10;
+                else if (count === 2) score += 2;
+            }
+
             return score;
         }
 
