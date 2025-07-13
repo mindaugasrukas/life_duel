@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Dots and Boxes</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background: #f8f8f8;
+        }
+
+        #game {
+            display: inline-block;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 24px 32px;
+        }
+
+        canvas {
+            background: #e9e9e9;
+            border-radius: 8px;
+            box-shadow: 0 1px 6px #bbb;
+            margin-bottom: 16px;
+        }
+
+        #score {
+            font-size: 1.2em;
+            margin-bottom: 12px;
+        }
+
+        button {
+            margin-top: 12px;
+            padding: 8px 18px;
+            font-size: 1em;
+            border-radius: 6px;
+            border: none;
+            background: #1976d2;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Dots and Boxes</h1>
+    <div id="game">
+        <div id="score"></div>
+        <canvas id="board" width="400" height="400"></canvas>
+        <br>
+        <button onclick="resetGame()">Restart</button>
+    </div>
+    <script>
+        // --- Game config ---
+        const gridSize = 4; // 4x4 dots (3x3 boxes)
+        const dotRadius = 8;
+        const cellSize = 80;
+        const lineWidth = 6;
+        const boxColors = ["#ffb74d", "#64b5f6"];
+
+        // --- State ---
+        let horizontal = Array(gridSize).fill().map(() => Array(gridSize - 1).fill(null));
+        let vertical = Array(gridSize - 1).fill().map(() => Array(gridSize).fill(null));
+        let boxes = Array(gridSize - 1).fill().map(() => Array(gridSize - 1).fill(null));
+        let scores = [0, 0];
+        let currentPlayer = 0;
+        let gameOver = false;
+        let hoverLine = null; // {type: 'h'|'v', r, c}
+
+        const canvas = document.getElementById("board");
+        const ctx = canvas.getContext("2d");
+        const scoreDiv = document.getElementById("score");
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Centering offset
+            const gridPixelSize = (gridSize - 1) * cellSize;
+            const offsetX = (canvas.width - gridPixelSize) / 2;
+            const offsetY = (canvas.height - gridPixelSize) / 2;
+
+            // Draw boxes
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    if (boxes[r][c] !== null) {
+                        ctx.fillStyle = boxColors[boxes[r][c]];
+                        ctx.fillRect(offsetX + c * cellSize + dotRadius, offsetY + r * cellSize + dotRadius, cellSize - dotRadius * 2, cellSize - dotRadius * 2);
+                    }
+                }
+            }
+            // Draw hovered line (highlight)
+            if (hoverLine) {
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                ctx.strokeStyle = '#43a047';
+                ctx.lineWidth = lineWidth + 2;
+                if (hoverLine.type === 'h') {
+                    ctx.beginPath();
+                    ctx.moveTo(offsetX + hoverLine.c * cellSize + dotRadius, offsetY + hoverLine.r * cellSize);
+                    ctx.lineTo(offsetX + (hoverLine.c + 1) * cellSize - dotRadius, offsetY + hoverLine.r * cellSize);
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(offsetX + hoverLine.c * cellSize, offsetY + hoverLine.r * cellSize + dotRadius);
+                    ctx.lineTo(offsetX + hoverLine.c * cellSize, offsetY + (hoverLine.r + 1) * cellSize - dotRadius);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            // Draw horizontal lines
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    if (horizontal[r][c] !== null) {
+                        ctx.strokeStyle = boxColors[horizontal[r][c]];
+                        ctx.lineWidth = lineWidth;
+                        ctx.beginPath();
+                        ctx.moveTo(offsetX + c * cellSize + dotRadius, offsetY + r * cellSize);
+                        ctx.lineTo(offsetX + (c + 1) * cellSize - dotRadius, offsetY + r * cellSize);
+                        ctx.stroke();
+                    }
+                }
+            }
+            // Draw vertical lines
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (vertical[r][c] !== null) {
+                        ctx.strokeStyle = boxColors[vertical[r][c]];
+                        ctx.lineWidth = lineWidth;
+                        ctx.beginPath();
+                        ctx.moveTo(offsetX + c * cellSize, offsetY + r * cellSize + dotRadius);
+                        ctx.lineTo(offsetX + c * cellSize, offsetY + (r + 1) * cellSize - dotRadius);
+                        ctx.stroke();
+                    }
+                }
+            }
+            // Draw dots
+            ctx.fillStyle = "#333";
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    ctx.beginPath();
+                    ctx.arc(offsetX + c * cellSize, offsetY + r * cellSize, dotRadius, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function updateScore() {
+            scoreDiv.textContent = `Player 1: ${scores[0]} | Player 2: ${scores[1]}${gameOver ? " | Game Over" : ""}`;
+        }
+
+        function resetGame() {
+            horizontal = Array(gridSize).fill().map(() => Array(gridSize - 1).fill(null));
+            vertical = Array(gridSize - 1).fill().map(() => Array(gridSize).fill(null));
+            boxes = Array(gridSize - 1).fill().map(() => Array(gridSize - 1).fill(null));
+            scores = [0, 0];
+            currentPlayer = 0;
+            gameOver = false;
+            drawBoard();
+            updateScore();
+        }
+
+        function checkBoxCompleted(r, c) {
+            return horizontal[r][c] !== null &&
+                horizontal[r + 1][c] !== null &&
+                vertical[r][c] !== null &&
+                vertical[r][c + 1] !== null;
+        }
+
+        function getHoveredLine(x, y) {
+            const gridPixelSize = (gridSize - 1) * cellSize;
+            const offsetX = (canvas.width - gridPixelSize) / 2;
+            const offsetY = (canvas.height - gridPixelSize) / 2;
+            // Check horizontal lines
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    const x1 = offsetX + c * cellSize + dotRadius, x2 = offsetX + (c + 1) * cellSize - dotRadius;
+                    const y0 = offsetY + r * cellSize;
+                    if (y > y0 - lineWidth && y < y0 + lineWidth && x > x1 - 10 && x < x2 + 10 && horizontal[r][c] === null) {
+                        return { type: 'h', r, c };
+                    }
+                }
+            }
+            // Check vertical lines
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const y1 = offsetY + r * cellSize + dotRadius, y2 = offsetY + (r + 1) * cellSize - dotRadius;
+                    const x0 = offsetX + c * cellSize;
+                    if (x > x0 - lineWidth && x < x0 + lineWidth && y > y1 - 10 && y < y2 + 10 && vertical[r][c] === null) {
+                        return { type: 'v', r, c };
+                    }
+                }
+            }
+            return null;
+        }
+
+        canvas.addEventListener("mousemove", function (e) {
+            if (gameOver) {
+                hoverLine = null;
+                drawBoard();
+                return;
+            }
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const line = getHoveredLine(x, y);
+            if (line && (!hoverLine || line.type !== hoverLine.type || line.r !== hoverLine.r || line.c !== hoverLine.c)) {
+                hoverLine = line;
+                drawBoard();
+            } else if (!line && hoverLine) {
+                hoverLine = null;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener("mouseleave", function () {
+            if (hoverLine) {
+                hoverLine = null;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener("click", function (e) {
+            if (gameOver) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const line = getHoveredLine(x, y);
+            if (!line) return;
+            if (line.type === 'h') {
+                const r = line.r, c = line.c;
+                horizontal[r][c] = currentPlayer;
+                let claimed = false;
+                if (r > 0 && checkBoxCompleted(r - 1, c) && boxes[r - 1][c] === null) {
+                    boxes[r - 1][c] = currentPlayer;
+                    scores[currentPlayer]++;
+                    claimed = true;
+                }
+                if (r < gridSize - 1 && checkBoxCompleted(r, c) && boxes[r][c] === null) {
+                    boxes[r][c] = currentPlayer;
+                    scores[currentPlayer]++;
+                    claimed = true;
+                }
+                if (!claimed) currentPlayer = 1 - currentPlayer;
+                drawBoard();
+                updateScore();
+                checkGameOver();
+                return;
+            } else {
+                const r = line.r, c = line.c;
+                vertical[r][c] = currentPlayer;
+                let claimed = false;
+                if (c > 0 && checkBoxCompleted(r, c - 1) && boxes[r][c - 1] === null) {
+                    boxes[r][c - 1] = currentPlayer;
+                    scores[currentPlayer]++;
+                    claimed = true;
+                }
+                if (c < gridSize - 1 && checkBoxCompleted(r, c) && boxes[r][c] === null) {
+                    boxes[r][c] = currentPlayer;
+                    scores[currentPlayer]++;
+                    claimed = true;
+                }
+                if (!claimed) currentPlayer = 1 - currentPlayer;
+                drawBoard();
+                updateScore();
+                checkGameOver();
+                return;
+            }
+        });
+
+        function checkGameOver() {
+            let filled = 0;
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    if (boxes[r][c] !== null) filled++;
+                }
+            }
+            if (filled === (gridSize - 1) * (gridSize - 1)) {
+                gameOver = true;
+                updateScore();
+            }
+        }
+
+        // Initial draw
+        drawBoard();
+        updateScore();
+    </script>
+</body>
+
+</html>
