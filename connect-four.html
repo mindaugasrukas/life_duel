@@ -313,9 +313,7 @@
             }
         }
 
-        // AI makes a move using the MiniMax algorithm
-        // This function evaluates all possible moves using the MiniMax algorithm with the given depth
-        // It finds the best move for the AI and places its piece in that cell
+        // Handle AI move
         function aiMove() {
             const [score, col] = minimax(board, 5, true);
             dropPiece(col, AI);
@@ -439,10 +437,8 @@
             return false;
         }
 
-        // Minimax algorithm with alpha-beta pruning
-        // This function recursively evaluates the game tree to find the best move for the AI
-        // It uses alpha-beta pruning to optimize the search and avoid unnecessary calculations
-        // The depth parameter controls how many moves ahead the AI will look
+        // Minimax algorithm
+        // This function evaluates all possible moves using the MiniMax algorithm with the given depth
         // The maximizing parameter indicates whether the current player is the AI (maximizing) or
         // the human player (minimizing)
         // It returns the best score and the column to play
@@ -530,12 +526,12 @@
             return -1;
         }
 
-        // Score the position based on the number of pieces for each player
-        // This function counts the number of pieces for each player on the board
+        // Score the position after a move
+        // This function evaluates the current board position after a move has been made
         // It returns a score where positive values favor the AI and negative values favor the human player
-        // The score is simply the difference between the number of AI pieces and human pieces
-        // This is a simple heuristic and can be improved with more complex scoring strategies
-        // For example, you could add weights for positions, check for potential winning moves, etc
+        // The score is based on the number of consecutive pieces in all directions
+        // It checks the last piece placed in the column and counts consecutive pieces in all four directions
+        // The scoring is designed to favor positions that lead to winning moves
         function scorePosition(b, col) {
             // Find the row where the last piece was placed in this column
             let row = -1;
