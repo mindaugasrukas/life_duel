@@ -54,6 +54,13 @@
     <h1>Dots and Boxes</h1>
     <div id="game">
         <div id="score"></div>
+        <div style="margin-bottom: 12px;">
+            <label for="gameMode">Game Mode:</label>
+            <select id="gameMode" onchange="changeGameMode()">
+                <option value="human">Human vs Human</option>
+                <option value="ai">Human vs AI</option>
+            </select>
+        </div>
         <canvas id="board" width="400" height="400"></canvas>
         <br>
         <button onclick="resetGame()">Restart</button>
@@ -74,6 +81,7 @@
         let currentPlayer = 0;
         let gameOver = false;
         let hoverLine = null; // {type: 'h'|'v', r, c}
+        let isAI = false; // AI mode toggle
 
         const canvas = document.getElementById("board");
         const ctx = canvas.getContext("2d");
@@ -152,7 +160,9 @@
         }
 
         function updateScore() {
-            scoreDiv.textContent = `Player 1: ${scores[0]} | Player 2: ${scores[1]}${gameOver ? " | Game Over" : ""}`;
+            const playerText = isAI ? `Human: ${scores[0]} | AI: ${scores[1]}` : `Player 1: ${scores[0]} | Player 2: ${scores[1]}`;
+            const turnText = gameOver ? " | Game Over" : (isAI && currentPlayer === 1 ? " | AI's turn" : "");
+            scoreDiv.textContent = playerText + turnText;
         }
 
         function resetGame() {
@@ -162,8 +172,15 @@
             scores = [0, 0];
             currentPlayer = 0;
             gameOver = false;
+            hoverLine = null;
             drawBoard();
             updateScore();
+        }
+
+        function changeGameMode() {
+            const select = document.getElementById("gameMode");
+            isAI = select.value === "ai";
+            resetGame();
         }
 
         function checkBoxCompleted(r, c) {
@@ -171,6 +188,200 @@
                 horizontal[r + 1][c] !== null &&
                 vertical[r][c] !== null &&
                 vertical[r][c + 1] !== null;
+        }
+
+        // AI Functions
+        function getAllAvailableMoves() {
+            const moves = [];
+            // Horizontal lines
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    if (horizontal[r][c] === null) {
+                        moves.push({ type: 'h', r, c });
+                    }
+                }
+            }
+            // Vertical lines
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (vertical[r][c] === null) {
+                        moves.push({ type: 'v', r, c });
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function countBoxesCompletedByMove(move) {
+            let count = 0;
+            if (move.type === 'h') {
+                const r = move.r, c = move.c;
+                // Check box above
+                if (r > 0 && horizontal[r - 1][c] !== null && vertical[r - 1][c] !== null && vertical[r - 1][c + 1] !== null) {
+                    count++;
+                }
+                // Check box below
+                if (r < gridSize - 1 && horizontal[r + 1][c] !== null && vertical[r][c] !== null && vertical[r][c + 1] !== null) {
+                    count++;
+                }
+            } else {
+                const r = move.r, c = move.c;
+                // Check box left
+                if (c > 0 && horizontal[r][c - 1] !== null && horizontal[r + 1][c - 1] !== null && vertical[r][c - 1] !== null) {
+                    count++;
+                }
+                // Check box right
+                if (c < gridSize - 1 && horizontal[r][c] !== null && horizontal[r + 1][c] !== null && vertical[r][c + 1] !== null) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        function countBoxesWithThreeLines() {
+            let count = 0;
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    if (boxes[r][c] === null) {
+                        let lines = 0;
+                        if (horizontal[r][c] !== null) lines++;
+                        if (horizontal[r + 1][c] !== null) lines++;
+                        if (vertical[r][c] !== null) lines++;
+                        if (vertical[r][c + 1] !== null) lines++;
+                        if (lines === 3) count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function wouldCreateThreeLineBox(move) {
+            // Quick check if this move would create a 3-line box for opponent
+            if (move.type === 'h') {
+                const r = move.r, c = move.c;
+                // Check box above
+                if (r > 0 && boxes[r - 1][c] === null) {
+                    let lines = 0;
+                    if (horizontal[r - 1][c] !== null) lines++;
+                    if (vertical[r - 1][c] !== null) lines++;
+                    if (vertical[r - 1][c + 1] !== null) lines++;
+                    if (lines === 2) return true; // Would create 3rd line
+                }
+                // Check box below
+                if (r < gridSize - 1 && boxes[r][c] === null) {
+                    let lines = 0;
+                    if (horizontal[r + 1][c] !== null) lines++;
+                    if (vertical[r][c] !== null) lines++;
+                    if (vertical[r][c + 1] !== null) lines++;
+                    if (lines === 2) return true; // Would create 3rd line
+                }
+            } else {
+                const r = move.r, c = move.c;
+                // Check box left
+                if (c > 0 && boxes[r][c - 1] === null) {
+                    let lines = 0;
+                    if (horizontal[r][c - 1] !== null) lines++;
+                    if (horizontal[r + 1][c - 1] !== null) lines++;
+                    if (vertical[r][c - 1] !== null) lines++;
+                    if (lines === 2) return true; // Would create 3rd line
+                }
+                // Check box right
+                if (c < gridSize - 1 && boxes[r][c] === null) {
+                    let lines = 0;
+                    if (horizontal[r][c] !== null) lines++;
+                    if (horizontal[r + 1][c] !== null) lines++;
+                    if (vertical[r][c + 1] !== null) lines++;
+                    if (lines === 2) return true; // Would create 3rd line
+                }
+            }
+            return false;
+        }
+
+        function makeAIMove() {
+            const moves = getAllAvailableMoves();
+            if (moves.length === 0) return;
+
+            // Strategy 1: Complete boxes if possible (highest priority)
+            const completingMoves = moves.filter(move => countBoxesCompletedByMove(move) > 0);
+            if (completingMoves.length > 0) {
+                const bestMove = completingMoves.reduce((best, move) =>
+                    countBoxesCompletedByMove(move) > countBoxesCompletedByMove(best) ? move : best
+                );
+                executeMoveForPlayer(bestMove, 1);
+                return;
+            }
+
+            // Strategy 2: Avoid creating 3-line boxes (fast check)
+            const safeMoves = moves.filter(move => !wouldCreateThreeLineBox(move));
+
+            // If we have safe moves, pick one randomly
+            if (safeMoves.length > 0) {
+                const randomMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+                executeMoveForPlayer(randomMove, 1);
+                return;
+            }
+
+            // Strategy 3: If forced to create opportunities, just pick randomly
+            const randomMove = moves[Math.floor(Math.random() * moves.length)];
+            executeMoveForPlayer(randomMove, 1);
+        }
+
+        function makeTemporaryMove(move) {
+            if (move.type === 'h') {
+                horizontal[move.r][move.c] = 1;
+            } else {
+                vertical[move.r][move.c] = 1;
+            }
+        }
+
+        function undoTemporaryMove(move) {
+            if (move.type === 'h') {
+                horizontal[move.r][move.c] = null;
+            } else {
+                vertical[move.r][move.c] = null;
+            }
+        }
+
+        function executeMoveForPlayer(move, player) {
+            let claimed = false;
+            if (move.type === 'h') {
+                horizontal[move.r][move.c] = player;
+                if (move.r > 0 && checkBoxCompleted(move.r - 1, move.c) && boxes[move.r - 1][move.c] === null) {
+                    boxes[move.r - 1][move.c] = player;
+                    scores[player]++;
+                    claimed = true;
+                }
+                if (move.r < gridSize - 1 && checkBoxCompleted(move.r, move.c) && boxes[move.r][move.c] === null) {
+                    boxes[move.r][move.c] = player;
+                    scores[player]++;
+                    claimed = true;
+                }
+            } else {
+                vertical[move.r][move.c] = player;
+                if (move.c > 0 && checkBoxCompleted(move.r, move.c - 1) && boxes[move.r][move.c - 1] === null) {
+                    boxes[move.r][move.c - 1] = player;
+                    scores[player]++;
+                    claimed = true;
+                }
+                if (move.c < gridSize - 1 && checkBoxCompleted(move.r, move.c) && boxes[move.r][move.c] === null) {
+                    boxes[move.r][move.c] = player;
+                    scores[player]++;
+                    claimed = true;
+                }
+            }
+
+            if (!claimed) {
+                currentPlayer = 1 - currentPlayer;
+            }
+
+            drawBoard();
+            updateScore();
+            checkGameOver();
+
+            // If AI claimed boxes and game isn't over, AI goes again
+            if (claimed && !gameOver && isAI && currentPlayer === 1) {
+                setTimeout(() => makeAIMove(), 200);
+            }
         }
 
         function getHoveredLine(x, y) {
@@ -201,7 +412,7 @@
         }
 
         canvas.addEventListener("mousemove", function (e) {
-            if (gameOver) {
+            if (gameOver || (isAI && currentPlayer === 1)) {
                 hoverLine = null;
                 drawBoard();
                 return;
@@ -228,49 +439,20 @@
 
         canvas.addEventListener("click", function (e) {
             if (gameOver) return;
+            if (isAI && currentPlayer === 1) return; // Block clicks during AI turn
+
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             const line = getHoveredLine(x, y);
             if (!line) return;
-            if (line.type === 'h') {
-                const r = line.r, c = line.c;
-                horizontal[r][c] = currentPlayer;
-                let claimed = false;
-                if (r > 0 && checkBoxCompleted(r - 1, c) && boxes[r - 1][c] === null) {
-                    boxes[r - 1][c] = currentPlayer;
-                    scores[currentPlayer]++;
-                    claimed = true;
-                }
-                if (r < gridSize - 1 && checkBoxCompleted(r, c) && boxes[r][c] === null) {
-                    boxes[r][c] = currentPlayer;
-                    scores[currentPlayer]++;
-                    claimed = true;
-                }
-                if (!claimed) currentPlayer = 1 - currentPlayer;
-                drawBoard();
-                updateScore();
-                checkGameOver();
-                return;
-            } else {
-                const r = line.r, c = line.c;
-                vertical[r][c] = currentPlayer;
-                let claimed = false;
-                if (c > 0 && checkBoxCompleted(r, c - 1) && boxes[r][c - 1] === null) {
-                    boxes[r][c - 1] = currentPlayer;
-                    scores[currentPlayer]++;
-                    claimed = true;
-                }
-                if (c < gridSize - 1 && checkBoxCompleted(r, c) && boxes[r][c] === null) {
-                    boxes[r][c] = currentPlayer;
-                    scores[currentPlayer]++;
-                    claimed = true;
-                }
-                if (!claimed) currentPlayer = 1 - currentPlayer;
-                drawBoard();
-                updateScore();
-                checkGameOver();
-                return;
+
+            const wasPlayerTurn = currentPlayer === 0;
+            executeMoveForPlayer(line, currentPlayer);
+
+            // Trigger AI move if it's now AI's turn
+            if (isAI && !gameOver && currentPlayer === 1) {
+                setTimeout(() => makeAIMove(), 200);
             }
         });
 
