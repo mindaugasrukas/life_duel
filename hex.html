@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Hex</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background: #f8f8f8;
+        }
+
+        #game-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 30px;
+            margin: 40px auto;
+            max-width: 900px;
+        }
+
+        #game {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 24px 32px;
+        }
+
+        #rules {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 20px;
+            width: 280px;
+            font-size: 0.9em;
+            text-align: left;
+        }
+
+        #rules h3 {
+            margin-top: 0;
+            color: #1976d2;
+            font-size: 1.2em;
+        }
+
+        #rules ul {
+            padding-left: 18px;
+            margin-bottom: 15px;
+        }
+
+        #rules li {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        #rules .strategy {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        #rules .player-colors {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+
+        .color-box {
+            width: 30px;
+            height: 20px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .red { background: #e53e3e; }
+        .blue { background: #3182ce; }
+
+        canvas {
+            background: #f7f7f7;
+            border-radius: 8px;
+            box-shadow: 0 1px 6px #bbb;
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+
+        #score {
+            font-size: 1.2em;
+            margin-bottom: 12px;
+            font-weight: bold;
+        }
+
+        button {
+            margin-top: 12px;
+            padding: 8px 18px;
+            font-size: 1em;
+            border-radius: 6px;
+            border: none;
+            background: #1976d2;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+
+        .board-border {
+            position: absolute;
+            background: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Hex</h1>
+    <div id="game-container">
+        <div id="game">
+            <div id="score"></div>
+            <div style="margin-bottom: 12px;">
+                <label for="gameMode">Game Mode:</label>
+                <select id="gameMode" onchange="changeGameMode()">
+                    <option value="human">Human vs Human</option>
+                    <option value="ai">Human vs AI</option>
+                </select>
+                <label for="boardSize" style="margin-left: 15px;">Board Size:</label>
+                <select id="boardSize" onchange="changeBoardSize()">
+                    <option value="7">7x7</option>
+                    <option value="9">9x9</option>
+                    <option value="11" selected>11x11</option>
+                    <option value="13">13x13</option>
+                </select>
+            </div>
+            <canvas id="board" width="560" height="400"></canvas>
+            <br>
+            <button onclick="resetGame()">Restart</button>
+        </div>
+        <div id="rules">
+            <h3>How to Play</h3>
+            <div class="player-colors">
+                <div>Red (You): <span class="color-box red"></span> Connect Left ↔ Right</div>
+                <div>Blue (AI): <span class="color-box blue"></span> Connect Top ↔ Bottom</div>
+            </div>
+            <ul>
+                <li><strong>Goal:</strong> Create an unbroken chain connecting your two opposite sides</li>
+                <li><strong>Turn:</strong> Click any empty hexagon to place your piece</li>
+                <li><strong>Connection:</strong> Pieces connect through adjacent edges (6 neighbors)</li>
+                <li><strong>No Draws:</strong> One player must always win!</li>
+                <li><strong>Winner:</strong> First to complete their connection wins</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li><strong>Blocking:</strong> Place pieces to interrupt opponent's potential paths</li>
+                    <li><strong>Bridging:</strong> Create "virtual connections" using bridge patterns</li>
+                    <li><strong>Center Control:</strong> The center offers the most flexibility</li>
+                    <li><strong>Edge Play:</strong> Sometimes the edges provide the shortest path</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- Game config ---
+        let boardSize = 11;
+        const hexRadius = 18;
+        const hexSpacing = 36;
+        const playerColors = ["#e53e3e", "#3182ce"]; // Red, Blue
+        const borderColors = ["#c53030", "#2c5aa0"]; // Darker versions
+
+        // --- State ---
+        let board = [];
+        let currentPlayer = 0; // 0 = Red (Human), 1 = Blue (AI/Player2)
+        let gameOver = false;
+        let isAI = false;
+        let hoverHex = null;
+        let winningPath = [];
+
+        const canvas = document.getElementById("board");
+        const ctx = canvas.getContext("2d");
+        const scoreDiv = document.getElementById("score");
+
+        function initBoard() {
+            board = [];
+            for (let r = 0; r < boardSize; r++) {
+                board[r] = [];
+                for (let c = 0; c < boardSize; c++) {
+                    board[r][c] = null;
+                }
+            }
+        }
+
+        function getHexCenter(row, col) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // True Hex board diamond layout - rhombus shape
+            const hexWidth = hexSpacing * 0.866; // sqrt(3)/2 for proper hex spacing
+            const hexHeight = hexSpacing * 0.75; // 3/4 for proper vertical spacing
+
+            // Create rhombus pattern: offset each row to form diamond
+            // Each row shifts horizontally by half a hex width
+            const rowOffset = row * hexWidth * 0.5;
+            const offsetX = (col - (boardSize - 1) / 2) * hexWidth + (row - (boardSize - 1) / 2) * hexWidth * 0.5;
+            const offsetY = (row - (boardSize - 1) / 2) * hexHeight;
+
+            return {
+                x: centerX + offsetX,
+                y: centerY + offsetY
+            };
+        }
+
+        function drawHexagon(x, y, color, isHovered = false, isWinning = false) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                // Rotate hexagons by 30 degrees (π/6) so they have flat sides
+                const angle = (i * Math.PI) / 3 + Math.PI / 6;
+                const hx = hexRadius * Math.cos(angle);
+                const hy = hexRadius * Math.sin(angle);
+                if (i === 0) ctx.moveTo(hx, hy);
+                else ctx.lineTo(hx, hy);
+            }
+            ctx.closePath();
+
+            if (color !== null) {
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = isWinning ? "#ffd700" : borderColors[color === playerColors[0] ? 0 : 1];
+                ctx.lineWidth = isWinning ? 4 : 2;
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = isHovered ? "#e2e8f0" : "#f7fafc";
+                ctx.fill();
+                ctx.strokeStyle = "#cbd5e0";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw border indicators
+            drawBorders();
+
+            // Draw hexagons
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    const center = getHexCenter(r, c);
+                    const color = board[r][c] !== null ? playerColors[board[r][c]] : null;
+                    const isHovered = hoverHex && hoverHex.r === r && hoverHex.c === c;
+                    const isWinning = winningPath.some(hex => hex.r === r && hex.c === c);
+                    drawHexagon(center.x, center.y, color, isHovered, isWinning);
+                }
+            }
+        }
+
+        function drawBorders() {
+            // Draw colored borders as simple lines at diamond edges
+            const borderWidth = 10;
+
+            // Calculate the actual diamond corners
+            const topCorner = getHexCenter(0, Math.floor(boardSize / 2));
+            const leftCorner = getHexCenter(Math.floor(boardSize / 2), 0);
+            const rightCorner = getHexCenter(Math.floor(boardSize / 2), boardSize - 1);
+            const bottomCorner = getHexCenter(boardSize - 1, Math.floor(boardSize / 2));
+
+            ctx.lineWidth = borderWidth;
+            ctx.lineCap = "round";
+
+            // Red borders (horizontal - top and bottom)
+            ctx.strokeStyle = playerColors[0]; // Red
+
+            const topLeftX = leftCorner.x - hexRadius - 85;
+            const topLeftY = leftCorner.y - hexRadius - 132;
+            const topRightX = rightCorner.x + hexRadius - 87;
+            const topRightY = rightCorner.y - hexRadius - 132;
+            const bottomLeftX = leftCorner.x - hexRadius + 87;
+            const bottomLeftY = leftCorner.y + hexRadius + 132;
+            const bottomRightX = rightCorner.x + hexRadius + 85;
+            const bottomRightY = rightCorner.y + hexRadius + 132;
+
+            // Top horizontal border
+            ctx.beginPath();
+            ctx.moveTo(topLeftX, topLeftY);
+            ctx.lineTo(topRightX, topRightY);
+            ctx.stroke();
+
+            // Bottom horizontal border
+            ctx.beginPath();
+            ctx.moveTo(bottomLeftX, bottomLeftY);
+            ctx.lineTo(bottomRightX, bottomRightY);
+            ctx.stroke();
+
+            // Blue borders (vertical - left and right)
+            ctx.strokeStyle = playerColors[1]; // Blue
+
+            // Left vertical border
+            ctx.beginPath();
+            ctx.moveTo(topLeftX, topLeftY);
+            ctx.lineTo(bottomLeftX, bottomLeftY);
+            ctx.stroke();
+
+            // Right vertical border
+            ctx.beginPath();
+            ctx.moveTo(topRightX, topRightY);
+            ctx.lineTo(bottomRightX, bottomRightY);
+            ctx.stroke();
+        }
+
+        function getHexFromPoint(x, y) {
+            let bestHex = null;
+            let minDist = Infinity;
+
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    const center = getHexCenter(r, c);
+                    const dist = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
+                    if (dist < hexRadius && dist < minDist) {
+                        minDist = dist;
+                        bestHex = { r, c };
+                    }
+                }
+            }
+
+            return bestHex;
+        }
+
+        function getNeighbors(r, c) {
+            const neighbors = [];
+            const directions = [
+                [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0]
+            ];
+
+            for (const [dr, dc] of directions) {
+                const nr = r + dr;
+                const nc = c + dc;
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
+                    neighbors.push({ r: nr, c: nc });
+                }
+            }
+
+            return neighbors;
+        }
+
+        function checkWin(player) {
+            // Red player (0): connect top to bottom
+            // Blue player (1): connect left to right
+
+            if (player === 0) {
+                // Check from top row
+                for (let c = 0; c < boardSize; c++) {
+                    if (board[0][c] === player) {
+                        const visited = new Set();
+                        const path = [];
+                        if (dfsToBottom(0, c, player, visited, path)) {
+                            winningPath = [...path];
+                            return true;
+                        }
+                    }
+                }
+            } else {
+                // Check from left column
+                for (let r = 0; r < boardSize; r++) {
+                    if (board[r][0] === player) {
+                        const visited = new Set();
+                        const path = [];
+                        if (dfsToRight(r, 0, player, visited, path)) {
+                            winningPath = [...path];
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function dfsToBottom(r, c, player, visited, path) {
+            const key = `${r},${c}`;
+            if (visited.has(key)) return false;
+
+            visited.add(key);
+            path.push({ r, c });
+
+            // Check if we reached the bottom
+            if (r === boardSize - 1) {
+                return true;
+            }
+
+            const neighbors = getNeighbors(r, c);
+            for (const neighbor of neighbors) {
+                if (board[neighbor.r][neighbor.c] === player) {
+                    if (dfsToBottom(neighbor.r, neighbor.c, player, visited, path)) {
+                        return true;
+                    }
+                }
+            }
+
+            // Backtrack
+            path.pop();
+            return false;
+        }
+
+        function dfsToRight(r, c, player, visited, path) {
+            const key = `${r},${c}`;
+            if (visited.has(key)) return false;
+
+            visited.add(key);
+            path.push({ r, c });
+
+            // Check if we reached the right edge
+            if (c === boardSize - 1) {
+                return true;
+            }
+
+            const neighbors = getNeighbors(r, c);
+            for (const neighbor of neighbors) {
+                if (board[neighbor.r][neighbor.c] === player) {
+                    if (dfsToRight(neighbor.r, neighbor.c, player, visited, path)) {
+                        return true;
+                    }
+                }
+            }
+
+            // Backtrack
+            path.pop();
+            return false;
+        }
+
+        function makeMove(r, c, player) {
+            if (board[r][c] !== null || gameOver) return false;
+
+            board[r][c] = player;
+
+            if (checkWin(player)) {
+                gameOver = true;
+                // The player who just moved is the winner, not the currentPlayer
+                updateScore();
+                return true;
+            }
+
+            currentPlayer = 1 - currentPlayer;
+            updateScore();
+            return true;
+        }
+
+        function updateScore() {
+            const playerText = isAI ?
+                `Human (Red): ${currentPlayer === 0 && !gameOver ? 'Your turn' : ''}` +
+                ` | AI (Blue): ${currentPlayer === 1 && !gameOver ? 'Thinking...' : ''}` :
+                `Red Player: ${currentPlayer === 0 && !gameOver ? 'Your turn' : ''}` +
+                ` | Blue Player: ${currentPlayer === 1 && !gameOver ? 'Your turn' : ''}`;
+
+            if (gameOver) {
+                // Winner is the player who just made the move (1 - currentPlayer)
+                const winningPlayer = 1 - currentPlayer;
+                const winner = winningPlayer === 0 ? (isAI ? "Human (Red)" : "Red Player") : (isAI ? "AI (Blue)" : "Blue Player");
+                scoreDiv.textContent = `${winner} Wins!`;
+                scoreDiv.style.color = playerColors[winningPlayer];
+            } else {
+                scoreDiv.textContent = playerText;
+                scoreDiv.style.color = "#333";
+            }
+        }
+
+        function resetGame() {
+            initBoard();
+            currentPlayer = 0;
+            gameOver = false;
+            hoverHex = null;
+            winningPath = [];
+            drawBoard();
+            updateScore();
+        }
+
+        function changeGameMode() {
+            const select = document.getElementById("gameMode");
+            isAI = select.value === "ai";
+            resetGame();
+        }
+
+        function changeBoardSize() {
+            const select = document.getElementById("boardSize");
+            boardSize = parseInt(select.value);
+            resetGame();
+        }
+
+        // Simple AI
+        function makeAIMove() {
+            if (gameOver) return;
+
+            const availableMoves = [];
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (board[r][c] === null) {
+                        availableMoves.push({ r, c });
+                    }
+                }
+            }
+
+            if (availableMoves.length === 0) return;
+
+            // Simple strategy: try center positions first, then random
+            const centerMoves = availableMoves.filter(move => {
+                const centerDist = Math.abs(move.r - boardSize/2) + Math.abs(move.c - boardSize/2);
+                return centerDist < boardSize / 3;
+            });
+
+            const move = centerMoves.length > 0 ?
+                centerMoves[Math.floor(Math.random() * centerMoves.length)] :
+                availableMoves[Math.floor(Math.random() * availableMoves.length)];
+
+            makeMove(move.r, move.c, 1);
+            drawBoard();
+        }
+
+        // Event listeners
+        canvas.addEventListener("mousemove", function(e) {
+            if (gameOver || (isAI && currentPlayer === 1)) {
+                hoverHex = null;
+                drawBoard();
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const hex = getHexFromPoint(x, y);
+
+            if (hex && board[hex.r][hex.c] === null) {
+                if (!hoverHex || hoverHex.r !== hex.r || hoverHex.c !== hex.c) {
+                    hoverHex = hex;
+                    drawBoard();
+                }
+            } else if (hoverHex) {
+                hoverHex = null;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener("mouseleave", function() {
+            if (hoverHex) {
+                hoverHex = null;
+                drawBoard();
+            }
+        });
+
+        canvas.addEventListener("click", function(e) {
+            if (gameOver || (isAI && currentPlayer === 1)) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const hex = getHexFromPoint(x, y);
+
+            if (hex && board[hex.r][hex.c] === null) {
+                if (makeMove(hex.r, hex.c, currentPlayer)) {
+                    drawBoard();
+
+                    // Trigger AI move
+                    if (isAI && !gameOver && currentPlayer === 1) {
+                        setTimeout(() => {
+                            makeAIMove();
+                        }, 300);
+                    }
+                }
+            }
+        });
+
+        // Initialize game
+        initBoard();
+        drawBoard();
+        updateScore();
+    </script>
+</body>
+
+</html>
