@@ -17,7 +17,7 @@
             align-items: flex-start;
             gap: 30px;
             margin: 40px auto;
-            max-width: 900px;
+            max-width: 1200px;
         }
 
         #game {
@@ -32,7 +32,7 @@
             border-radius: 12px;
             box-shadow: 0 2px 12px #ccc;
             padding: 20px;
-            width: 280px;
+            width: 340px;
             font-size: 0.9em;
             text-align: left;
         }
@@ -61,8 +61,6 @@
         }
 
         #rules .player-colors {
-            display: flex;
-            justify-content: space-between;
             margin: 10px 0;
         }
 
@@ -462,8 +460,7 @@
                 ` | Blue Player: ${currentPlayer === 1 && !gameOver ? 'Your turn' : ''}`;
 
             if (gameOver) {
-                // Winner is the player who just made the move (1 - currentPlayer)
-                const winningPlayer = 1 - currentPlayer;
+                const winningPlayer = currentPlayer;
                 const winner = winningPlayer === 0 ? (isAI ? "Human (Red)" : "Red Player") : (isAI ? "AI (Blue)" : "Blue Player");
                 scoreDiv.textContent = `${winner} Wins!`;
                 scoreDiv.style.color = playerColors[winningPlayer];
