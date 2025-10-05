@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Games</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+        }
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+
+        .game-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 20px;
+        }
+        .game-item {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 10px;
+            padding: 15px;
+            width: 200px;
+            text-align: center;
+            height: 150px;
+        }
+        .game-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+        a:hover {
+            background-color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>My Games</h1>
+    </header>
+    <main>
+        <section class="game-list">
+            <a href="tictactoe.html">
+                <div class="game-item">
+                    <h2>Tic-Tac-Toe</h2>
+                    <p>My first game with an AI opponent</p>
+                </div>
+            </a>
+            <a href="life_duel.html">
+                <div class="game-item">
+                    <h2>Life Duel</h2>
+                    <p>Life Duel is a strategic two-player game based on Conway's Game of Life</p>
+                </div>
+            </a>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2025 Mindaugas Rukas. All rights reserved.</p>
+    </footer>
+</body>
+</html>
