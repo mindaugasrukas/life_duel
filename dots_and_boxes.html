@@ -98,8 +98,8 @@
             <div style="margin-bottom: 12px;">
                 <label for="gameMode">Game Mode:</label>
                 <select id="gameMode" onchange="changeGameMode()">
-                    <option value="human">Human vs Human</option>
                     <option value="ai">Human vs AI</option>
+                    <option value="human">Human vs Human</option>
                 </select>
             </div>
             <canvas id="board" width="400" height="400"></canvas>
@@ -141,7 +141,7 @@
         let scores = [0, 0];
         let currentPlayer = 0;
         let gameOver = false;
-        let isAI = false; // AI mode toggle
+        let isAI = true; // AI mode toggle
 
         /*
             hoverLine = {
