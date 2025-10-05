@@ -141,8 +141,16 @@
         let scores = [0, 0];
         let currentPlayer = 0;
         let gameOver = false;
-        let hoverLine = null; // {type: 'h'|'v', r, c}
         let isAI = false; // AI mode toggle
+
+        /*
+            hoverLine = {
+                type: 'h'|'v', // line type horizontal or vertical
+                r, // row index
+                c // column index
+            }
+        */
+        let hoverLine = null;
 
         const canvas = document.getElementById("board");
         const ctx = canvas.getContext("2d");
@@ -168,7 +176,7 @@
             if (hoverLine) {
                 ctx.save();
                 ctx.globalAlpha = 0.5;
-                ctx.strokeStyle = '#43a047';
+                ctx.strokeStyle = boxColors[currentPlayer];
                 ctx.lineWidth = lineWidth + 2;
                 if (hoverLine.type === 'h') {
                     ctx.beginPath();
@@ -358,6 +366,7 @@
             return false;
         }
 
+        // TODO: add minimax or alpha-beta pruning for better selection
         function makeAIMove() {
             const moves = getAllAvailableMoves();
             if (moves.length === 0) return;
@@ -375,14 +384,14 @@
             // Strategy 2: Avoid creating 3-line boxes (fast check)
             const safeMoves = moves.filter(move => !wouldCreateThreeLineBox(move));
 
-            // If we have safe moves, pick one randomly
+            // If we have safe moves, pick one randomly (TODO: minimize opponent boxes)
             if (safeMoves.length > 0) {
                 const randomMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
                 executeMoveForPlayer(randomMove, 1);
                 return;
             }
 
-            // Strategy 3: If forced to create opportunities, just pick randomly
+            // Strategy 3: If forced to create opportunities, just pick randomly (TODO: minimize opponent boxes)
             const randomMove = moves[Math.floor(Math.random() * moves.length)];
             executeMoveForPlayer(randomMove, 1);
         }
