@@ -479,6 +479,13 @@
                         }
                     }
                 }
+
+                // Debug logging at root level
+                if (depth === 2) {
+                    console.log("Column evaluations:", colScores);
+                    console.log("Best columns:", bestCols, "with score:", maxEval);
+                }
+
                 // Randomly select from best columns
                 const bestCol = bestCols[Math.floor(Math.random() * bestCols.length)];
                 return [maxEval, bestCol];
