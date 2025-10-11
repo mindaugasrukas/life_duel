@@ -68,3 +68,23 @@ button:disabled {
     background: #aaa;
     cursor: not-allowed;
 }
+
+/* Home link style */
+.home-link {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 1000;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.home-link svg {
+    vertical-align: middle;
+}
+
+.home-link span {
+    font-size: 1rem;
+    vertical-align: middle;
+    color: #333;
+}

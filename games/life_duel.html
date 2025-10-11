@@ -3,21 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <title>Life Duel</title>
+  <link rel="stylesheet" href="styles.css">
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      margin-top: 10px;
-    }
-    #container {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
     canvas {
       border: 1px solid #555;
       cursor: pointer;
@@ -39,14 +26,6 @@
       font-weight: bold;
       font-size: 1.1rem;
     }
-    .guide {
-      background: #f9f9f9;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 0.85rem;
-      margin-left: 10px;
-    }
     button,
     select {
       margin-top: 6px;
@@ -61,9 +40,15 @@
   </style>
 </head>
 <body>
-  <div id="container">
-    <!--‑‑ LEFT PANEL ‑‑-->
-    <div class="sideinfo" id="leftPanel">
+  <a href="../index.html" title="Back to Home" class="home-link">
+    <svg width="28" height="28" viewBox="0 0 24 24">
+      <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Home</span>
+  </a>
+  <h1>Life Duel</h1>
+  <div id="game-container">
+    <div id="game">
       <label for="boardSize">Board size:</label>
       <select id="boardSize">
         <option value="7" selected>7 x 7</option>
@@ -71,16 +56,14 @@
         <option value="15">15 x 15</option>
       </select>
       <button id="newGameBtn">New Game</button>
+      <button id="evolveBtn" style="background:#4caf50;color:#fff" disabled>Evolve!</button>
 
       <div id="stats" style="margin-top:10px"></div>
-      <button id="evolveBtn" style="background:#4caf50;color:#fff" disabled>Evolve!</button>
+
+      <canvas id="board"></canvas>
     </div>
 
-    <!--‑‑ CANVAS ‑‑-->
-    <canvas id="board"></canvas>
-
-    <!--‑‑ RULES PANEL ‑‑-->
-    <div class="sideinfo guide" id="guide">
+    <div id="rules">
       <h3>Life Duel Rules</h3>
 
       <h4>Game Overview</h4>
