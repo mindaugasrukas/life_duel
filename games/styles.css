@@ -10,7 +10,7 @@ body {
     align-items: flex-start;
     gap: 30px;
     margin: 40px auto;
-    max-width: 800px;
+    max-width: 1200px;
 }
 
 #game {

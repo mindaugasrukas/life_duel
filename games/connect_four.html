@@ -3,16 +3,22 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Connect Four: You (🔴) vs AI (🟡)</title>
+    <title>Connect Four</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-        body {
-            font-family: sans-serif;
-            text-align: center;
+        #message {
+            font-size: 1.5em;
+            height: 80px;
+            margin-bottom: 10px;
+            display: none;
         }
 
-        #game-container {
-            margin: 50px auto;
-            width: fit-content;
+        .winning-line {
+            position: absolute;
+            background: #001122;
+            border-radius: 3px;
+            z-index: 15;
+            pointer-events: none;
         }
 
         #drop-zone {
@@ -166,37 +172,41 @@
                 /* Final position will be set dynamically */
             }
         }
-
-        #message {
-            font-size: 1.5em;
-            margin-top: 20px;
-        }
-
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-        }
-
-        .winning-line {
-            position: absolute;
-            background: #001122;
-            border-radius: 3px;
-            z-index: 15;
-            pointer-events: none;
-        }
     </style>
 </head>
 
 <body>
     <h1>Connect Four: You (🔴) vs AI (🟡)</h1>
     <div id="game-container">
-        <div id="drop-zone">
-            <div class="hover-piece" id="hoverPiece"></div>
+        <div id="game">
+            <div id="drop-zone">
+                <div class="hover-piece" id="hoverPiece"></div>
+            </div>
+            <div id="message"></div>
+            <div id="board"></div>
+            <button onclick="resetGame()">Restart</button>
         </div>
-        <div id="board"></div>
+        <div id="rules">
+            <h3>How to Play</h3>
+            <ul>
+                <li><strong>Goal:</strong> Connect four of your pieces in a row before your opponent</li>
+                <li><strong>Turn:</strong> Click a column to drop your piece (Red for you, Yellow for AI)</li>
+                <li><strong>Gravity:</strong> Pieces fall to the lowest available spot in each column</li>
+                <li><strong>Win:</strong> First to get 4 pieces in a line (horizontal, vertical, or diagonal)</li>
+                <li><strong>Draw:</strong> If the board fills up with no winner, the game is a tie</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li>Control the center columns - they offer the most winning opportunities</li>
+                    <li>Block your opponent when they have 3 in a row</li>
+                    <li>Look for "threats" - positions where you can win in multiple ways</li>
+                    <li>Build from the bottom up and think vertically</li>
+                </ul>
+            </div>
+        </div>
     </div>
-    <div id="message"></div>
-    <button onclick="resetGame()">Restart</button>
 
     <script>
         const ROWS = 6, COLS = 7;
@@ -599,7 +609,8 @@
         function endGame(msg, winner) {
             messageDiv.textContent = msg;
             isPlayerTurn = false;
-            hoverPiece.classList.remove('visible');
+            dropZoneDiv.style.display = 'none';
+            messageDiv.style.display = 'block';
 
             // Highlight winning pieces if there's a winner
             if (winner) {
@@ -658,6 +669,8 @@
             board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
             messageDiv.textContent = '';
             isPlayerTurn = true;
+            dropZoneDiv.style.display = 'block';
+            messageDiv.style.display = 'none';
             hoverPiece.className = 'hover-piece red'; // Set to red for player
             createBoard();
         }
