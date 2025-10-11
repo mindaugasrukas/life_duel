@@ -3,17 +3,13 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Tic-Tac-Toe vs AI</title>
+    <title>Tic-Tac-Toe</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-        body {
-            font-family: sans-serif;
-            text-align: center;
-        }
-
         #board {
             display: grid;
-            grid-template-columns: repeat(3, 100px);
-            grid-gap: 5px;
+            grid-template-columns: repeat(3, 104px);
+            grid-gap: 1px;
             margin: 50px auto;
             width: max-content;
         }
@@ -53,17 +49,38 @@
 </head>
 
 <body>
-    <h1>Tic-Tac-Toe: You (X) vs AI (O)</h1>
-    <div id="ai-mode">
-        <label for="aiMode">AI Difficulty:</label>
-        <select id="aiMode" onchange="updateAIMode()">
-            <option selected value="random">Random (Easy)</option>
-            <option value="minimax">Minimax (Impossible)</option>
-        </select>
+    <h1>Tic-Tac-Toe</h1>
+    <div id="game-container">
+        <div id="game">
+            <label for="aiMode">AI Difficulty:</label>
+            <select id="aiMode" onchange="updateAIMode()">
+                <option selected value="random">Random (Easy)</option>
+                <option value="minimax">Minimax (Impossible)</option>
+            </select>
+            <div id="board"></div>
+            <div id="message"></div>
+            <button onclick="resetGame()">Restart</button>
+        </div>
+        <div id="rules">
+            <h3>How to Play</h3>
+            <ul>
+                <li><strong>Goal:</strong> Get three of your marks in a row before your opponent</li>
+                <li><strong>Turn:</strong> Click an empty cell to place your mark (X for you, O for AI)</li>
+                <li><strong>Win:</strong> First to get 3 marks in a line (horizontal, vertical, or diagonal)</li>
+                <li><strong>Tie:</strong> If all 9 cells are filled with no winner, the game is a draw</li>
+                <li><strong>AI:</strong> Choose between Random (easy) or Minimax (impossible) difficulty</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li>Control the center - it's part of 4 different winning lines</li>
+                    <li>Block your opponent when they have 2 in a row</li>
+                    <li>Create forks - positions where you can win in two different ways</li>
+                </ul>
+            </div>
+        </div>
     </div>
-    <div id="board"></div>
-    <div id="message"></div>
-    <button onclick="resetGame()">Restart</button>
 
     <script>
         const HUMAN = 'X';
