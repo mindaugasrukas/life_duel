@@ -242,10 +242,16 @@
       }
 
       statsDiv.innerHTML = `
-        <b>Round ${round + 1} / ${maxRounds}</b><br>
-        <span class="player" style="color:${COLORS[1]}">Blue</span>: ${blue}${currentPlayer === 1 ? " ←" : ""}<br>
-        <span class="player" style="color:${COLORS[2]}">Red</span>: ${red}${currentPlayer === 2 ? " ←" : ""}<br><br>
-        ${gameOver ? "<b>Game Over!</b>" : waitingEvolution ? "Press <b>Evolve!</b>" : `Place square ${placements + 1} / 3`}`;
+        <b>Round ${round + 1} / ${maxRounds}</b>:
+        <span class="player" style="color:${COLORS[1]}">Blue</span>: ${blue}
+        <span class="player" style="color:${COLORS[2]}">Red</span>: ${red}
+        (
+          ${
+            gameOver ?
+            "<b>Game Over!</b>" : waitingEvolution ? "Press <b>Evolve!</b>" : `
+            ${currentPlayer === 1 ? "Blue" : "Red"} move. Place square ${placements + 1} / 3`
+          }
+        )`;
     }
 
     // Evolution animation (fade‑out + fade‑in)
