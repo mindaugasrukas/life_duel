@@ -180,8 +180,6 @@
         let steps = 0;
         let startTime = Date.now();
         let gameWon = false;
-        let exploredCells = new Set();
-        let visitedCells = new Set();
 
         // Difficulty settings
         const difficulties = {
@@ -213,9 +211,14 @@
             steps = 0;
             startTime = Date.now();
             gameWon = false;
-            exploredCells.clear();
-            visitedCells.clear();
-            visitedCells.add({x: playerX, y: playerY}); // Add starting position
+            // Reset explored and visited states
+            for (let y = 0; y < mazeHeight; y++) {
+                for (let x = 0; x < mazeWidth; x++) {
+                    maze[y][x].explored = false;
+                    maze[y][x].visited = false;
+                }
+            }
+            maze[playerY][playerX].visited = true; // Add starting position
             setupCanvas(); // Reset canvas size for viewport
             updateStats();
         }
@@ -237,7 +240,13 @@
 
         // Maze generation using recursive backtracking
         function generateMaze() {
-            maze = Array(mazeHeight).fill().map(() => Array(mazeWidth).fill(1));
+            maze = Array(mazeHeight).fill().map(() =>
+                Array(mazeWidth).fill().map(() => ({
+                    visited: false,
+                    explored: false,
+                    wall: true
+                }))
+            );
             const stack = [];
             const visited = Array(mazeHeight).fill().map(() => Array(mazeWidth).fill(false));
 
@@ -258,7 +267,7 @@
             // Start at (1,1)
             let currentX = 1;
             let currentY = 1;
-            maze[currentY][currentX] = 0;
+            maze[currentY][currentX].wall = false;
             visited[currentY][currentX] = true;
             stack.push([currentX, currentY]);
 
@@ -270,9 +279,8 @@
                     const [nextX, nextY] = neighbors[Math.floor(Math.random() * neighbors.length)];
 
                     // Remove wall between current and next
-                    maze[nextY][nextX] = 0;
-                    maze[currentY + (nextY - currentY) / 2][currentX + (nextX - currentX) / 2] = 0;
-
+                    maze[nextY][nextX].wall = false;
+                    maze[currentY + (nextY - currentY) / 2][currentX + (nextX - currentX) / 2].wall = false;
                     visited[nextY][nextX] = true;
                     stack.push([nextX, nextY]);
                     currentX = nextX;
@@ -284,12 +292,8 @@
             }
 
             // Ensure goal is reachable
-            maze[goalY][goalX] = 0;
-            exploredCells.clear();
-            visitedCells.clear();
-
-            // Add starting position to visited cells
-            visitedCells.add({x: playerX, y: playerY});
+            maze[goalY][goalX].wall = false;
+            maze[playerY][playerX].visited = true;
         }
 
         function changeDifficulty() {
@@ -352,20 +356,19 @@
             const newY = playerY + dy;
 
             // Check bounds and walls
-            if (newX >= 0 && newX < mazeWidth && newY >= 0 && newY < mazeHeight && maze[newY][newX] === 0) {
+            if (newX >= 0 && newX < mazeWidth && newY >= 0 && newY < mazeHeight && !maze[newY][newX].wall) {
                 playerX = newX;
                 playerY = newY;
                 steps++;
 
-                // Add current position to visited cells
-                visitedCells.add({x: playerX, y: playerY});
+                maze[playerY][playerX].visited = true; // Mark cell as visited
 
                 // Add visible cells to explored set
                 const halfView = Math.floor(viewportSize / 2);
                 for (let y = playerY - halfView; y <= playerY + halfView; y++) {
                     for (let x = playerX - halfView; x <= playerX + halfView; x++) {
                         if (x >= 0 && x < mazeWidth && y >= 0 && y < mazeHeight) {
-                            exploredCells.add({x, y});
+                            maze[y][x].explored = true; // Mark cell as explored
                         }
                     }
                 }
@@ -390,8 +393,18 @@
             const seconds = timeElapsed % 60;
             document.getElementById('time').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
+            // Count explored cells from the maze array
+            let exploredCount = 0;
+            for (let y = 0; y < mazeHeight; y++) {
+                for (let x = 0; x < mazeWidth; x++) {
+                    if (maze[y][x].explored) {
+                        exploredCount++;
+                    }
+                }
+            }
+
             const totalCells = mazeWidth * mazeHeight;
-            const exploredPercent = Math.floor((exploredCells.size / totalCells) * 100);
+            const exploredPercent = Math.floor((exploredCount / totalCells) * 100);
             document.getElementById('explored').textContent = `${exploredPercent}%`;
         }
 
@@ -420,7 +433,7 @@
                     const drawX = x * cellSize;
                     const drawY = y * cellSize;
 
-                    if (maze[y][x] === 1) {
+                    if (maze[y][x].wall) {
                         // Wall
                         ctx.fillStyle = '#333';
                         ctx.fillRect(drawX, drawY, cellSize, cellSize);
@@ -449,22 +462,23 @@
             ctx.fillStyle = '#2196f3';
             ctx.fillRect(playerDrawX + 4, playerDrawY + 4, cellSize - 8, cellSize - 8);
 
-            // Draw explored areas (what was visible) in light blue
-            ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
-            exploredCells.forEach(cellKey => {
-                const {x, y} = cellKey;
-                if (maze[y] && maze[y][x] === 0) { // Only mark empty cells
-                    ctx.fillRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
-                }
-            });
+            maze.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    // skip walls
+                    if (cell.wall) return;
 
-            // Draw visited path (where player actually walked) in darker blue
-            ctx.fillStyle = 'rgba(33, 150, 243, 0.6)';
-            visitedCells.forEach(cellKey => {
-                const {x, y} = cellKey;
-                if (maze[y] && maze[y][x] === 0) { // Only mark empty cells
-                    ctx.fillRect(x * cellSize + 4, y * cellSize + 4, cellSize - 8, cellSize - 8);
-                }
+                    // Draw explored areas (what was visible) in light blue
+                    if (cell.explored) {
+                        ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
+                        ctx.fillRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+                    }
+
+                    // Draw visited path (where player actually walked) in darker blue
+                    if (cell.visited) {
+                        ctx.fillStyle = 'rgba(33, 150, 243, 0.6)';
+                        ctx.fillRect(x * cellSize + 4, y * cellSize + 4, cellSize - 8, cellSize - 8);
+                    }
+                });
             });
 
             // Draw full maze border
@@ -487,7 +501,7 @@
                     const drawY = y * cellSize;
 
                     if (mazeX >= 0 && mazeX < mazeWidth && mazeY >= 0 && mazeY < mazeHeight) {
-                        if (maze[mazeY][mazeX] === 1) {
+                        if (maze[mazeY][mazeX].wall) {
                             // Wall
                             ctx.fillStyle = '#333';
                             ctx.fillRect(drawX, drawY, cellSize, cellSize);
