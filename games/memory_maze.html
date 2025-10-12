@@ -180,13 +180,14 @@
         let steps = 0;
         let startTime = Date.now();
         let gameWon = false;
+        let settings = {};
 
         // Difficulty settings
         const difficulties = {
-            beginner: { viewport: 9, mazeSize: 21 },
-            intermediate: { viewport: 7, mazeSize: 25 },
-            expert: { viewport: 5, mazeSize: 31 },
-            master: { viewport: 3, mazeSize: 39 }
+            beginner: { viewport: 9, mazeSize: 21, cycles: false },
+            intermediate: { viewport: 7, mazeSize: 25, cycles: false },
+            expert: { viewport: 5, mazeSize: 31, cycles: true },
+            master: { viewport: 3, mazeSize: 39, cycles: true }
         };
 
         // Initialize game
@@ -291,14 +292,112 @@
                 }
             }
 
+            // Add a few strategic cycles for challenge
+            if (settings.cycles) {
+                addStrategicCycles();
+            }
+
             // Ensure goal is reachable
             maze[goalY][goalX].wall = false;
             maze[playerY][playerX].visited = true;
         }
 
+        function addStrategicCycles() {
+            // Add 2-4 cycles depending on maze size, but place them strategically
+            const targetCycles = Math.min(4, Math.max(2, Math.floor(mazeWidth / 12)));
+            let cyclesAdded = 0;
+            const maxAttempts = mazeWidth * 3;
+            let attempts = 0;
+
+            while (cyclesAdded < targetCycles && attempts < maxAttempts) {
+                attempts++;
+
+                // Focus on middle areas, avoid start and goal regions
+                const avoidRadius = Math.max(4, Math.floor(mazeWidth / 8));
+                let x, y;
+
+                do {
+                    x = 1 + Math.floor(Math.random() * (mazeWidth - 2));
+                    y = 1 + Math.floor(Math.random() * (mazeHeight - 2));
+                } while (
+                    // Avoid start area
+                    (Math.abs(x - playerX) + Math.abs(y - playerY) < avoidRadius) ||
+                    // Avoid goal area
+                    (Math.abs(x - goalX) + Math.abs(y - goalY) < avoidRadius)
+                );
+
+                if (maze[y][x].wall) {
+                    // Check if this wall removal would create a meaningful cycle
+                    if (wouldCreateGoodCycle(x, y)) {
+                        maze[y][x].wall = false;
+                        cyclesAdded++;
+                    }
+                }
+            }
+        }
+
+        function wouldCreateGoodCycle(x, y) {
+            // Count adjacent open paths
+            const openNeighbors = [];
+            const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
+            for (const [dx, dy] of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < mazeWidth && ny >= 0 && ny < mazeHeight && !maze[ny][nx].wall) {
+                    openNeighbors.push([nx, ny]);
+                }
+            }
+
+            // Need exactly 2 open neighbors to create a cycle
+            if (openNeighbors.length !== 2) return false;
+
+            const [[x1, y1], [x2, y2]] = openNeighbors;
+
+            // Make sure we're not just connecting adjacent cells (too trivial)
+            const distance = Math.abs(x1 - x2) + Math.abs(y1 - y2);
+            if (distance < 2) return false;
+
+            // Use flood fill to check if these two points are already connected by another path
+            return !areConnectedByPath(x1, y1, x2, y2, x, y);
+        }
+
+        function areConnectedByPath(startX, startY, endX, endY, avoidX, avoidY) {
+            // Simple flood fill to see if start and end are already connected (avoiding the wall we're considering)
+            const visited = Array(mazeHeight).fill().map(() => Array(mazeWidth).fill(false));
+            const queue = [[startX, startY]];
+            visited[startY][startX] = true;
+
+            const maxSteps = 50; // Limit search to avoid performance issues
+            let steps = 0;
+
+            while (queue.length > 0 && steps < maxSteps) {
+                steps++;
+                const [x, y] = queue.shift();
+
+                if (x === endX && y === endY) return true; // Already connected
+
+                const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+                for (const [dx, dy] of directions) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+
+                    if (nx >= 0 && nx < mazeWidth && ny >= 0 && ny < mazeHeight &&
+                        !visited[ny][nx] && !maze[ny][nx].wall &&
+                        !(nx === avoidX && ny === avoidY)) { // Don't go through the wall we're testing
+
+                        visited[ny][nx] = true;
+                        queue.push([nx, ny]);
+                    }
+                }
+            }
+
+            return false; // Not connected by existing path
+        }
+
         function changeDifficulty() {
             const difficulty = document.getElementById('difficulty').value;
-            const settings = difficulties[difficulty];
+            settings = difficulties[difficulty];
             viewportSize = settings.viewport;
             mazeWidth = settings.mazeSize;
             mazeHeight = settings.mazeSize;
