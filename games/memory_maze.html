@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Memory Maze</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        #canvas {
+            border: 2px solid #333;
+            background: #f0f0f0;
+            display: block;
+            margin: 0 auto;
+        }
+
+        #controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        .stat-item {
+            padding: 8px 16px;
+            background: #e8e8e8;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        #message {
+            font-size: 1.2em;
+            height: 50px;
+            margin: 15px 0;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .victory {
+            color: #2e7d32;
+        }
+
+        .info {
+            color: #1976d2;
+        }
+
+        #instructions {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+    </a>
+    <h1>Memory Maze</h1>
+    <div id="game-container">
+        <div id="game">
+            <div id="controls">
+                <label for="difficulty">Difficulty:</label>
+                <select id="difficulty" onchange="changeDifficulty()">
+                    <option value="beginner">Beginner (21x21 maze, 9x9 view)</option>
+                    <option value="intermediate" selected>Intermediate (25x25 maze, 7x7 view)</option>
+                    <option value="expert">Expert (31x31 maze, 5x5 view)</option>
+                    <option value="master">Master (39x39 maze, 3x3 view)</option>
+                </select>
+                <button onclick="newGame()">New Maze</button>
+                <button onclick="resetGame(); showMessage('Position reset! Try again.', 'info');">Reset Position</button>
+            </div>
+
+            <div id="custom-controls" style="margin: 10px 0; display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                <div>
+                    <label for="maze-size">Maze Size:</label>
+                    <select id="maze-size" onchange="updateCustomSettings()">
+                        <option value="15">Small (15x15)</option>
+                        <option value="21">Medium (21x21)</option>
+                        <option value="25" selected>Large (25x25)</option>
+                        <option value="31">Extra Large (31x31)</option>
+                        <option value="39">Huge (39x39)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="view-size">View Size:</label>
+                    <select id="view-size" onchange="updateCustomSettings()">
+                        <option value="3">Tiny (3x3)</option>
+                        <option value="5">Small (5x5)</option>
+                        <option value="7" selected>Medium (7x7)</option>
+                        <option value="9">Large (9x9)</option>
+                        <option value="11">Extra Large (11x11)</option>
+                    </select>
+                </div>
+                <button onclick="applyCustomSettings()">Apply Custom Settings</button>
+            </div>
+
+            <div id="stats">
+                <div class="stat-item">Steps: <span id="steps">0</span></div>
+                <div class="stat-item">Time: <span id="time">0:00</span></div>
+                <div class="stat-item">Explored: <span id="explored">0%</span></div>
+            </div>
+
+            <div id="message"></div>
+            <canvas id="canvas" width="420" height="420"></canvas>
+
+            <div id="instructions">
+                <strong>How to play:</strong> Use arrow keys or WASD to move. Navigate through the maze using only your visible window.
+                Remember the paths you've seen - you'll need to build a mental map to reach the goal (green square)!
+            </div>
+        </div>
+
+        <div id="rules">
+            <h3>Memory Maze Rules</h3>
+            <ul>
+                <li><strong>Goal:</strong> Navigate from the blue start to the green goal using only a small viewport</li>
+                <li><strong>Movement:</strong> Use arrow keys or WASD to move through the maze</li>
+                <li><strong>Challenge:</strong> You can only see a limited area around your position</li>
+                <li><strong>Memory:</strong> Remember the maze layout as you explore - previously seen areas become hidden</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li>Move systematically to map out the area</li>
+                    <li>Remember key junctions and decision points</li>
+                    <li>Use wall-following techniques when lost</li>
+                    <li>Mark dead ends mentally to avoid revisiting</li>
+                    <li>Plan efficient routes to minimize backtracking</li>
+                </ul>
+            </div>
+
+            <h4>Difficulty Levels:</h4>
+            <ul>
+                <li><strong>Beginner:</strong> Large 9x9 viewport, smaller maze</li>
+                <li><strong>Intermediate:</strong> 7x7 viewport, medium maze</li>
+                <li><strong>Expert:</strong> 5x5 viewport, large maze</li>
+                <li><strong>Master:</strong> Tiny 3x3 viewport, huge maze</li>
+                <li><strong>Custom:</strong> Choose your own maze size and viewport size for personalized challenge</li>
+            </ul>
+
+            <h4>New Features:</h4>
+            <ul>
+                <li><strong>Full Maze View:</strong> When you complete the maze, see the entire maze with your path analysis</li>
+                <li><strong>Path Visualization:</strong> Light blue shows areas you explored (saw), dark blue shows where you actually walked</li>
+                <li><strong>Custom Settings:</strong> Mix and match maze sizes (15x15 to 39x39) with viewport sizes (3x3 to 11x11)</li>
+                <li><strong>Perfect Fit:</strong> Game window automatically adjusts to match your viewport size</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let maze = [];
+        let mazeWidth = 25;
+        let mazeHeight = 25;
+        let playerX = 1;
+        let playerY = 1;
+        let goalX = mazeWidth - 2;
+        let goalY = mazeHeight - 2;
+        let viewportSize = 7;
+        let cellSize = 20;
+        let steps = 0;
+        let startTime = Date.now();
+        let gameWon = false;
+        let exploredCells = new Set();
+        let visitedCells = new Set();
+
+        // Difficulty settings
+        const difficulties = {
+            beginner: { viewport: 9, mazeSize: 21 },
+            intermediate: { viewport: 7, mazeSize: 25 },
+            expert: { viewport: 5, mazeSize: 31 },
+            master: { viewport: 3, mazeSize: 39 }
+        };
+
+        // Initialize game
+        function init() {
+            setupCanvas();
+            generateMaze();
+            gameLoop();
+            updateStats();
+            showMessage("Navigate to the green goal! Use arrow keys or WASD to move.", "info");
+        }
+
+        // Generate a new maze and reset game state
+        function newGame() {
+            generateMaze();
+            resetGame();
+        }
+
+        // Use existing maze and reset player position and stats
+        function resetGame() {
+            playerX = 1;
+            playerY = 1;
+            steps = 0;
+            startTime = Date.now();
+            gameWon = false;
+            exploredCells.clear();
+            visitedCells.clear();
+            visitedCells.add({x: playerX, y: playerY}); // Add starting position
+            setupCanvas(); // Reset canvas size for viewport
+            updateStats();
+        }
+
+        function setupCanvas() {
+            if (gameWon) {
+                // When game is won, show the entire maze
+                const canvasWidth = mazeWidth * cellSize;
+                const canvasHeight = mazeHeight * cellSize;
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+            } else {
+                // During gameplay, show only the viewport
+                const canvasSize = viewportSize * cellSize;
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+            }
+        }
+
+        // Maze generation using recursive backtracking
+        function generateMaze() {
+            maze = Array(mazeHeight).fill().map(() => Array(mazeWidth).fill(1));
+            const stack = [];
+            const visited = Array(mazeHeight).fill().map(() => Array(mazeWidth).fill(false));
+
+            function getNeighbors(x, y) {
+                const neighbors = [];
+                const directions = [[0, -2], [2, 0], [0, 2], [-2, 0]];
+
+                for (const [dx, dy] of directions) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx > 0 && nx < mazeWidth - 1 && ny > 0 && ny < mazeHeight - 1 && !visited[ny][nx]) {
+                        neighbors.push([nx, ny]);
+                    }
+                }
+                return neighbors;
+            }
+
+            // Start at (1,1)
+            let currentX = 1;
+            let currentY = 1;
+            maze[currentY][currentX] = 0;
+            visited[currentY][currentX] = true;
+            stack.push([currentX, currentY]);
+
+            while (stack.length > 0) {
+                const neighbors = getNeighbors(currentX, currentY);
+
+                if (neighbors.length > 0) {
+                    // Choose random neighbor
+                    const [nextX, nextY] = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+                    // Remove wall between current and next
+                    maze[nextY][nextX] = 0;
+                    maze[currentY + (nextY - currentY) / 2][currentX + (nextX - currentX) / 2] = 0;
+
+                    visited[nextY][nextX] = true;
+                    stack.push([nextX, nextY]);
+                    currentX = nextX;
+                    currentY = nextY;
+                } else {
+                    // Backtrack
+                    [currentX, currentY] = stack.pop();
+                }
+            }
+
+            // Ensure goal is reachable
+            maze[goalY][goalX] = 0;
+            exploredCells.clear();
+            visitedCells.clear();
+
+            // Add starting position to visited cells
+            visitedCells.add({x: playerX, y: playerY});
+        }
+
+        function changeDifficulty() {
+            const difficulty = document.getElementById('difficulty').value;
+            const settings = difficulties[difficulty];
+            viewportSize = settings.viewport;
+            mazeWidth = settings.mazeSize;
+            mazeHeight = settings.mazeSize;
+            goalX = mazeWidth - 2;
+            goalY = mazeHeight - 2;
+            newGame();
+            showMessage("New maze generated! Find your way to the green goal.", "info");
+        }
+
+        function updateCustomSettings() {
+            // Update the display text to show current settings
+            const mazeSize = parseInt(document.getElementById('maze-size').value);
+            const viewSize = parseInt(document.getElementById('view-size').value);
+
+            // Optional: Show preview of what settings will be applied
+            console.log(`Settings ready: Maze ${mazeSize}x${mazeSize}, View ${viewSize}x${viewSize}`);
+        }
+
+        function applyCustomSettings() {
+            const mazeSize = parseInt(document.getElementById('maze-size').value);
+            const viewSize = parseInt(document.getElementById('view-size').value);
+
+            // Apply custom settings
+            mazeWidth = mazeSize;
+            mazeHeight = mazeSize;
+            viewportSize = viewSize;
+            goalX = mazeWidth - 2;
+            goalY = mazeHeight - 2;
+
+            // Reset difficulty selector to show it's using custom settings
+            document.getElementById('difficulty').value = 'custom';
+            if (document.getElementById('difficulty').value !== 'custom') {
+                // Add custom option if it doesn't exist
+                const customOption = document.createElement('option');
+                customOption.value = 'custom';
+                customOption.textContent = `Custom (${viewSize}x${viewSize} view, ${mazeSize}x${mazeSize} maze)`;
+                document.getElementById('difficulty').appendChild(customOption);
+                document.getElementById('difficulty').value = 'custom';
+            } else {
+                // Update existing custom option text
+                const customOption = document.querySelector('option[value="custom"]');
+                if (customOption) {
+                    customOption.textContent = `Custom (${viewSize}x${viewSize} view, ${mazeSize}x${mazeSize} maze)`;
+                }
+            }
+
+            newGame();
+            showMessage(`Applied custom settings: ${mazeSize}x${mazeSize} maze with ${viewSize}x${viewSize} view!`, "info");
+        }
+
+        function movePlayer(dx, dy) {
+            if (gameWon) return;
+
+            const newX = playerX + dx;
+            const newY = playerY + dy;
+
+            // Check bounds and walls
+            if (newX >= 0 && newX < mazeWidth && newY >= 0 && newY < mazeHeight && maze[newY][newX] === 0) {
+                playerX = newX;
+                playerY = newY;
+                steps++;
+
+                // Add current position to visited cells
+                visitedCells.add({x: playerX, y: playerY});
+
+                // Add visible cells to explored set
+                const halfView = Math.floor(viewportSize / 2);
+                for (let y = playerY - halfView; y <= playerY + halfView; y++) {
+                    for (let x = playerX - halfView; x <= playerX + halfView; x++) {
+                        if (x >= 0 && x < mazeWidth && y >= 0 && y < mazeHeight) {
+                            exploredCells.add({x, y});
+                        }
+                    }
+                }
+
+                // Check win condition
+                if (playerX === goalX && playerY === goalY) {
+                    gameWon = true;
+                    const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
+                    showMessage(`🎉 Congratulations! You won in ${steps} steps and ${timeElapsed} seconds! Light blue = explored areas, Dark blue = your path`, "victory");
+                    setupCanvas(); // Resize canvas to show full maze
+                }
+
+                updateStats();
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('steps').textContent = steps;
+
+            const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(timeElapsed / 60);
+            const seconds = timeElapsed % 60;
+            document.getElementById('time').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            const totalCells = mazeWidth * mazeHeight;
+            const exploredPercent = Math.floor((exploredCells.size / totalCells) * 100);
+            document.getElementById('explored').textContent = `${exploredPercent}%`;
+        }
+
+        function showMessage(text, type = "") {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = type;
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameWon) {
+                // Show entire maze when won
+                renderFullMaze();
+            } else {
+                // Show viewport during gameplay
+                renderViewport();
+            }
+        }
+
+        function renderFullMaze() {
+            // Draw the entire maze
+            for (let y = 0; y < mazeHeight; y++) {
+                for (let x = 0; x < mazeWidth; x++) {
+                    const drawX = x * cellSize;
+                    const drawY = y * cellSize;
+
+                    if (maze[y][x] === 1) {
+                        // Wall
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                    } else {
+                        // Empty space
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(drawX, drawY, cellSize, cellSize);
+
+                        // Goal
+                        if (x === goalX && y === goalY) {
+                            ctx.fillStyle = '#4caf50';
+                            ctx.fillRect(drawX + 2, drawY + 2, cellSize - 4, cellSize - 4);
+                        }
+                    }
+
+                    // Grid lines
+                    ctx.strokeStyle = '#ddd';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(drawX, drawY, cellSize, cellSize);
+                }
+            }
+
+            // Draw player at current position
+            const playerDrawX = playerX * cellSize;
+            const playerDrawY = playerY * cellSize;
+            ctx.fillStyle = '#2196f3';
+            ctx.fillRect(playerDrawX + 4, playerDrawY + 4, cellSize - 8, cellSize - 8);
+
+            // Draw explored areas (what was visible) in light blue
+            ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
+            exploredCells.forEach(cellKey => {
+                const {x, y} = cellKey;
+                if (maze[y] && maze[y][x] === 0) { // Only mark empty cells
+                    ctx.fillRect(x * cellSize + 2, y * cellSize + 2, cellSize - 4, cellSize - 4);
+                }
+            });
+
+            // Draw visited path (where player actually walked) in darker blue
+            ctx.fillStyle = 'rgba(33, 150, 243, 0.6)';
+            visitedCells.forEach(cellKey => {
+                const {x, y} = cellKey;
+                if (maze[y] && maze[y][x] === 0) { // Only mark empty cells
+                    ctx.fillRect(x * cellSize + 4, y * cellSize + 4, cellSize - 8, cellSize - 8);
+                }
+            });
+
+            // Draw full maze border
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function renderViewport() {
+            const halfView = Math.floor(viewportSize / 2);
+            const startX = playerX - halfView;
+            const startY = playerY - halfView;
+
+            // Draw visible maze portion
+            for (let y = 0; y < viewportSize; y++) {
+                for (let x = 0; x < viewportSize; x++) {
+                    const mazeX = startX + x;
+                    const mazeY = startY + y;
+                    const drawX = x * cellSize;
+                    const drawY = y * cellSize;
+
+                    if (mazeX >= 0 && mazeX < mazeWidth && mazeY >= 0 && mazeY < mazeHeight) {
+                        if (maze[mazeY][mazeX] === 1) {
+                            // Wall
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                        } else {
+                            // Empty space
+                            ctx.fillStyle = '#fff';
+                            ctx.fillRect(drawX, drawY, cellSize, cellSize);
+
+                            // Goal
+                            if (mazeX === goalX && mazeY === goalY) {
+                                ctx.fillStyle = '#4caf50';
+                                ctx.fillRect(drawX + 2, drawY + 2, cellSize - 4, cellSize - 4);
+                            }
+                        }
+
+                        // Grid lines
+                        ctx.strokeStyle = '#ddd';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(drawX, drawY, cellSize, cellSize);
+                    } else {
+                        // Out of bounds - draw as void
+                        ctx.fillStyle = '#666';
+                        ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                    }
+                }
+            }
+
+            // Draw player (always at center)
+            const playerDrawX = halfView * cellSize;
+            const playerDrawY = halfView * cellSize;
+            ctx.fillStyle = '#2196f3';
+            ctx.fillRect(playerDrawX + 4, playerDrawY + 4, cellSize - 8, cellSize - 8);
+
+            // Draw viewport border
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function gameLoop() {
+            render();
+            if (!gameWon) {
+                updateStats();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    movePlayer(0, -1);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    movePlayer(0, 1);
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    movePlayer(-1, 0);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    movePlayer(1, 0);
+                    break;
+            }
+        });
+
+        // Initialize game when page loads
+        init();
+    </script>
+</body>
+</html>
