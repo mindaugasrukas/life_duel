@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Chopsticks</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        #game-board {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        .player-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .player-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .player-name.current-turn {
+            color: #1976d2;
+            text-shadow: 0 0 5px rgba(25, 118, 210, 0.3);
+        }
+
+        .hands {
+            display: flex;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .hand {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 4px solid #e0e0e0;
+            background: linear-gradient(135deg, #ffffff, #f8f9fa);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .hand:hover {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            transform: scale(1.08);
+            box-shadow: 0 6px 20px rgba(25, 118, 210, 0.2);
+        }
+
+        .hand.selectable {
+            border-color: #1976d2;
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            box-shadow: 0 4px 16px rgba(25, 118, 210, 0.3);
+        }
+
+        .hand.selected {
+            background: linear-gradient(135deg, #1976d2, #1565c0);
+            color: white;
+            border-color: #0d47a1;
+            box-shadow: 0 8px 25px rgba(25, 118, 210, 0.4);
+            transform: scale(1.1);
+        }
+
+        .hand.selected .finger-count {
+            color: white;
+        }
+
+        .hand.target {
+            border-color: #f44336;
+            background: linear-gradient(135deg, #ffebee, #ffcdd2);
+            box-shadow: 0 4px 16px rgba(244, 67, 54, 0.3);
+        }
+
+        .hand.out {
+            background: linear-gradient(135deg, #ffcdd2, #ef9a9a);
+            border-color: #e57373;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .hand.ai {
+            border-color: #757575;
+        }
+
+        .hand.ai.selectable {
+            border-color: #f44336;
+            background: linear-gradient(135deg, #ffebee, #ffcdd2);
+        }
+
+        .hand-label {
+            position: absolute;
+            bottom: -30px;
+            font-size: 0.9em;
+            color: #555;
+            font-weight: 600;
+        }
+
+        #message {
+            font-size: 1.2em;
+            margin: 20px 0;
+            min-height: 30px;
+            text-align: center;
+            width: 400px;
+        }
+
+        #controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        #split-button {
+            background: #4caf50;
+        }
+
+        #split-button:disabled {
+            background: #aaa;
+        }
+
+        .finger-display {
+            display: flex;
+            gap: 3px;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8em;
+        }
+
+        .finger-count {
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #1976d2;
+            position: absolute;
+            bottom: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .finger-emoji {
+            font-size: 2.2em;
+            margin: 0;
+        }
+
+        .move-animation {
+            animation: moveIndicator 0.6s ease-in-out;
+        }
+
+        .ai-selecting {
+            animation: aiSelectPulse 1s ease-in-out;
+        }
+
+        .ai-attacking {
+            animation: aiAttackBounce 0.8s ease-in-out;
+        }
+
+        .ai-redistributing {
+            animation: aiRedistributeSpin 1.2s ease-in-out;
+        }
+
+        @keyframes moveIndicator {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+            25% {
+                transform: scale(1.15);
+                background: linear-gradient(135deg, #ffeb3b, #ffc107);
+                box-shadow: 0 8px 25px rgba(255, 193, 7, 0.4);
+            }
+            75% {
+                transform: scale(1.05);
+                background: linear-gradient(135deg, #ffeb3b, #ffc107);
+                box-shadow: 0 8px 25px rgba(255, 193, 7, 0.4);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+        }
+
+        @keyframes aiSelectPulse {
+            0%, 100% {
+                transform: scale(1);
+                border-color: #757575;
+            }
+            25%, 75% {
+                transform: scale(1.05);
+                border-color: #ff9800;
+                background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+                box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3);
+            }
+            50% {
+                transform: scale(1.1);
+                border-color: #f57c00;
+                background: linear-gradient(135deg, #ffcc02, #ff9800);
+                box-shadow: 0 8px 25px rgba(255, 152, 0, 0.4);
+            }
+        }
+
+        @keyframes aiAttackBounce {
+            0% { transform: scale(1) rotate(0deg); }
+            25% { transform: scale(1.1) rotate(-2deg); }
+            50% { transform: scale(1.15) rotate(2deg); }
+            75% { transform: scale(1.05) rotate(-1deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes aiRedistributeSpin {
+            0% {
+                transform: scale(1) rotate(0deg);
+                background: linear-gradient(135deg, #ffffff, #f8f9fa);
+            }
+            25% {
+                transform: scale(1.05) rotate(90deg);
+                background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
+            }
+            50% {
+                transform: scale(1.1) rotate(180deg);
+                background: linear-gradient(135deg, #4caf50, #66bb6a);
+            }
+            75% {
+                transform: scale(1.05) rotate(270deg);
+                background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
+            }
+            100% {
+                transform: scale(1) rotate(360deg);
+                background: linear-gradient(135deg, #ffffff, #f8f9fa);
+            }
+        }
+
+        .thinking-indicator {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            animation: thinkingPulse 1s infinite;
+            z-index: 10;
+        }
+
+        @keyframes thinkingPulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .vs-indicator {
+            font-size: 2em;
+            color: #666;
+            margin: 0 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+    </a>
+
+    <h1>Chopsticks</h1>
+
+    <div id="game-container">
+        <div id="game">
+            <div id="game-board">
+                <!-- AI Player (top) -->
+                <div class="player-area">
+                    <h3 class="player-name" id="ai-name">AI</h3>
+                    <div class="hands">
+                        <div class="hand ai" id="ai-left" onclick="selectHand('ai', 'left')">
+                            <div class="finger-display" id="ai-left-display"></div>
+                            <div class="hand-label">Left</div>
+                        </div>
+                        <div class="hand ai" id="ai-right" onclick="selectHand('ai', 'right')">
+                            <div class="finger-display" id="ai-right-display"></div>
+                            <div class="hand-label">Right</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vs-indicator">VS</div>
+
+                <!-- Human Player (bottom) -->
+                <div class="player-area">
+                    <h3 class="player-name current-turn" id="human-name">You</h3>
+                    <div class="hands">
+                        <div class="hand selectable" id="human-left" onclick="selectHand('human', 'left')">
+                            <div class="finger-display" id="human-left-display"></div>
+                            <div class="hand-label">Left</div>
+                        </div>
+                        <div class="hand selectable" id="human-right" onclick="selectHand('human', 'right')">
+                            <div class="finger-display" id="human-right-display"></div>
+                            <div class="hand-label">Right</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="message">Select one of your hands, then tap an opponent's hand</div>
+
+            <div id="controls">
+                <button onclick="resetGame()">New Game</button>
+                <button id="split-button" onclick="showSplitOptions()" disabled>Redistribute Fingers</button>
+            </div>
+        </div>
+
+        <div id="rules" style="width:300px;">
+            <h3>How to Play</h3>
+            <ul>
+                <li><strong>Goal:</strong> Eliminate both of your opponent's hands</li>
+                <li><strong>Starting:</strong> Each player starts with 1 finger on each hand</li>
+                <li><strong>Attack:</strong> Select your hand, then tap opponent's hand to add your fingers to theirs</li>
+                <li><strong>Elimination:</strong> When a hand reaches 5+ fingers, subtract 5 from that hand</li>
+                <li><strong>Redistribute:</strong> Move fingers between your hands in any combination (revive eliminated hands)</li>
+                <li><strong>Win:</strong> First to eliminate both opponent hands wins</li>
+            </ul>
+
+            <div class="strategy">
+                <strong>Strategy Tips:</strong>
+                <ul>
+                    <li>Force opponent to awkward finger counts</li>
+                    <li>Use redistribution to revive eliminated hands and avoid threats</li>
+                    <li>Try to get opponent to 4 fingers - one move from elimination</li>
+                    <li>Balance offense and defense</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            human: { left: 1, right: 1 },
+            ai: { left: 1, right: 1 },
+            currentPlayer: 'human',
+            selectedHand: null,
+            gameOver: false
+        };
+
+        // Initialize game
+        function initGame() {
+            gameState = {
+                human: { left: 1, right: 1 },
+                ai: { left: 1, right: 1 },
+                currentPlayer: 'human',
+                selectedHand: null,
+                gameOver: false
+            };
+            updateDisplay();
+            updateMessage("Select one of your hands, then tap an opponent's hand");
+        }
+
+        // Update visual display
+        function updateDisplay() {
+            // Update finger displays
+            updateFingerDisplay('human', 'left', gameState.human.left);
+            updateFingerDisplay('human', 'right', gameState.human.right);
+            updateFingerDisplay('ai', 'left', gameState.ai.left);
+            updateFingerDisplay('ai', 'right', gameState.ai.right);
+
+            // Update hand classes
+            updateHandClasses();
+
+            // Update current player indicator
+            updateCurrentPlayerDisplay();
+
+            // Update split button
+            updateSplitButton();
+        }
+
+        function updateFingerDisplay(player, hand, count) {
+            const display = document.getElementById(`${player}-${hand}-display`);
+            display.innerHTML = '';
+
+            if (count === 0) {
+                display.innerHTML = '<span style="color: #d32f2f; font-size: 2em;">✖</span>';
+            } else {
+                // Show small number at top
+                const numberSpan = document.createElement('span');
+                numberSpan.className = 'finger-count';
+                numberSpan.textContent = count;
+                display.appendChild(numberSpan);
+
+                // Add large finger emoji in center
+                const fingerEmojis = ['☝️', '✌️', '🤟', '🖖', '✋'];
+                const emoji = fingerEmojis[Math.min(count - 1, 4)] || '✋';
+                const emojiSpan = document.createElement('span');
+                emojiSpan.className = 'finger-emoji';
+                emojiSpan.textContent = emoji;
+                display.appendChild(emojiSpan);
+            }
+        }
+
+        function updateHandClasses() {
+            const hands = ['human-left', 'human-right', 'ai-left', 'ai-right'];
+
+            hands.forEach(handId => {
+                const hand = document.getElementById(handId);
+                const [player, side] = handId.split('-');
+                const count = gameState[player][side];
+
+                // Reset classes
+                hand.className = 'hand';
+                if (player === 'ai') hand.classList.add('ai');
+
+                // Add state classes
+                if (count === 0) {
+                    hand.classList.add('out');
+                } else if (gameState.currentPlayer === player && !gameState.gameOver) {
+                    hand.classList.add('selectable');
+                } else if (gameState.currentPlayer !== player && gameState.selectedHand && !gameState.gameOver) {
+                    hand.classList.add('target');
+                }
+
+                // Selected hand
+                if (gameState.selectedHand === handId) {
+                    hand.classList.add('selected');
+                }
+            });
+        }
+
+        function updateCurrentPlayerDisplay() {
+            const humanName = document.getElementById('human-name');
+            const aiName = document.getElementById('ai-name');
+
+            humanName.classList.toggle('current-turn', gameState.currentPlayer === 'human');
+            aiName.classList.toggle('current-turn', gameState.currentPlayer === 'ai');
+        }
+
+        function updateSplitButton() {
+            const button = document.getElementById('split-button');
+            const canSplit = gameState.currentPlayer === 'human' &&
+                           !gameState.gameOver &&
+                           canPlayerSplit('human');
+            button.disabled = !canSplit;
+        }
+
+        function canPlayerSplit(player) {
+            const state = gameState[player];
+            const total = state.left + state.right;
+
+            // Can combine/split if:
+            // 1. One hand has 0 and other has 2+ fingers (revive dead hand)
+            // 2. Both hands alive and can be redistributed differently
+            // 3. At least 2 total fingers to work with
+
+            if (total < 2) return false;
+
+            // Generate all possible distributions
+            const possibleSplits = [];
+            for (let i = 0; i <= total; i++) {
+                const j = total - i;
+                if (i !== state.left || j !== state.right) {
+                    possibleSplits.push([i, j]);
+                }
+            }
+
+            return possibleSplits.length > 0;
+        }
+
+        // Handle hand selection
+        function selectHand(player, hand) {
+            if (gameState.gameOver) return;
+
+            const handId = `${player}-${hand}`;
+            const handElement = document.getElementById(handId);
+
+            // If it's a target hand (opponent's hand when we have selection)
+            if (gameState.selectedHand && player !== gameState.currentPlayer) {
+                makeMove(gameState.selectedHand, handId);
+                return;
+            }
+
+            // If it's current player's turn
+            if (player === gameState.currentPlayer) {
+                // Can't select a hand with 0 fingers
+                if (gameState[player][hand] === 0) return;
+
+                // Select this hand
+                gameState.selectedHand = handId;
+                updateDisplay();
+                updateMessage(`Selected ${hand} hand. Now tap opponent's hand to attack.`);
+            }
+        }
+
+        // Make a move
+        function makeMove(sourceHandId, targetHandId) {
+            const [sourcePlayer, sourceHand] = sourceHandId.split('-');
+            const [targetPlayer, targetHand] = targetHandId.split('-');
+
+            // Validate move
+            if (sourcePlayer === targetPlayer) return;
+            if (gameState[targetPlayer][targetHand] === 0) return;
+
+            // Execute move
+            const attackFingers = gameState[sourcePlayer][sourceHand];
+            gameState[targetPlayer][targetHand] += attackFingers;
+
+            // Check for elimination
+            if (gameState[targetPlayer][targetHand] >= 5) {
+                gameState[targetPlayer][targetHand] -= 5;
+            }
+
+            // Add animation
+            const targetElement = document.getElementById(targetHandId);
+            targetElement.classList.add('move-animation');
+            setTimeout(() => targetElement.classList.remove('move-animation'), 500);
+
+            // Clear selection
+            gameState.selectedHand = null;
+
+            // Check for win
+            if (checkWin()) {
+                return;
+            }
+
+            // Switch turns
+            gameState.currentPlayer = gameState.currentPlayer === 'human' ? 'ai' : 'human';
+            updateDisplay();
+
+            if (gameState.currentPlayer === 'ai') {
+                setTimeout(makeAIMove, 800);
+            } else {
+                updateMessage("Select one of your hands, then tap an opponent's hand");
+            }
+        }
+
+        // Check for win condition
+        function checkWin() {
+            const humanOut = gameState.human.left === 0 && gameState.human.right === 0;
+            const aiOut = gameState.ai.left === 0 && gameState.ai.right === 0;
+
+            if (humanOut || aiOut) {
+                gameState.gameOver = true;
+                const winner = humanOut ? 'AI' : 'You';
+                updateMessage(`${winner} win${winner === 'You' ? '' : 's'}! Game Over.`);
+                updateDisplay();
+                return true;
+            }
+            return false;
+        }
+
+        // AI Move with animations
+        function makeAIMove() {
+            if (gameState.gameOver) return;
+
+            // Check if AI should redistribute first
+            if (shouldAIRedistribute()) {
+                animateAIRedistribution();
+                return;
+            }
+
+            const moves = getValidMoves('ai');
+            if (moves.length === 0) return;
+
+            // Simple AI strategy: prefer moves that eliminate opponent hands
+            let bestMove = moves[0];
+            let maxDamage = 0;
+
+            for (const move of moves) {
+                const damage = gameState.ai[move.source] + gameState.human[move.target];
+                if (damage >= 5 && damage > maxDamage) {
+                    maxDamage = damage;
+                    bestMove = move;
+                }
+            }
+
+            // If no elimination move, pick random
+            if (maxDamage === 0) {
+                bestMove = moves[Math.floor(Math.random() * moves.length)];
+            }
+
+            animateAIAttack(bestMove);
+        }
+
+        function animateAIAttack(move) {
+            const sourceHandId = `ai-${move.source}`;
+            const targetHandId = `human-${move.target}`;
+            const sourceElement = document.getElementById(sourceHandId);
+            const targetElement = document.getElementById(targetHandId);
+
+            // Step 1: AI thinking
+            updateMessage("AI is thinking...");
+            addThinkingIndicator(sourceElement);
+
+            setTimeout(() => {
+                // Step 2: AI selects hand
+                removeThinkingIndicator(sourceElement);
+                sourceElement.classList.add('ai-selecting');
+                updateMessage(`AI selects ${move.source} hand...`);
+
+                setTimeout(() => {
+                    // Step 3: AI attacks target
+                    sourceElement.classList.remove('ai-selecting');
+                    targetElement.classList.add('ai-attacking');
+                    updateMessage(`AI attacks your ${move.target} hand!`);
+
+                    setTimeout(() => {
+                        // Step 4: Execute move
+                        targetElement.classList.remove('ai-attacking');
+                        makeMove(sourceHandId, targetHandId);
+                    }, 800);
+                }, 1000);
+            }, 1000);
+        }
+
+        function shouldAIRedistribute() {
+            const ai = gameState.ai;
+            // AI should redistribute if one hand is dead and the other has 3+ fingers
+            return (ai.left === 0 && ai.right >= 3) || (ai.right === 0 && ai.left >= 3);
+        }
+
+        function animateAIRedistribution() {
+            const leftElement = document.getElementById('ai-left');
+            const rightElement = document.getElementById('ai-right');
+
+            // Step 1: AI thinking about redistribution
+            updateMessage("AI is thinking about redistribution...");
+            addThinkingIndicator(leftElement);
+            addThinkingIndicator(rightElement);
+
+            setTimeout(() => {
+                // Step 2: Show redistribution animation
+                removeThinkingIndicator(leftElement);
+                removeThinkingIndicator(rightElement);
+                leftElement.classList.add('ai-redistributing');
+                rightElement.classList.add('ai-redistributing');
+                updateMessage("AI is redistributing fingers...");
+
+                setTimeout(() => {
+                    // Step 3: Execute redistribution
+                    leftElement.classList.remove('ai-redistributing');
+                    rightElement.classList.remove('ai-redistributing');
+
+                    const ai = gameState.ai;
+                    const total = ai.left + ai.right;
+
+                    // Simple redistribution: try to balance or revive dead hand
+                    let newLeft, newRight;
+                    if (ai.left === 0) {
+                        newLeft = 1;
+                        newRight = total - 1;
+                    } else if (ai.right === 0) {
+                        newLeft = total - 1;
+                        newRight = 1;
+                    } else {
+                        // Balance hands
+                        newLeft = Math.floor(total / 2);
+                        newRight = total - newLeft;
+                    }
+
+                    gameState.ai.left = newLeft;
+                    gameState.ai.right = newRight;
+
+                    updateDisplay();
+                    updateMessage(`AI redistributed: Left=${newLeft}, Right=${newRight}`);
+
+                    // Switch turns
+                    gameState.currentPlayer = 'human';
+
+                    setTimeout(() => {
+                        updateMessage("Your turn! Select one of your hands, then tap an opponent's hand");
+                    }, 2000);
+                }, 1200);
+            }, 1000);
+        }
+
+        function getValidMoves(player) {
+            const moves = [];
+            const opponent = player === 'human' ? 'ai' : 'human';
+
+            ['left', 'right'].forEach(source => {
+                if (gameState[player][source] > 0) {
+                    ['left', 'right'].forEach(target => {
+                        if (gameState[opponent][target] > 0) {
+                            moves.push({ source, target });
+                        }
+                    });
+                }
+            });
+
+            return moves;
+        }
+
+        // Split/Combine functionality
+        function showSplitOptions() {
+            if (!canPlayerSplit('human')) return;
+
+            const human = gameState.human;
+            const total = human.left + human.right;
+
+            let options = [];
+            for (let i = 0; i <= total; i++) {
+                const j = total - i;
+                if (i !== human.left || j !== human.right) {
+                    options.push([i, j]);
+                }
+            }
+
+            if (options.length === 0) return;
+
+            // Create a visual interface for split options
+            let message = "Choose how to redistribute your fingers:\n\n";
+            message += `Current: Left=${human.left}, Right=${human.right}\n\n`;
+            message += "Available options:\n";
+
+            options.forEach((option, index) => {
+                const [left, right] = option;
+                const leftEmoji = left === 0 ? '✖' : ['☝️', '✌️', '🤟', '🖖', '✋'][Math.min(left - 1, 4)];
+                const rightEmoji = right === 0 ? '✖' : ['☝️', '✌️', '🤟', '🖖', '✋'][Math.min(right - 1, 4)];
+                message += `${index + 1}: Left=${left} ${leftEmoji}  Right=${right} ${rightEmoji}\n`;
+            });
+
+            const choice = prompt(message + "\nEnter number (1-" + options.length + "):");
+            const choiceNum = parseInt(choice);
+
+            if (choiceNum >= 1 && choiceNum <= options.length) {
+                const [newLeft, newRight] = options[choiceNum - 1];
+                gameState.human.left = newLeft;
+                gameState.human.right = newRight;
+
+                updateMessage(`You redistributed: Left=${newLeft}, Right=${newRight}`);
+
+                // Switch turns
+                gameState.currentPlayer = 'ai';
+                updateDisplay();
+
+                setTimeout(() => {
+                    makeAIMove();
+                }, 1500);
+            }
+        }
+
+        function updateMessage(msg) {
+            document.getElementById('message').textContent = msg;
+        }
+
+        function addThinkingIndicator(element) {
+            const indicator = document.createElement('div');
+            indicator.className = 'thinking-indicator';
+            indicator.textContent = '🤔';
+            element.appendChild(indicator);
+        }
+
+        function removeThinkingIndicator(element) {
+            const indicator = element.querySelector('.thinking-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Start the game
+        initGame();
+    </script>
+</body>
+</html>
