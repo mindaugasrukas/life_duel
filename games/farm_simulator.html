@@ -1,0 +1,2390 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Farm Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        #canvas {
+            border: 2px solid #333;
+            background: linear-gradient(135deg, #87CEEB 0%, #98FB98 100%);
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+        }
+
+        #game-ui {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            gap: 20px;
+        }
+
+        #toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 1000;
+            pointer-events: none; /* Allow clicks through the container */
+        }
+
+        #stats .stat-item {
+            pointer-events: auto; /* Re-enable clicks for individual items */
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            min-width: 70px;
+            text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            font-size: 0.9em;
+        }
+
+        .money {
+            color: #2e7d32;
+        }
+
+        .energy {
+            color: #ff6f00;
+        }
+
+        .level {
+            color: #1976d2;
+        }
+
+        #inventory {
+            display: flex;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+            overflow-x: auto;
+        }
+
+        .inventory-slot {
+            width: 45px;
+            height: 45px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .inventory-slot.has-item {
+            border-color: #4caf50;
+            background: #f0f8f0;
+        }
+
+        .inventory-slot.storage-item {
+            border-color: #ff9800;
+            background: #fff8e1;
+            cursor: pointer;
+        }
+
+        .inventory-slot.storage-item:hover {
+            border-color: #f57c00;
+            background: #fff3c4;
+            transform: scale(1.05);
+        }
+
+        .inventory-slot.storage-capacity {
+            border-color: #9e9e9e;
+            background: #f5f5f5;
+            cursor: default;
+        }
+
+        .item-count {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: #333;
+            color: white;
+            font-size: 0.6em;
+            padding: 1px 3px;
+            border-radius: 2px;
+            min-width: 12px;
+            text-align: center;
+        }
+
+        #message {
+            font-size: 1.1em;
+            height: 40px;
+            margin: 15px 0;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            color: #2e7d32;
+            background: rgba(76, 175, 80, 0.1) !important;
+        }
+
+        .warning {
+            color: #f57c00;
+            background: rgba(255, 152, 0, 0.1) !important;
+        }
+
+        .info {
+            color: #1976d2;
+            background: rgba(33, 150, 243, 0.1) !important;
+        }
+
+        #shop {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            max-width: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        #levelInfo {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            max-width: 450px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        #guide {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            max-width: 500px;
+            max-height: 650px;
+            overflow-y: auto;
+        }
+
+        #guide ul {
+            text-align: left;
+            padding-left: 20px;
+        }
+
+        #guide .strategy {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .shop-item:hover {
+            background: #f0f8f0;
+        }
+
+        .shop-item.affordable {
+            border-color: #4caf50;
+        }
+
+        .shop-item.expensive {
+            border-color: #f44336;
+            opacity: 0.6;
+        }
+
+        #controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .game-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #1976d2;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s ease;
+        }
+
+        .game-btn:hover {
+            background: #1565c0;
+        }
+
+        .game-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Tooltip styles */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            pointer-events: none;
+            z-index: 1000;
+            min-width: 200px;
+            max-width: 250px;
+        }
+
+        .tooltip-text {
+            margin-bottom: 6px;
+        }
+
+        .progress-bar-container {
+            margin-top: 6px;
+        }
+
+        .progress-label {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-bottom: 3px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+            border-radius: 4px;
+        }
+
+        #default-actions {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .tooltip-toggle-btn {
+            padding: 6px 12px;
+            background: #f5f5f5;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tooltip-toggle-btn:hover {
+            background: #e8f5e8;
+            border-color: #4caf50;
+        }
+
+        .tooltip-toggle-btn.tooltips-off {
+            background: #ffebee;
+            border-color: #f44336;
+            color: #d32f2f;
+        }
+
+        .tooltip-toggle-btn.tooltips-off:hover {
+            background: #ffcdd2;
+            border-color: #d32f2f;
+        }
+
+        /* Action wheel for right-click menu */
+        #action-wheel {
+            position: absolute;
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #333;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            display: none;
+        }
+
+        .wheel-action {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #4caf50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: transform 0.2s ease;
+        }
+
+        .wheel-action:hover {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+
+        /* Hover tile highlight */
+        .tile-highlight {
+            position: absolute;
+            pointer-events: none;
+            z-index: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+    </a>
+    <h1>🚜 Farm Simulator</h1>
+
+    <div id="game-container">
+        <div id="game">
+            <div id="controls">
+                <button class="game-btn" onclick="openShop(event)">🏪 Shop</button>
+                <button class="game-btn" onclick="nextDay()">🌙 Sleep (Next Day)</button>
+                <button class="game-btn" onclick="openGuide(event)">❓ Help</button>
+                <button class="game-btn" onclick="zoomOut()">🔍➖ Zoom Out</button>
+                <button class="game-btn" onclick="zoomIn()">🔍➕ Zoom In</button>
+                <button class="game-btn" onclick="saveGame()">💾 Save</button>
+                <button class="game-btn" onclick="loadGame()">📁 Load</button>
+            </div>
+
+            <div id="game-ui">
+                <div id="toolbar">
+                    <div id="tooltip-toggle">
+                        <button id="tooltip-btn" class="tooltip-toggle-btn" onclick="toggleTooltips()" title="Toggle action tooltips">
+                            <span id="tooltip-icon">�</span>
+                            <span id="tooltip-text">Tooltips OFF</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="inventory"></div>
+            </div>
+
+            <div id="message">Welcome to your new farm! Start by buying seeds from the shop.</div>
+
+            <div id="canvas-container" style="position: relative; display: inline-block;">
+                <canvas id="canvas" width="800" height="600"></canvas>
+
+                <!-- Game stats overlay -->
+                <div id="stats">
+                    <div class="stat-item money">💰 $<span id="money">100</span></div>
+                    <div class="stat-item energy">⚡ <span id="energy">10</span>/10</div>
+                    <div class="stat-item level" id="levelStat" onclick="openLevelInfo(event)" title="Click for level details" style="cursor: pointer;">📊 Lvl <span id="level">1</span></div>
+                    <div class="stat-item">📅 Day <span id="day">1</span></div>
+                </div>
+            </div>
+
+            <!-- Action wheel for right-click context menu -->
+            <div id="action-wheel">
+                <div class="wheel-action" data-action="move" style="top: 10px; left: 40px;" title="Move">🚶</div>
+                <div class="wheel-action" data-action="harvest" style="top: 20px; right: 10px;" title="Harvest">🌾</div>
+                <div class="wheel-action" data-action="cut" style="right: 40px; top: 40px;" title="Cut Tree">🪓</div>
+                <div class="wheel-action" data-action="hoe" style="bottom: 20px; right: 10px;" title="Till">🔨</div>
+                <div class="wheel-action" data-action="plant" style="bottom: 10px; left: 40px;" title="Plant">🌱</div>
+                <div class="wheel-action" data-action="water" style="top: 40px; left: 10px;" title="Water">💧</div>
+            </div>
+
+            <div style="font-size: 0.9em; color: #666; margin-top: 10px; line-height: 1.4; text-align: center;">
+                <strong>Controls:</strong> Click to move/interact • Use toolbar to select tools •
+                Buy seeds from shop • Plant, water, and harvest crops to earn money and XP!
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Modal -->
+    <div id="shop">
+        <h3>🏪 Farm Shop</h3>
+        <div id="shop-content"></div>
+        <button onclick="closeShop()" style="margin-top: 15px; padding: 8px 16px; width: 100%;">Close Shop</button>
+    </div>
+
+    <!-- Level Info Modal -->
+    <div id="levelInfo">
+        <h3>📊 Level Information</h3>
+        <div id="levelInfo-content"></div>
+        <button onclick="closeLevelInfo()" style="margin-top: 15px; padding: 8px 16px; width: 100%;">Close</button>
+    </div>
+
+    <!-- Guide Modal -->
+    <div id="guide">
+        <h3>❓ Farm Simulator Guide</h3>
+        <div id="guide-content"></div>
+        <button onclick="closeGuide()" style="margin-top: 15px; padding: 8px 16px; width: 100%;">Close</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Isometric constants
+        let TILE_WIDTH = 64;
+        let TILE_HEIGHT = 32;
+        const GRID_WIDTH = 12;
+        const GRID_HEIGHT = 12;
+        // Zoom state - start at max zoom for new games
+        let zoomLevel = 2.0;
+        const MIN_ZOOM = 0.5;
+        const MAX_ZOOM = 2.0;
+        const ZOOM_STEP = 0.1;
+
+        // Calculate proper camera offsets to center the player at start
+        // Canvas is 800x600, player starts at (5,5), we want player in center
+        const CANVAS_CENTER_X = 400; // 800 / 2
+        const CANVAS_CENTER_Y = 300; // 600 / 2
+        // Base offset for isometric grid positioning
+        let CAMERA_OFFSET_X = 200; // Offset to position the grid base
+        let CAMERA_OFFSET_Y = 50;  // Offset to position the grid base
+
+        // Camera/panning state - start centered on player
+        let cameraX = 0;
+        let cameraY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let lastDragX = 0;
+        let lastDragY = 0;
+
+        // Navigation state
+        let hoveredTile = null;
+        let mouseX = 0;
+        let mouseY = 0;        // Game state
+        let gameState = {
+            money: 100,
+            energy: 10,
+            maxEnergy: 10,
+            level: 1,
+            xp: 0,
+            day: 1,
+            selectedTool: 'select', // Keep for compatibility, but use smart actions
+            defaultActions: {
+                hoe: true,    // Default for grass tiles
+                plant: true, // Default for tilled tiles
+                water: true  // Default for planted tiles
+            },
+            inventory: {
+                carrot_seeds: 3,
+                wheat_seeds: 1
+            },
+            storage: {}, // Harvested crops storage
+            storageCapacity: 20, // Maximum items in storage
+            farm: {},
+            playerX: 5,
+            playerY: 5,
+            playerMoving: false,
+            playerMoveTarget: null
+        };
+
+        // Tooltip display state
+        let tooltipsEnabled = true;
+
+        // Crop definitions (extensible design)
+        const CROPS = {
+            carrot: {
+                name: 'Carrot',
+                seedCost: 2,
+                sellPrice: 8,
+                growthDays: 2,
+                waterBonus: 0.25,
+                xpReward: 5,
+                emoji: '🥕',
+                requiredLevel: 1
+            },
+            wheat: {
+                name: 'Wheat',
+                seedCost: 5,
+                sellPrice: 15,
+                growthDays: 4,
+                waterBonus: 0.25,
+                xpReward: 10,
+                emoji: '🌾',
+                requiredLevel: 1
+            },
+            corn: {
+                name: 'Corn',
+                seedCost: 12,
+                sellPrice: 25,
+                growthDays: 6,
+                waterBonus: 0.25,
+                xpReward: 20,
+                emoji: '🌽',
+                requiredLevel: 3
+            },
+            tomato: {
+                name: 'Tomato',
+                seedCost: 20,
+                sellPrice: 40,
+                growthDays: 8,
+                waterBonus: 0.25,
+                xpReward: 35,
+                emoji: '🍅',
+                requiredLevel: 5
+            },
+            pumpkin: {
+                name: 'Pumpkin',
+                seedCost: 35,
+                sellPrice: 75,
+                growthDays: 10,
+                waterBonus: 0.3,
+                xpReward: 50,
+                emoji: '🎃',
+                requiredLevel: 7
+            },
+            strawberry: {
+                name: 'Strawberry',
+                seedCost: 50,
+                sellPrice: 120,
+                growthDays: 12,
+                waterBonus: 0.35,
+                xpReward: 70,
+                emoji: '🍓',
+                requiredLevel: 9
+            },
+            grapes: {
+                name: 'Grapes',
+                seedCost: 80,
+                sellPrice: 200,
+                growthDays: 15,
+                waterBonus: 0.4,
+                xpReward: 100,
+                emoji: '🍇',
+                requiredLevel: 12
+            },
+            apple: {
+                name: 'Apple Tree',
+                seedCost: 150,
+                sellPrice: 400,
+                growthDays: 20,
+                waterBonus: 0.5,
+                xpReward: 150,
+                emoji: '🍎',
+                requiredLevel: 15
+            }
+        };
+
+        // Tile types (extensible for future features)
+        const TILE_TYPES = {
+            grass: {
+                color: '#90EE90',
+                walkable: true,
+                plantable: false,
+                progressionDays: 20 // Days to grow trees (when adjacent trees exist)
+            },
+            tilled: {
+                color: '#8B4513',
+                walkable: true,
+                plantable: true,
+                progressionDays: 7 // Days until returns to grass if unused
+            },
+            planted: {
+                color: '#654321',
+                walkable: false,
+                plantable: false,
+                progressionDays: 0 // No natural progression
+            },
+            tree: {
+                color: '#228B22',
+                walkable: false,
+                plantable: false,
+                progressionDays: 0 // No natural progression
+            }
+        };
+
+        // Initialize game
+        function init() {
+            // Initialize farm grid with trees and a small cleared area
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    // Create a small cleared area around the player starting position (5,5)
+                    const distanceFromCenter = Math.max(Math.abs(x - 5), Math.abs(y - 5));
+                    const isInClearedArea = distanceFromCenter <= 0; // 1x1 cleared area
+
+                    gameState.farm[`${x},${y}`] = {
+                        type: isInClearedArea ? 'grass' : 'tree',
+                        crop: null,
+                        plantedDay: null,
+                        watered: false,
+                        lastWatered: null,
+                        lastUsed: gameState.day || 1, // Track when tile was last used
+                        lastTilled: null // Track when tile was tilled
+                    };
+                }
+            }
+
+            setupEventListeners();
+            centerCameraOnPlayer(); // Center camera on player at start
+            updateUI();
+            gameLoop();
+            showMessage("Welcome to your forest farm! Clear trees to expand your farming area!", "info");
+        }
+
+        // Function to center camera on player
+        function centerCameraOnPlayer() {
+            // Calculate player's world position in isometric coordinates
+            const playerWorldX = (gameState.playerX - gameState.playerY) * (TILE_WIDTH / 2) * zoomLevel;
+            const playerWorldY = (gameState.playerX + gameState.playerY) * (TILE_HEIGHT / 2) * zoomLevel;
+
+            // Calculate camera offset to center player on screen
+            // We want the player to appear at canvas center, so:
+            // CAMERA_OFFSET_X + cameraX + playerWorldX = CANVAS_CENTER_X
+            cameraX = CANVAS_CENTER_X - CAMERA_OFFSET_X - playerWorldX;
+            cameraY = CANVAS_CENTER_Y - CAMERA_OFFSET_Y - playerWorldY;
+        }
+
+        function setupEventListeners() {
+            // Canvas click handler
+            canvas.addEventListener('click', handleCanvasClick);
+
+            // Hover tooltips and panning
+            canvas.addEventListener('mousemove', handleCanvasHover);
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp); // Stop dragging if mouse leaves canvas
+
+            // Level stat is now clickable (tooltip functionality replaced with modal)
+
+            // Prevent context menu on right click
+            canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', handleKeyPress);
+
+            // Prevent modal closing when clicking inside modals
+            document.getElementById('shop').addEventListener('click', (e) => e.stopPropagation());
+            document.getElementById('levelInfo').addEventListener('click', (e) => e.stopPropagation());
+            document.getElementById('guide').addEventListener('click', (e) => e.stopPropagation());
+
+            // Initialize UI
+            updateDefaultActionUI();
+
+            // Add click-outside functionality for modals with delay to prevent immediate closing
+            setTimeout(() => {
+                document.addEventListener('click', (e) => {
+                    const shop = document.getElementById('shop');
+                    const levelInfo = document.getElementById('levelInfo');
+                    const guide = document.getElementById('guide');
+
+                    // Skip if clicking inside modals or on their trigger elements
+                    if (e.target.closest('#shop') ||
+                        e.target.closest('#levelInfo') ||
+                        e.target.closest('#guide') ||
+                        e.target.closest('button[onclick*="openShop"]') ||
+                        e.target.closest('button[onclick*="openGuide"]') ||
+                        e.target.closest('#levelStat')) {
+                        e.stopPropagation(); // Prevent any further event handling
+                        return;
+                    }
+
+                    // Close modals if they're open and clicking outside
+                    if (shop && shop.style.display === 'block') {
+                        closeShop();
+                    }
+
+                    if (levelInfo && levelInfo.style.display === 'block') {
+                        closeLevelInfo();
+                    }
+
+                    if (guide && guide.style.display === 'block') {
+                        closeGuide();
+                    }
+                });
+            }, 100);
+        }
+
+        // Isometric coordinate conversion
+        function screenToIso(screenX, screenY) {
+            // Adjust for camera offset (including panning) and zoom
+            const x = (screenX - (CAMERA_OFFSET_X + cameraX)) / zoomLevel;
+            const y = (screenY - (CAMERA_OFFSET_Y + cameraY)) / zoomLevel;
+
+            // Convert screen coordinates to grid coordinates
+            // Using proper isometric coordinate transformation
+            const isoX = x / (TILE_WIDTH / 2);
+            const isoY = y / (TILE_HEIGHT / 2);
+
+            const gridX = Math.floor((isoX + isoY) / 2);
+            const gridY = Math.floor((isoY - isoX) / 2);
+
+            return { x: gridX, y: gridY };
+        }
+
+        function isoToScreen(gridX, gridY) {
+            // Convert grid coordinates to screen coordinates with zoom and camera
+            const screenX = (gridX - gridY) * (TILE_WIDTH / 2) * zoomLevel + (CAMERA_OFFSET_X + cameraX);
+            const screenY = (gridX + gridY) * (TILE_HEIGHT / 2) * zoomLevel + (CAMERA_OFFSET_Y + cameraY);
+
+            return { x: screenX, y: screenY };
+        }
+
+        function handleCanvasClick(e) {
+            // Hide action wheel if visible
+            hideActionWheel();
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const gridPos = screenToIso(x, y);
+
+            if (gridPos.x >= 0 && gridPos.x < GRID_WIDTH &&
+                gridPos.y >= 0 && gridPos.y < GRID_HEIGHT) {
+
+                // Get smart action for this tile
+                const smartAction = getSmartAction(gridPos.x, gridPos.y);
+
+                if (smartAction) {
+                    executeAction(smartAction.type, gridPos.x, gridPos.y);
+                }
+            }
+        }
+
+        function handleRightClick(e) {
+            e.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const gridPos = screenToIso(x, y);
+
+            if (gridPos.x >= 0 && gridPos.x < GRID_WIDTH &&
+                gridPos.y >= 0 && gridPos.y < GRID_HEIGHT) {
+
+                const actions = getAvailableActions(gridPos.x, gridPos.y);
+
+                if (actions.length > 1) {
+                    showActionWheel(e.clientX, e.clientY, gridPos.x, gridPos.y, actions);
+                } else if (actions.length === 1) {
+                    executeAction(actions[0].type, gridPos.x, gridPos.y);
+                }
+            }
+        }
+
+        function executeAction(actionType, x, y) {
+            switch (actionType) {
+                case 'move':
+                    movePlayer(x, y);
+                    break;
+                case 'cut':
+                    cutTree(x, y);
+                    break;
+                case 'harvest':
+                    harvestCrop(x, y);
+                    break;
+                case 'hoe':
+                    gameState.selectedTool = 'hoe';
+                    useTool(x, y);
+                    break;
+                case 'plant':
+                    gameState.selectedTool = 'plant';
+                    useTool(x, y);
+                    break;
+                case 'water':
+                    gameState.selectedTool = 'water';
+                    useTool(x, y);
+                    break;
+            }
+        }
+
+        // Action wheel functions
+        function showActionWheel(screenX, screenY, gridX, gridY, actions) {
+            const wheel = document.getElementById('action-wheel');
+            wheel.style.display = 'block';
+            wheel.style.left = (screenX - 60) + 'px';
+            wheel.style.top = (screenY - 60) + 'px';
+
+            // Clear existing actions
+            wheel.querySelectorAll('.wheel-action').forEach(el => el.remove());
+
+            // Add actions in a circle
+            actions.forEach((action, index) => {
+                const angle = (index / actions.length) * 2 * Math.PI - Math.PI / 2;
+                const radius = 40;
+                const x = Math.cos(angle) * radius + 60;
+                const y = Math.sin(angle) * radius + 60;
+
+                const actionEl = document.createElement('div');
+                actionEl.className = 'wheel-action';
+                actionEl.textContent = action.icon;
+                actionEl.style.left = (x - 20) + 'px';
+                actionEl.style.top = (y - 20) + 'px';
+                actionEl.title = action.type;
+
+                actionEl.addEventListener('click', () => {
+                    executeAction(action.type, gridX, gridY);
+                    // Set as new default if it's a tool action
+                    if (['hoe', 'plant', 'water'].includes(action.type)) {
+                        setDefaultAction(action.type);
+                    }
+                    hideActionWheel();
+                });
+
+                wheel.appendChild(actionEl);
+            });
+
+            // Auto-hide after 3 seconds
+            setTimeout(hideActionWheel, 3000);
+        }
+
+        function hideActionWheel() {
+            document.getElementById('action-wheel').style.display = 'none';
+        }
+
+        function handleKeyPress(e) {
+            // Hide action wheel on any key press
+            hideActionWheel();
+
+            switch (e.key) {
+                case '1':
+                    setDefaultAction('hoe');
+                    showMessage("Default: Till soil 🔨", "info");
+                    break;
+                case '2':
+                    setDefaultAction('plant');
+                    showMessage("Default: Plant seeds 🌱", "info");
+                    break;
+                case '3':
+                    setDefaultAction('water');
+                    showMessage("Default: Water plants 💧", "info");
+                    break;
+                case 'Escape':
+                    hideActionWheel();
+                    break;
+            }
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (e.button === 2) { // Right click - show action wheel
+                handleRightClick(e);
+                return;
+            }
+
+            if (e.ctrlKey) { // Ctrl+click for panning (same as right-click for panning)
+                e.preventDefault();
+                isDragging = true;
+                dragStartX = x;
+                dragStartY = y;
+                lastDragX = x;
+                lastDragY = y;
+                canvas.style.cursor = 'grabbing';
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (isDragging) {
+                isDragging = false;
+                canvas.style.cursor = 'crosshair';
+            }
+        }
+
+        function handleCanvasHover(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+
+            // Handle panning
+            if (isDragging) {
+                const deltaX = mouseX - lastDragX;
+                const deltaY = mouseY - lastDragY;
+
+                cameraX += deltaX;
+                cameraY += deltaY;
+
+                lastDragX = mouseX;
+                lastDragY = mouseY;
+                return; // Don't show tooltips while panning
+            }
+
+            const gridPos = screenToIso(mouseX, mouseY);
+
+            // Update hovered tile
+            hoveredTile = null;
+            if (gridPos.x >= 0 && gridPos.x < GRID_WIDTH &&
+                gridPos.y >= 0 && gridPos.y < GRID_HEIGHT) {
+                hoveredTile = { x: gridPos.x, y: gridPos.y };
+            }
+
+            // Remove existing tooltips
+            document.querySelectorAll('.tooltip').forEach(tip => tip.remove());
+
+            if (hoveredTile) {
+                const tile = gameState.farm[`${hoveredTile.x},${hoveredTile.y}`];
+                let tooltipText = '';
+
+                // Check proximity
+                const distance = Math.max(Math.abs(hoveredTile.x - gameState.playerX), Math.abs(hoveredTile.y - gameState.playerY));
+                const isAdjacent = distance <= 1;
+
+                // Show smart action tooltip
+                const smartAction = getSmartAction(hoveredTile.x, hoveredTile.y);
+                const allActions = getAvailableActions(hoveredTile.x, hoveredTile.y);
+
+                if (smartAction) {
+                    switch (smartAction.type) {
+                        case 'cut':
+                            tooltipText = `${smartAction.icon} Click to cut tree (+$5, -2 energy)`;
+                            break;
+                        case 'harvest':
+                            tooltipText = `${smartAction.icon} Click to harvest!`;
+                            break;
+                        case 'hoe':
+                            tooltipText = `${smartAction.icon} Click to till soil`;
+                            break;
+                        case 'plant':
+                            tooltipText = `${smartAction.icon} Click to plant seeds`;
+                            break;
+                        case 'water':
+                            tooltipText = `${smartAction.icon} Click to water`;
+                            break;
+                    }
+
+                    // Add tile info
+                    if (tile.crop) {
+                        const crop = CROPS[tile.crop];
+                        const daysGrowing = gameState.day - tile.plantedDay;
+                        const daysRemaining = Math.max(0, crop.growthDays - daysGrowing);
+
+                        if (daysRemaining > 0) {
+                            tooltipText += ` | ${crop.emoji} ${crop.name} (${daysRemaining} days)`;
+                        } else {
+                            tooltipText += ` | ${crop.emoji} ${crop.name} ready!`;
+                        }
+                    }
+
+                    // Show alternative actions if available
+                    if (allActions.length > 1) {
+                        tooltipText += ` | Right-click for more options`;
+                    }
+                } else if (allActions.length > 0) {
+                    // No smart action available, but show right-click options
+                    const walkDistance = Math.abs(hoveredTile.x - gameState.playerX) + Math.abs(hoveredTile.y - gameState.playerY);
+                    tooltipText = `Right-click to move here (${walkDistance} steps, ${walkDistance > 1 ? '-1 energy' : 'free'})`;
+
+                    // Add tile info
+                    if (tile.crop) {
+                        const crop = CROPS[tile.crop];
+                        const daysGrowing = gameState.day - tile.plantedDay;
+                        const daysRemaining = Math.max(0, crop.growthDays - daysGrowing);
+
+                        if (daysRemaining > 0) {
+                            tooltipText += ` | ${crop.emoji} ${crop.name} (${daysRemaining} days)`;
+                        } else {
+                            tooltipText += ` | ${crop.emoji} ${crop.name} ready!`;
+                        }
+                    }
+
+                    if (allActions.length > 1) {
+                        tooltipText += ` | +${allActions.length - 1} more action${allActions.length > 2 ? 's' : ''}`;
+                    }
+                }
+
+                // Only show tooltip if enabled
+                if (tooltipText && tooltipsEnabled) {
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'tooltip';
+
+                    // Create tooltip content with progress bars
+                    let tooltipHTML = `<div class="tooltip-text">${tooltipText}</div>`;
+
+                    // Add crop freshness bar for mature crops
+                    if (tile.crop && isCropMature(tile)) {
+                        const crop = CROPS[tile.crop];
+                        const daysGrowing = gameState.day - tile.plantedDay;
+                        const daysSinceMaturity = daysGrowing - crop.growthDays;
+                        const freshnessProgress = Math.max(0, (3 - daysSinceMaturity) / 3 * 100);
+                        const freshnessColor = freshnessProgress > 60 ? '#4caf50' : freshnessProgress > 30 ? '#ff9800' : '#f44336';
+
+                        tooltipHTML += `
+                            <div class="progress-bar-container">
+                                <div class="progress-label">Freshness: ${3 - daysSinceMaturity} days left</div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${freshnessProgress}%; background-color: ${freshnessColor};"></div>
+                                </div>
+                            </div>`;
+                    }
+
+                    // Add growth progress bar for growing crops
+                    else if (tile.crop && !isCropMature(tile)) {
+                        const crop = CROPS[tile.crop];
+                        const daysGrowing = gameState.day - tile.plantedDay;
+                        const growthProgress = (daysGrowing / crop.growthDays) * 100;
+
+                        tooltipHTML += `
+                            <div class="progress-bar-container">
+                                <div class="progress-label">Growth: ${daysGrowing}/${crop.growthDays} days</div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${growthProgress}%; background-color: #4caf50;"></div>
+                                </div>
+                            </div>`;
+                    }
+
+                    // Add land regression bar for tilled/grass tiles
+                    else if (tile.type === 'tilled' || tile.type === 'grass') {
+                        const daysSinceUsed = gameState.day - (tile.lastUsed || 1);
+
+                        if (tile.type === 'tilled') {
+                            const maxDays = TILE_TYPES.tilled.progressionDays;
+                            const regressionProgress = (daysSinceUsed / maxDays) * 100;
+                            const regressionColor = regressionProgress > 80 ? '#f44336' : regressionProgress > 60 ? '#ff9800' : '#4caf50';
+
+                            if (daysSinceUsed > 0) {
+                                const remainingDays = Math.max(0, maxDays - daysSinceUsed);
+                                tooltipHTML += `
+                                    <div class="progress-bar-container">
+                                        <div class="progress-label">Returns to grass in ${remainingDays} days</div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: ${Math.min(regressionProgress, 100)}%; background-color: ${regressionColor};"></div>
+                                        </div>
+                                    </div>`;
+                            }
+                        } else if (tile.type === 'grass') {
+                            // Check distance from player (same as in nextDay logic)
+                            const distanceFromPlayer = Math.max(Math.abs(hoveredTile.x - gameState.playerX), Math.abs(hoveredTile.y - gameState.playerY));
+                            const hasNearbyTrees = hasAdjacentTrees(hoveredTile.x, hoveredTile.y);
+
+                            if (hasNearbyTrees) {
+                                if (distanceFromPlayer > 2) {
+                                    // Can spread trees - show progress
+                                    const maxDays = TILE_TYPES.grass.progressionDays;
+
+                                    if (tile.treeSpreadStart) {
+                                        const daysSinceSpreadStart = gameState.day - tile.treeSpreadStart;
+                                        const regressionProgress = (daysSinceSpreadStart / maxDays) * 100;
+                                        const regressionColor = regressionProgress > 80 ? '#f44336' : regressionProgress > 60 ? '#ff9800' : '#4caf50';
+                                        const remainingDays = Math.max(0, maxDays - daysSinceSpreadStart);
+
+                                        tooltipHTML += `
+                                            <div class="progress-bar-container">
+                                                <div class="progress-label">Trees spread in ${remainingDays} days</div>
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" style="width: ${Math.min(regressionProgress, 100)}%; background-color: ${regressionColor};"></div>
+                                                </div>
+                                            </div>`;
+                                    } else {
+                                        tooltipHTML += `
+                                            <div class="progress-bar-container">
+                                                <div class="progress-label">Trees will start spreading next day</div>
+                                            </div>`;
+                                    }
+                                } else {
+                                    // Too close to player
+                                    tooltipHTML += `
+                                        <div class="progress-bar-container">
+                                            <div class="progress-label">Too close to player - trees won't spread</div>
+                                        </div>`;
+                                }
+                            } else {
+                                // Show that trees can't spread without nearby trees
+                                tooltipHTML += `
+                                    <div class="progress-bar-container">
+                                        <div class="progress-label">No nearby trees to spread from</div>
+                                    </div>`;
+                            }
+                        }
+                    }
+
+                    tooltip.innerHTML = tooltipHTML;
+
+                    // Position tooltip to the side to avoid covering the target
+                    const rect = canvas.getBoundingClientRect();
+                    const canvasX = e.clientX - rect.left;
+                    const canvasY = e.clientY - rect.top;
+
+                    // Position to the right if there's space, otherwise to the left
+                    if (canvasX < canvas.width * 0.7) {
+                        tooltip.style.left = (e.clientX + 20) + 'px';
+                    } else {
+                        tooltip.style.left = (e.clientX - 200) + 'px';
+                    }
+                    tooltip.style.top = (e.clientY - 40) + 'px';
+                    document.body.appendChild(tooltip);
+                }
+            }
+        }
+
+        // Smart action system
+        function getAvailableActions(x, y) {
+            const tile = gameState.farm[`${x},${y}`];
+            const actions = [];
+
+            // Always available: move to any valid tile
+            actions.push({ type: 'move', icon: '🚶', priority: 1 });
+
+            // Check adjacency for actions that need it
+            const distance = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+            const isAdjacent = distance <= 1;
+
+            if (isAdjacent) {
+                // Cut down trees
+                if (tile.type === 'tree') {
+                    actions.push({ type: 'cut', icon: '🪓', priority: 9 });
+                }
+
+                // Harvest if crop is mature
+                if (tile.crop && isCropMature(tile)) {
+                    actions.push({ type: 'harvest', icon: '🌾', priority: 10 });
+                }
+
+                // Till grass
+                if (tile.type === 'grass') {
+                    actions.push({ type: 'hoe', icon: '🔨', priority: 8 });
+                }
+
+                // Plant on tilled soil
+                if (tile.type === 'tilled' && !tile.crop) {
+                    const hasSeeds = Object.keys(gameState.inventory).some(item =>
+                        item.includes('seeds') && gameState.inventory[item] > 0
+                    );
+                    if (hasSeeds) {
+                        actions.push({ type: 'plant', icon: '🌱', priority: 9 });
+                    }
+                }
+
+                // Water planted crops (only if not mature)
+                if (tile.crop && !tile.watered && !isCropMature(tile)) {
+                    actions.push({ type: 'water', icon: '💧', priority: 7 });
+                }
+            }
+
+            return actions.sort((a, b) => b.priority - a.priority);
+        }
+
+        function getSmartAction(x, y) {
+            const actions = getAvailableActions(x, y);
+            if (actions.length === 0) return null;
+
+            // Filter out move action for left-click - only allow move via right-click/action wheel
+            const nonMoveActions = actions.filter(action => action.type !== 'move');
+
+            if (nonMoveActions.length === 0) return null; // No non-move actions available
+
+            // Return the highest priority non-move action
+            const primaryAction = nonMoveActions[0];
+
+            // Check if user has a default preference that's available
+            for (const action of nonMoveActions) {
+                if (action.type === 'hoe' && gameState.defaultActions.hoe) return action;
+                if (action.type === 'plant' && gameState.defaultActions.plant) return action;
+                if (action.type === 'water' && gameState.defaultActions.water) return action;
+            }
+
+            return primaryAction;
+        }
+
+
+
+        function setDefaultAction(actionType) {
+            // Reset all defaults
+            Object.keys(gameState.defaultActions).forEach(key => {
+                gameState.defaultActions[key] = false;
+            });
+
+            // Set new default
+            gameState.defaultActions[actionType] = true;
+
+            // Update UI
+            updateDefaultActionUI();
+        }
+
+        function updateDefaultActionUI() {
+            // Default actions updated (no UI buttons to update anymore)
+        }
+
+        function useTool(x, y) {
+            if (gameState.energy <= 0) {
+                showMessage("No energy left! Sleep to restore energy.", "warning");
+                return;
+            }
+
+            // Check if farmer is adjacent to the target tile (within 1 tile)
+            const distance = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+            if (distance > 1) {
+                showMessage("Too far! Move closer to work on this tile.", "warning");
+                return;
+            }
+
+            const tile = gameState.farm[`${x},${y}`];
+
+            switch (gameState.selectedTool) {
+                case 'hoe':
+                    if (tile.type === 'grass') {
+                        tile.type = 'tilled';
+                        tile.lastUsed = gameState.day;
+                        tile.lastTilled = gameState.day;
+                        useEnergy(1);
+                        showMessage("Tilled the soil!", "success");
+                        gainXP(2);
+                    } else {
+                        showMessage("Can only till grass!", "warning");
+                    }
+                    break;
+
+                case 'water':
+                    if (tile.crop && (!tile.watered || tile.lastWatered !== gameState.day)) {
+                        tile.watered = true;
+                        tile.lastWatered = gameState.day;
+                        tile.lastUsed = gameState.day;
+                        useEnergy(1);
+                        showMessage("Watered the plant!", "success");
+                        gainXP(1);
+                    } else if (tile.crop) {
+                        showMessage("Already watered today!", "warning");
+                    } else {
+                        showMessage("Nothing to water here!", "warning");
+                    }
+                    break;
+
+                case 'plant':
+                    if (tile.type === 'tilled' && !tile.crop) {
+                        plantSeed(x, y);
+                    } else if (tile.crop) {
+                        showMessage("Already planted here!", "warning");
+                    } else {
+                        showMessage("Need tilled soil to plant!", "warning");
+                    }
+                    break;
+            }
+
+            updateUI();
+        }
+
+        function plantSeed(x, y) {
+            // Find available seed in inventory
+            let seedType = null;
+            let seedKey = null;
+
+            for (const [key, count] of Object.entries(gameState.inventory)) {
+                if (key.endsWith('_seeds') && count > 0) {
+                    seedType = key.replace('_seeds', '');
+                    seedKey = key;
+                    break;
+                }
+            }
+
+            if (!seedType) {
+                showMessage("No seeds available! Buy some from the shop.", "warning");
+                return;
+            }
+
+            const crop = CROPS[seedType];
+            if (gameState.level < crop.requiredLevel) {
+                showMessage(`Need level ${crop.requiredLevel} for ${crop.name}!`, "warning");
+                return;
+            }
+
+            const tile = gameState.farm[`${x},${y}`];
+            tile.crop = seedType;
+            tile.plantedDay = gameState.day;
+            tile.watered = false;
+            tile.type = 'planted';
+            tile.lastUsed = gameState.day;
+
+            gameState.inventory[seedKey]--;
+            if (gameState.inventory[seedKey] <= 0) {
+                delete gameState.inventory[seedKey];
+            }
+
+            useEnergy(1);
+            showMessage(`Planted ${crop.name}!`, "success");
+            gainXP(3);
+        }
+
+        function cutTree(x, y) {
+            // Check if farmer is adjacent to the target tile
+            const distance = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+            if (distance > 1) {
+                showMessage("Too far! Move closer to cut this tree.", "warning");
+                return;
+            }
+
+            const tile = gameState.farm[`${x},${y}`];
+
+            if (tile.type !== 'tree') {
+                showMessage("No tree to cut here!", "warning");
+                return;
+            }
+
+            if (gameState.energy <= 0) {
+                showMessage("No energy left! Sleep to restore energy.", "warning");
+                return;
+            }
+
+            // Cut the tree and turn it into grass
+            tile.type = 'grass';
+            tile.lastUsed = gameState.day;
+
+            // Reward the player with money and XP for clearing land
+            gameState.money += 5;
+            useEnergy(2); // Cutting trees takes more energy
+            showMessage("Tree cut down! +$5", "success");
+            gainXP(5);
+            updateUI();
+        }
+
+        function harvestCrop(x, y) {
+            // Check if farmer is adjacent to the target tile
+            const distance = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+            if (distance > 1) {
+                showMessage("Too far! Move closer to harvest this crop.", "warning");
+                return;
+            }
+
+            const tile = gameState.farm[`${x},${y}`];
+            const crop = CROPS[tile.crop];
+
+            if (!isCropMature(tile)) {
+                showMessage("Crop not ready yet!", "warning");
+                return;
+            }
+
+            // Check storage capacity
+            const currentStorageCount = Object.values(gameState.storage).reduce((sum, count) => sum + count, 0);
+            if (currentStorageCount >= gameState.storageCapacity) {
+                showMessage("Storage full! Sell some crops first.", "warning");
+                return;
+            }
+
+            // Add to storage instead of selling immediately
+            const cropKey = tile.crop;
+            const isWatered = tile.watered && tile.lastWatered >= tile.plantedDay;
+            const storageKey = isWatered ? `${cropKey}_watered` : cropKey;
+
+            gameState.storage[storageKey] = (gameState.storage[storageKey] || 0) + 1;
+            gainXP(crop.xpReward);
+
+            // Show harvest message
+            if (isWatered) {
+                showMessage(`Harvested premium ${crop.name}! (+25% value when sold)`, "success");
+            } else {
+                showMessage(`Harvested ${crop.name}! Stored for later sale.`, "success");
+            }
+
+            // Clear the tile
+            tile.crop = null;
+            tile.plantedDay = null;
+            tile.watered = false;
+            tile.lastWatered = null;
+            tile.type = 'tilled';
+            tile.lastUsed = gameState.day;
+
+            useEnergy(1);
+            updateUI();
+        }
+
+        function isCropMature(tile) {
+            if (!tile.crop || !tile.plantedDay) return false;
+
+            const crop = CROPS[tile.crop];
+            const daysGrowing = gameState.day - tile.plantedDay;
+            return daysGrowing >= crop.growthDays;
+        }
+
+        function movePlayer(x, y) {
+            const tile = gameState.farm[`${x},${y}`];
+            if (TILE_TYPES[tile.type]?.walkable) {
+                const distance = Math.abs(x - gameState.playerX) + Math.abs(y - gameState.playerY);
+
+                // Check energy before moving
+                if (gameState.energy <= 0) {
+                    showMessage("No energy left! Sleep to restore energy.", "warning");
+                    return;
+                }
+
+                gameState.playerX = x;
+                gameState.playerY = y;
+
+                // Always consume energy for walking (except for very short moves within 1 tile)
+                if (distance > 1) {
+                    useEnergy(1);
+                    showMessage(`Walked to new location! (-1 energy)`, "info");
+                } else {
+                    showMessage(`Moved to (${x}, ${y})`, "info");
+                }
+            } else {
+                showMessage("Can't walk there!", "warning");
+            }
+        }
+
+        function useEnergy(amount) {
+            gameState.energy = Math.max(0, gameState.energy - amount);
+            updateUI(); // Update the energy display immediately
+        }
+
+        function gainXP(amount) {
+            gameState.xp += amount;
+
+            // Level up check
+            const xpNeeded = gameState.level * 50;
+            if (gameState.xp >= xpNeeded) {
+                gameState.level++;
+                gameState.xp -= xpNeeded;
+                gameState.maxEnergy += 2;
+                // Cap energy to max energy (don't overflow)
+                gameState.energy = Math.min(gameState.energy, gameState.maxEnergy);
+                showMessage(`Level up! Now level ${gameState.level}! +2 max energy!`, "success");
+            }
+        }
+
+        function hasAdjacentTrees(x, y) {
+            // Check all 8 adjacent tiles for trees
+            const directions = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1],           [0, 1],
+                [1, -1],  [1, 0],  [1, 1]
+            ];
+
+            for (const [dx, dy] of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+
+                // Check bounds
+                if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                    const adjacentTile = gameState.farm[`${nx},${ny}`];
+                    if (adjacentTile && adjacentTile.type === 'tree') {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function nextDay() {
+            gameState.day++;
+            gameState.energy = gameState.maxEnergy;
+
+            // Land progression and crop management
+            const progressionMessages = [];
+
+            for (const [coords, tile] of Object.entries(gameState.farm)) {
+                // Reset daily watering status
+                if (tile.crop && tile.lastWatered !== gameState.day) {
+                    tile.watered = false;
+                }
+
+                // Check for crop spoilage (crops spoil if not harvested within 3 days of maturity)
+                if (tile.crop && isCropMature(tile)) {
+                    const crop = CROPS[tile.crop];
+                    const daysGrowing = gameState.day - tile.plantedDay;
+                    const daysSinceMaturity = daysGrowing - crop.growthDays;
+
+                    if (daysSinceMaturity >= 3) {
+                        // Crop spoiled - remove it and revert to tilled
+                        tile.crop = null;
+                        tile.plantedDay = null;
+                        tile.watered = false;
+                        tile.lastWatered = null;
+                        tile.type = 'tilled';
+                        tile.lastUsed = gameState.day; // Update lastUsed when crop spoils
+                        progressionMessages.push(`${crop.emoji} ${crop.name} spoiled and disappeared!`);
+                    }
+                }
+
+                // Land progression: tilled land returns to grass if unused and no crops
+                if (tile.type === 'tilled' && !tile.crop) {
+                    const daysSinceUsed = gameState.day - (tile.lastUsed || 1);
+                    const progressionDays = TILE_TYPES.tilled.progressionDays;
+
+                    if (daysSinceUsed >= progressionDays) {
+                        tile.type = 'grass';
+                        tile.lastTilled = null;
+                        // Keep the original lastUsed so grass can continue progressing to trees
+                        progressionMessages.push("Unused tilled land returned to grass.");
+                    }
+                }                // Grass spreads trees only if adjacent to existing trees
+                if (tile.type === 'grass') {
+                    const [x, y] = coords.split(',').map(Number);
+                    const distanceFromPlayer = Math.max(Math.abs(x - gameState.playerX), Math.abs(y - gameState.playerY));
+                    const hasNearbyTrees = hasAdjacentTrees(x, y);
+
+                    if (distanceFromPlayer > 2) {
+                        if (hasNearbyTrees) {
+                            // Start or continue tree spreading countdown
+                            if (!tile.treeSpreadStart) {
+                                tile.treeSpreadStart = gameState.day; // Start the counter
+                            }
+
+                            const daysSinceSpreadStart = gameState.day - tile.treeSpreadStart;
+                            const progressionDays = TILE_TYPES.grass.progressionDays;
+
+                            // Check if enough days have passed to spread trees
+                            if (daysSinceSpreadStart >= progressionDays) {
+                                tile.type = 'tree';
+                                tile.lastUsed = gameState.day;
+                                tile.lastTilled = null;
+                                tile.treeSpreadStart = null; // Clear the counter
+                                progressionMessages.push(`Trees spread at (${x},${y}) after ${daysSinceSpreadStart} days!`);
+                            }
+                        } else {
+                            // No nearby trees - reset the counter
+                            tile.treeSpreadStart = null;
+                        }
+                    }
+                }
+            }
+
+            // Show progression messages
+            if (progressionMessages.length > 0) {
+                // Remove duplicate messages
+                const uniqueMessages = [...new Set(progressionMessages)];
+                if (uniqueMessages.length <= 2) {
+                    uniqueMessages.forEach(msg => showMessage(msg, "warning"));
+                } else {
+                    showMessage(`Land changed: ${uniqueMessages.length} areas affected by natural progression.`, "warning");
+                }
+            }
+
+            showMessage(`Day ${gameState.day} begins! Energy restored!`, "info");
+            updateUI();
+        }
+
+        function toggleTooltips() {
+            tooltipsEnabled = !tooltipsEnabled;
+
+            const btn = document.getElementById('tooltip-btn');
+            const icon = document.getElementById('tooltip-icon');
+            const text = document.getElementById('tooltip-text');
+
+            if (tooltipsEnabled) {
+                btn.classList.remove('tooltips-off');
+                icon.textContent = '💡';
+                text.textContent = 'Tooltips ON';
+                showMessage("Action tooltips enabled!", "info");
+            } else {
+                btn.classList.add('tooltips-off');
+                icon.textContent = '🚫';
+                text.textContent = 'Tooltips OFF';
+                showMessage("Action tooltips disabled!", "info");
+            }
+        }
+
+        function openSellMenu(itemKey, count) {
+            const cropType = itemKey.replace('_watered', '');
+            const crop = CROPS[cropType];
+            const isWatered = itemKey.includes('_watered');
+            const basePrice = crop.sellPrice;
+            const sellPrice = isWatered ? Math.floor(basePrice * 1.25) : basePrice;
+
+            const confirmSell = confirm(`Sell ${count} ${crop.name}${isWatered ? ' (Premium)' : ''} for $${sellPrice * count}?`);
+
+            if (confirmSell) {
+                // Add money and remove from storage
+                gameState.money += sellPrice * count;
+                delete gameState.storage[itemKey];
+
+                showMessage(`Sold ${count} ${crop.name} for $${sellPrice * count}!`, "success");
+                updateUI();
+            }
+        }
+
+        function openShop(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            closeAllModals(); // Close any open modals first
+            refreshShopDisplay();
+            const shopElement = document.getElementById('shop');
+            if (shopElement) {
+                shopElement.style.display = 'block';
+            }
+        }
+
+        function refreshShopDisplay() {
+            const content = document.getElementById('shop-content');
+            content.innerHTML = '';
+
+            // Add seed options (both available and locked)
+            for (const [cropType, crop] of Object.entries(CROPS)) {
+                const seedKey = `${cropType}_seeds`;
+                const isUnlocked = gameState.level >= crop.requiredLevel;
+                const affordable = gameState.money >= crop.seedCost && isUnlocked;
+                const owned = gameState.inventory[seedKey] || 0;
+
+                const item = document.createElement('div');
+
+                if (!isUnlocked) {
+                    // Locked item
+                    item.className = 'shop-item locked-item';
+                    item.style.opacity = '0.5';
+                    item.style.borderColor = '#999';
+                    item.innerHTML = `
+                        <div>
+                            <strong>${crop.emoji} ${crop.name} Seeds</strong> 🔒<br>
+                            <small>Requires Level ${crop.requiredLevel} • Growth: ${crop.growthDays} days • Sell: $${crop.sellPrice}</small>
+                        </div>
+                        <div><strong>$${crop.seedCost}</strong></div>
+                    `;
+                    item.title = `Unlock at Level ${crop.requiredLevel}`;
+                } else {
+                    // Available item
+                    item.className = `shop-item ${affordable ? 'affordable' : 'expensive'}`;
+                    item.innerHTML = `
+                        <div>
+                            <strong>${crop.emoji} ${crop.name} Seeds</strong><br>
+                            <small>Growth: ${crop.growthDays} days • Sell: $${crop.sellPrice} • Owned: ${owned}</small>
+                        </div>
+                        <div><strong>$${crop.seedCost}</strong></div>
+                    `;
+
+                    if (affordable) {
+                        item.addEventListener('click', () => buyItem(seedKey, crop.seedCost));
+                        item.style.cursor = 'pointer';
+                    } else {
+                        item.title = 'Not enough money!';
+                    }
+                }
+
+                content.appendChild(item);
+            }
+        }        function closeShop() {
+            document.getElementById('shop').style.display = 'none';
+        }
+
+        function openLevelInfo(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            closeAllModals(); // Close any open modals first
+            refreshLevelInfoDisplay();
+            const levelElement = document.getElementById('levelInfo');
+            if (levelElement) {
+                levelElement.style.display = 'block';
+            }
+        }
+
+        function closeLevelInfo() {
+            document.getElementById('levelInfo').style.display = 'none';
+        }
+
+        function refreshLevelInfoDisplay() {
+            const content = document.getElementById('levelInfo-content');
+            const currentLevel = gameState.level;
+            const currentXP = gameState.xp;
+            const xpNeeded = currentLevel * 50;
+            const xpProgress = currentXP % 50;
+            const xpRemaining = xpNeeded - xpProgress;
+
+            content.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h4>Current Level: ${currentLevel}</h4>
+                    <div><strong>XP Progress:</strong> ${xpProgress}/${xpNeeded}</div>
+                    <div><strong>XP Needed:</strong> ${xpRemaining}</div>
+                    <div><strong>Max Energy:</strong> ${gameState.maxEnergy}</div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h4>📈 Level Progression Benefits:</h4>
+                    <ul style="text-align: left; padding-left: 20px;">
+                        <li>Each level: +2 Max Energy</li>
+                        <li>Level 3: Unlock 🌽 Corn</li>
+                        <li>Level 5: Unlock 🍅 Tomato</li>
+                        <li>Level 7: Unlock 🎃 Pumpkin</li>
+                        <li>Level 9: Unlock 🍓 Strawberry</li>
+                        <li>Level 12: Unlock 🍇 Grapes</li>
+                        <li>Level 15: Unlock 🍎 Apple Tree</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4>🌱 Available Crops at Level ${currentLevel}:</h4>
+                    <div style="text-align: left;">
+                        ${Object.entries(CROPS)
+                            .filter(([_, crop]) => crop.requiredLevel <= currentLevel)
+                            .map(([_, crop]) => `
+                                <div style="margin: 8px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <strong>${crop.emoji} ${crop.name}</strong><br>
+                                    <small>Seeds: $${crop.seedCost} • Growth: ${crop.growthDays} days • Sell: $${crop.sellPrice} • XP: ${crop.xpReward}</small>
+                                </div>
+                            `).join('')}
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <h4>🔮 Next Unlock:</h4>
+                    ${(() => {
+                        const nextCrop = Object.entries(CROPS).find(([_, crop]) => crop.requiredLevel > currentLevel);
+                        if (nextCrop) {
+                            const [_, crop] = nextCrop;
+                            return `<div><strong>Level ${crop.requiredLevel}:</strong> ${crop.emoji} ${crop.name} (Seeds: $${crop.seedCost}, Sell: $${crop.sellPrice})</div>`;
+                        } else {
+                            return '<div>All crops unlocked! 🎉</div>';
+                        }
+                    })()}
+                </div>
+            `;
+        }
+
+        function openGuide(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            closeAllModals(); // Close any open modals first
+            refreshGuideDisplay();
+            const guideElement = document.getElementById('guide');
+            if (guideElement) {
+                guideElement.style.display = 'block';
+            }
+        }
+
+        function closeGuide() {
+            document.getElementById('guide').style.display = 'none';
+        }
+
+        // Helper function to close all modals
+        function closeAllModals() {
+            document.getElementById('shop').style.display = 'none';
+            document.getElementById('levelInfo').style.display = 'none';
+            document.getElementById('guide').style.display = 'none';
+        }
+
+        function refreshGuideDisplay() {
+            const content = document.getElementById('guide-content');
+            content.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h4>🎯 Game Objective</h4>
+                    <ul>
+                        <li><strong>Goal:</strong> Build a thriving farm by growing and selling crops</li>
+                        <li><strong>Energy:</strong> Each action costs energy - sleep to restore</li>
+                        <li><strong>Growth:</strong> Plants need water and time to grow to maturity</li>
+                        <li><strong>Profit:</strong> Harvest crops and sell them for money</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h4>🎮 Smart Controls</h4>
+                    <ul>
+                        <li><strong>🖱️ Left Click:</strong> Smart farming action - automatically harvests, tills, plants, or waters</li>
+                        <li><strong>🖱️ Right Click:</strong> Movement & action wheel - move around or choose alternatives</li>
+                        <li><strong>⌨️ Keys 1-3:</strong> Set default action (1=Till, 2=Plant, 3=Water)</li>
+                        <li><strong>🔷 Blue Border:</strong> Farmer's work area - adjacent tiles you can interact with</li>
+                        <li><strong>Ctrl+Click:</strong> Pan the camera around the farm</li>
+                        <li><strong>Mouse Wheel:</strong> Zoom in/out for better view</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h4>🌱 Available Crop Types</h4>
+                    <ul>
+                        ${Object.entries(CROPS).map(([_, crop]) => `
+                            <li><strong>${crop.emoji} ${crop.name}:</strong> ${crop.growthDays} days growth, $${crop.seedCost} seeds → $${crop.sellPrice} sell ${crop.requiredLevel > 1 ? `(Level ${crop.requiredLevel})` : ''}</li>
+                        `).join('')}
+                    </ul>
+                </div>
+
+                <div class="strategy">
+                    <strong>💡 Strategy Tips:</strong>
+                    <ul>
+                        <li>Start with carrots for quick cash flow</li>
+                        <li>Water plants daily for 25% bonus yield</li>
+                        <li>Level up to unlock better crops and tools</li>
+                        <li>Plan your farm layout for efficiency</li>
+                        <li>Manage energy carefully - rest when needed</li>
+                        <li>Higher-level crops have better profit margins but take longer</li>
+                        <li>Save money for expensive premium crops like Apple Trees</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        function buyItem(item, cost) {
+            if (gameState.money >= cost) {
+                gameState.money -= cost;
+                gameState.inventory[item] = (gameState.inventory[item] || 0) + 1;
+                showMessage(`Bought ${item.replace('_', ' ')}!`, "success");
+                updateUI();
+                // Refresh shop display to show updated affordability
+                refreshShopDisplay();
+            } else {
+                showMessage("Not enough money!", "warning");
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('money').textContent = gameState.money;
+
+            // Update energy display with current/max format
+            const energyElement = document.getElementById('energy');
+            const energyContainer = energyElement.parentElement;
+            energyContainer.innerHTML = `⚡ <span id="energy">${gameState.energy}</span>/${gameState.maxEnergy}`;
+
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('day').textContent = gameState.day;
+
+            // Update inventory display (seeds)
+            const inventory = document.getElementById('inventory');
+            inventory.innerHTML = '';
+
+            for (const [item, count] of Object.entries(gameState.inventory)) {
+                const slot = document.createElement('div');
+                slot.className = 'inventory-slot has-item';
+
+                const cropType = item.replace('_seeds', '');
+                const emoji = CROPS[cropType]?.emoji || '📦';
+
+                slot.innerHTML = `
+                    ${emoji}
+                    <div class="item-count">${count}</div>
+                `;
+
+                inventory.appendChild(slot);
+            }
+
+            // Add storage display (harvested crops)
+            const currentStorageCount = Object.values(gameState.storage).reduce((sum, count) => sum + count, 0);
+
+            for (const [item, count] of Object.entries(gameState.storage)) {
+                const slot = document.createElement('div');
+                slot.className = 'inventory-slot has-item storage-item';
+                slot.title = 'Click to sell';
+                slot.onclick = () => openSellMenu(item, count);
+
+                const cropType = item.replace('_watered', '');
+                const emoji = CROPS[cropType]?.emoji || '📦';
+                const isWatered = item.includes('_watered');
+
+                slot.innerHTML = `
+                    ${emoji}${isWatered ? '💧' : ''}
+                    <div class="item-count">${count}</div>
+                `;
+
+                inventory.appendChild(slot);
+            }
+
+            // Add storage capacity indicator
+            if (currentStorageCount > 0) {
+                const capacitySlot = document.createElement('div');
+                capacitySlot.className = 'inventory-slot storage-capacity';
+                capacitySlot.innerHTML = `
+                    📦
+                    <div class="item-count">${currentStorageCount}/${gameState.storageCapacity}</div>
+                `;
+                inventory.appendChild(capacitySlot);
+            }
+
+            // Add empty slots for remaining space
+            const totalItems = Object.keys(gameState.inventory).length + Object.keys(gameState.storage).length + (currentStorageCount > 0 ? 1 : 0);
+            for (let i = totalItems; i < 8; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'inventory-slot';
+                inventory.appendChild(slot);
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // First pass: Draw all tile bases (back to front)
+            for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const tile = gameState.farm[`${x},${y}`];
+                    const screenPos = isoToScreen(x, y);
+
+                    // Highlight hovered tile
+                    let tileColor = TILE_TYPES[tile.type].color;
+                    if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y) {
+                        tileColor = lightenColor(tileColor, 20);
+                    }
+
+                    // Draw tile base
+                    drawIsometricTile(screenPos.x, screenPos.y, tileColor);
+
+                    // Draw movement path indicator
+                    if (hoveredTile && hoveredTile.x === x && hoveredTile.y === y && gameState.selectedTool === 'select') {
+                        drawMovementIndicator(screenPos.x, screenPos.y);
+                    }
+                }
+            }
+
+            // Draw farmer's influence area (behind crops)
+            drawInfluenceArea();
+
+            // Second pass: Draw all crops and objects (back to front)
+            for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const tile = gameState.farm[`${x},${y}`];
+                    const screenPos = isoToScreen(x, y);
+
+                    // Draw tree if present
+                    if (tile.type === 'tree') {
+                        drawTree(screenPos.x, screenPos.y);
+                    }
+
+                    // Draw crop if present
+                    if (tile.crop) {
+                        drawCrop(screenPos.x, screenPos.y, tile);
+                    }
+
+                    // Draw water indicator
+                    if (tile.watered && tile.lastWatered === gameState.day) {
+                        drawWaterIndicator(screenPos.x, screenPos.y);
+                    }
+
+                    // Draw player if they're on this tile
+                    if (gameState.playerX === x && gameState.playerY === y) {
+                        drawPlayer(screenPos.x, screenPos.y);
+                    }
+                }
+            }
+
+            // Draw movement arrow if hovering over a valid move location
+            if (hoveredTile && gameState.selectedTool === 'select') {
+                drawMovementArrow();
+            }
+
+            // Draw grid coordinates for debugging (optional)
+            if (false) { // Set to true for debugging
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    for (let x = 0; x < GRID_WIDTH; x++) {
+                        const screenPos = isoToScreen(x, y);
+                        ctx.fillStyle = '#333';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(`${x},${y}`, screenPos.x, screenPos.y + 5);
+                    }
+                }
+            }
+        }
+
+        function lightenColor(color, amount) {
+            // Simple color lightening function
+            if (color.startsWith('#')) {
+                const r = Math.min(255, parseInt(color.slice(1, 3), 16) + amount);
+                const g = Math.min(255, parseInt(color.slice(3, 5), 16) + amount);
+                const b = Math.min(255, parseInt(color.slice(5, 7), 16) + amount);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            return color;
+        }
+
+        function drawMovementIndicator(x, y) {
+            // Draw a subtle highlight ring around the tile with proper zoom scaling
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = Math.max(2, 3 * zoomLevel);
+            ctx.setLineDash([5 * zoomLevel, 5 * zoomLevel]);
+
+            const tileW = TILE_WIDTH * zoomLevel;
+            const tileH = TILE_HEIGHT * zoomLevel;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + tileW / 2, y + tileH / 2);
+            ctx.lineTo(x, y + tileH);
+            ctx.lineTo(x - tileW / 2, y + tileH / 2);
+            ctx.closePath();
+            ctx.stroke();
+
+            ctx.setLineDash([]); // Reset line dash
+        }
+
+        function drawMovementArrow() {
+            if (!hoveredTile) return;
+
+            const playerPos = isoToScreen(gameState.playerX, gameState.playerY);
+            const targetPos = isoToScreen(hoveredTile.x, hoveredTile.y);
+
+            // Don't draw arrow if already at target
+            if (hoveredTile.x === gameState.playerX && hoveredTile.y === gameState.playerY) {
+                return;
+            }
+
+            // Center positions within tiles for better accuracy
+            const playerCenterX = playerPos.x;
+            const playerCenterY = playerPos.y + (TILE_HEIGHT / 2) * zoomLevel;
+            const targetCenterX = targetPos.x;
+            const targetCenterY = targetPos.y + (TILE_HEIGHT / 2) * zoomLevel;
+
+            // Calculate distance and make arrow shorter
+            const dx = targetCenterX - playerCenterX;
+            const dy = targetCenterY - playerCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Don't draw arrow if distance is too small
+            if (distance < 20 * zoomLevel) {
+                return;
+            }
+
+            // Shorten the arrow to avoid overlapping with sprites
+            const shortenBy = 25 * zoomLevel;
+            const shortenStart = 15 * zoomLevel;
+
+            const startX = playerCenterX + dx * (shortenStart / distance);
+            const startY = playerCenterY + dy * (shortenStart / distance);
+            const endX = targetCenterX - dx * (shortenBy / distance);
+            const endY = targetCenterY - dy * (shortenBy / distance);            // Draw arrow with proper scaling
+            ctx.strokeStyle = '#FF4500';
+            ctx.fillStyle = '#FF4500';
+            ctx.lineWidth = Math.max(2, 3 * zoomLevel);
+            ctx.setLineDash([]);
+
+            const angle = Math.atan2(dy, dx);
+            const arrowLength = 15 * zoomLevel;
+
+            // Draw line
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Draw arrowhead at the end
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(
+                endX - arrowLength * Math.cos(angle - Math.PI / 6),
+                endY - arrowLength * Math.sin(angle - Math.PI / 6)
+            );
+            ctx.lineTo(
+                endX - arrowLength * Math.cos(angle + Math.PI / 6),
+                endY - arrowLength * Math.sin(angle + Math.PI / 6)
+            );
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawIsometricTile(x, y, color) {
+            const tileW = TILE_WIDTH * zoomLevel;
+            const tileH = TILE_HEIGHT * zoomLevel;
+
+            ctx.fillStyle = color;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = Math.max(0.5, 1 * zoomLevel);
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + tileW / 2, y + tileH / 2);
+            ctx.lineTo(x, y + tileH);
+            ctx.lineTo(x - tileW / 2, y + tileH / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function drawTree(x, y) {
+            // Draw tree emoji on the tile
+            ctx.save();
+            ctx.font = `${Math.floor(28 * zoomLevel)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Center the tree within the isometric tile (match crop positioning)
+            const centerX = x;
+            const centerY = y + (TILE_HEIGHT / 2) * zoomLevel;
+
+            // Draw the tree
+            ctx.fillStyle = '#000';
+            ctx.fillText('🌲', centerX, centerY - 5 * zoomLevel);
+            ctx.restore();
+        }
+
+        function drawCrop(x, y, tile) {
+            const crop = CROPS[tile.crop];
+            const daysGrowing = gameState.day - tile.plantedDay;
+            const progress = Math.min(daysGrowing / crop.growthDays, 1);
+
+            // Center the crop within the isometric tile
+            const centerX = x;
+            const centerY = y + (TILE_HEIGHT / 2) * zoomLevel;
+
+            const fontSize = (16 + Math.floor(progress * 8)) * zoomLevel;
+            ctx.font = `${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+
+            if (progress >= 1) {
+                // Mature crop - full emoji
+                ctx.fillStyle = '#000';
+                ctx.fillText(crop.emoji, centerX, centerY - 5 * zoomLevel);
+            } else {
+                // Growing crop - smaller green circle
+                ctx.fillStyle = '#4caf50';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY - 10 * zoomLevel, (3 + Math.floor(progress * 8)) * zoomLevel, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Add small sprout emoji for growing crops
+                ctx.font = `${12 * zoomLevel}px Arial`;
+                ctx.fillStyle = '#000';
+                ctx.fillText('🌱', centerX, centerY - 8 * zoomLevel);
+            }
+        }
+
+        function drawWaterIndicator(x, y) {
+            // Center the water indicator within the isometric tile
+            const centerX = x;
+            const centerY = y + (TILE_HEIGHT / 2) * zoomLevel;
+
+            ctx.fillStyle = 'rgba(33, 150, 243, 0.6)';
+            ctx.beginPath();
+            ctx.arc(centerX + 15 * zoomLevel, centerY - 15 * zoomLevel, 4 * zoomLevel, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.font = `${10 * zoomLevel}px Arial`;
+            ctx.fillStyle = '#1976d2';
+            ctx.textAlign = 'center';
+            ctx.fillText('💧', centerX + 15 * zoomLevel, centerY - 10 * zoomLevel);
+        }
+
+        function drawPlayer(x, y) {
+            // Center the player within the isometric tile
+            const centerX = x;
+            const centerY = y + (TILE_HEIGHT / 2) * zoomLevel;
+
+            // Player shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY + 15 * zoomLevel, 12 * zoomLevel, 6 * zoomLevel, 0, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Player character
+            ctx.font = `${20 * zoomLevel}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#000';
+            ctx.fillText('🧑‍🌾', centerX, centerY);
+        }
+
+        function drawInfluenceArea() {
+            // Draw a single external border around the farmer's influence area
+            const playerX = gameState.playerX;
+            const playerY = gameState.playerY;
+
+            ctx.strokeStyle = '#2196F3'; // Blue color
+            ctx.lineWidth = Math.max(2, 2 * zoomLevel);
+            ctx.setLineDash([]);
+
+            const tileW = TILE_WIDTH * zoomLevel;
+            const tileH = TILE_HEIGHT * zoomLevel;
+
+            // Collect all outer corner points of valid tiles in the influence area
+            const outerPoints = [];
+
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const tileX = playerX + dx;
+                    const tileY = playerY + dy;
+
+                    if (tileX >= 0 && tileX < GRID_WIDTH && tileY >= 0 && tileY < GRID_HEIGHT) {
+                        const screenPos = isoToScreen(tileX, tileY);
+
+                        // Add all 4 corner points of this tile
+                        const corners = [
+                            { x: screenPos.x, y: screenPos.y }, // top
+                            { x: screenPos.x + tileW / 2, y: screenPos.y + tileH / 2 }, // right
+                            { x: screenPos.x, y: screenPos.y + tileH }, // bottom
+                            { x: screenPos.x - tileW / 2, y: screenPos.y + tileH / 2 } // left
+                        ];
+
+                        outerPoints.push(...corners);
+                    }
+                }
+            }
+
+            if (outerPoints.length === 0) return;
+
+            // Find convex hull of all points to create outer boundary
+            function convexHull(points) {
+                if (points.length <= 3) return points;
+
+                // Sort points lexicographically (by x, then by y)
+                points.sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+
+                // Build lower hull
+                const lower = [];
+                for (const p of points) {
+                    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) {
+                        lower.pop();
+                    }
+                    lower.push(p);
+                }
+
+                // Build upper hull
+                const upper = [];
+                for (let i = points.length - 1; i >= 0; i--) {
+                    const p = points[i];
+                    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) {
+                        upper.pop();
+                    }
+                    upper.push(p);
+                }
+
+                // Remove last point of each half because it's repeated
+                lower.pop();
+                upper.pop();
+
+                return lower.concat(upper);
+            }
+
+            function cross(o, a, b) {
+                return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+            }
+
+            // Get the hull points and draw the boundary
+            const hull = convexHull([...outerPoints]);
+
+            if (hull.length > 2) {
+                ctx.beginPath();
+                ctx.moveTo(hull[0].x, hull[0].y);
+                for (let i = 1; i < hull.length; i++) {
+                    ctx.lineTo(hull[i].x, hull[i].y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+
+        function showMessage(text, type = '') {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = type;
+
+            setTimeout(() => {
+                messageEl.className = '';
+                messageEl.textContent = 'Click around to farm, use tools, and grow your business!';
+            }, 3000);
+        }
+
+        // Zoom functions
+        function zoomIn() {
+            if (zoomLevel < MAX_ZOOM) {
+                zoomLevel = Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP);
+                showMessage(`Zoomed in (${Math.round(zoomLevel * 100)}%)`, "info");
+            }
+        }
+
+        function zoomOut() {
+            if (zoomLevel > MIN_ZOOM) {
+                zoomLevel = Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP);
+                showMessage(`Zoomed out (${Math.round(zoomLevel * 100)}%)`, "info");
+            }
+        }
+
+        // Level tooltip functions removed - replaced with modal
+
+        function getLevelBenefits(level) {
+            const unlockedCrops = [];
+            for (const [cropType, crop] of Object.entries(CROPS)) {
+                if (level >= crop.requiredLevel) {
+                    unlockedCrops.push(`${crop.emoji} ${crop.name}`);
+                }
+            }
+
+            if (level >= 5) return `All crops unlocked: ${unlockedCrops.join(', ')}`;
+            if (level >= 3) return `Unlocked: ${unlockedCrops.join(', ')}. Next: 🍅 Tomatoes at Lv5`;
+            if (level >= 1) return `Unlocked: ${unlockedCrops.join(', ')}. Next: 🌽 Corn at Lv3`;
+            return 'Starting crops available';
+        }        function saveGame() {
+            const saveData = {
+                gameState: gameState,
+                zoomLevel: zoomLevel,
+                cameraX: cameraX,
+                cameraY: cameraY
+            };
+            localStorage.setItem('farmSim_save', JSON.stringify(saveData));
+            showMessage("Game saved!", "success");
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem('farmSim_save');
+            if (saved) {
+                const saveData = JSON.parse(saved);
+
+                // Handle both old and new save formats
+                if (saveData.gameState) {
+                    // New format with zoom and camera
+                    gameState = saveData.gameState;
+                    zoomLevel = saveData.zoomLevel || 1;
+                    cameraX = saveData.cameraX || 0;
+                    cameraY = saveData.cameraY || 0;
+                } else {
+                    // Old format - just gameState
+                    gameState = saveData;
+                    // Center camera for old saves that don't have camera info
+                    centerCameraOnPlayer();
+                }
+
+                updateUI();
+                showMessage("Game loaded!", "success");
+            } else {
+                showMessage("No save file found!", "warning");
+            }
+        }
+
+        function gameLoop() {
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize game
+        init();
+    </script>
+</body>
+</html>
