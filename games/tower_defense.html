@@ -760,6 +760,7 @@
         let waveBreakTimer = 0;
         let waveBreakStartTime = 0;
         let spawnInterval = null;
+        let enemiesToSpawn = 0; // Track remaining enemies to spawn in current wave
         let mouseX = 0;
         let mouseY = 0;
         let showPreview = false;
@@ -897,6 +898,10 @@
             waveBreakTimer = 0;
             waveBreakStartTime = 0;
             showPreview = false;
+
+            // Initialize enemies to spawn for first wave
+            const initialWaveConfig = getWaveConfig(1);
+            enemiesToSpawn = initialWaveConfig.totalEnemies;
 
             // Clear any existing spawn interval
             if (spawnInterval) {
@@ -1331,6 +1336,7 @@
         }
 
         function startWave() {
+            document.getElementById('start-wave-btn').disabled = true;
             if (waveInProgress) return;
 
             // Clear any existing spawn interval
@@ -1342,10 +1348,12 @@
             waveInProgress = true;
             gameState = 'playing';
 
+            // Initialize enemies to spawn count for current wave
+            const waveConfig = getWaveConfig(currentWave);
+            enemiesToSpawn = waveConfig.totalEnemies;
+
             // Generate wave enemies
             spawnWaveEnemies();
-
-            document.getElementById('start-wave-btn').disabled = true;
         }
 
         function spawnWaveEnemies() {
@@ -1369,6 +1377,7 @@
                     const enemyType = waveConfig.enemies[spawnCount % waveConfig.enemies.length];
                     spawnEnemy(enemyType);
                     spawnCount++;
+                    enemiesToSpawn--; // Decrement remaining enemies to spawn
                     lastSpawnTime = currentTime;
                 }
             }, 50); // Check every 50ms for smooth speed changes
@@ -1742,8 +1751,8 @@
                 return;
             }
 
-            // Check wave complete
-            if (enemies.length === 0 && waveInProgress) {
+            // Check wave complete - all enemies spawned AND killed
+            if (enemies.length === 0 && waveInProgress && enemiesToSpawn === 0) {
                 waveInProgress = false;
                 currentWave++;
 
@@ -1753,6 +1762,10 @@
                     showGameEndScreen(victory = true);
                     return;
                 }
+
+                // Initialize enemies count for next wave
+                const nextWaveConfig = getWaveConfig(currentWave);
+                enemiesToSpawn = nextWaveConfig.totalEnemies;
 
                 // Start wave break
                 gameState = 'wave-break';
@@ -2067,7 +2080,20 @@
             document.getElementById('current-wave').textContent = currentWave + '/' + maxWaveText;
 
             document.getElementById('score').textContent = score;
-            document.getElementById('enemies-remaining-overlay').textContent = enemies.length;
+
+            // Show enemies remaining based on game mode and state
+            let remainingToShow;
+            if (currentGameMode === 'sandbox') {
+                // In sandbox mode, just show enemies currently on map
+                remainingToShow = enemies.length;
+            } else if (waveInProgress) {
+                // During wave: show total remaining (enemies still to spawn + enemies on map)
+                remainingToShow = enemiesToSpawn + enemies.length;
+            } else {
+                // Before wave starts: show total enemies for upcoming wave
+                remainingToShow = enemiesToSpawn;
+            }
+            document.getElementById('enemies-remaining-overlay').textContent = remainingToShow;
 
             // Update wave status
             const statusElement = document.getElementById('wave-status-text');
@@ -2160,9 +2186,6 @@
                     previewContent.appendChild(span);
                 });
             }
-
-            const enemiesRemainingOverlayEl = document.getElementById('enemies-remaining-overlay');
-            if (enemiesRemainingOverlayEl) enemiesRemainingOverlayEl.textContent = config.totalEnemies;
         }
 
         function upgradeTower(upgradeType) {
