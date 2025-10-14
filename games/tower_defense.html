@@ -440,10 +440,9 @@
 </head>
 
 <body>
-    <a href="../index.html" class="home-link">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            <polyline points="9,22 9,12 15,12 15,22"></polyline>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>Home</span>
     </a>
@@ -462,7 +461,7 @@
                 </div>
 
                 <div id="wave-info-overlay">
-                    <div class="stat-row"><span class="stat-label">Wave:</span> <span id="current-wave">1</span>/20</div>
+                    <div class="stat-row"><span class="stat-label">Wave:</span> <span id="current-wave">1/20</span></div>
                     <div class="stat-row"><span class="stat-label">Enemies:</span> <span id="enemies-remaining-overlay">10</span></div>
                     <div class="stat-row" id="wave-status"><span class="stat-label">Status:</span> <span id="wave-status-text">Ready</span></div>
                 </div>
@@ -682,7 +681,7 @@
         let mouseY = 0;
         let showPreview = false;
         let gameSpeed = 1; // Game speed multiplier
-        let gameSpeedOptions = [0.5, 1, 1.5, 2, 3]; // Available speed options
+        let gameSpeedOptions = [0.5, 1, 2, 3]; // Available speed options
         let gameSpeedIndex = 1; // Current index in gameSpeedOptions (starts at 1x)
 
         // Game mode configurations
@@ -742,7 +741,9 @@
                 infiniteMoney: false,
                 infiniteLives: false
             }
-        };        // Game objects
+        };
+
+        // Game objects
         let towers = [];
         let enemies = [];
         let projectiles = [];
@@ -1229,30 +1230,6 @@
             drawGame();
         }
 
-        function updateUpgradeButtons(tower) {
-            // Calculate upgrade costs
-            const damageCost = Math.round(upgradeConfig.damage.baseCost * Math.pow(upgradeConfig.damage.costMultiplier, tower.damageUpgrades));
-            const rangeCost = Math.round(upgradeConfig.range.baseCost * Math.pow(upgradeConfig.range.costMultiplier, tower.rangeUpgrades));
-            const speedCost = Math.round(upgradeConfig.speed.baseCost * Math.pow(upgradeConfig.speed.costMultiplier, tower.speedUpgrades));
-            const sellValue = Math.round(tower.totalInvested * 0.7);
-
-            // Update button text and state (old sidebar - if exists)
-            const damageBtn = document.getElementById('upgrade-damage-btn');
-            const rangeBtn = document.getElementById('upgrade-range-btn');
-            const speedBtn = document.getElementById('upgrade-speed-btn');
-
-            if (damageBtn) {
-                document.getElementById('damage-cost').textContent = damageCost;
-                document.getElementById('range-cost').textContent = rangeCost;
-                document.getElementById('speed-cost').textContent = speedCost;
-                document.getElementById('sell-value').textContent = sellValue;
-
-                damageBtn.disabled = money < damageCost;
-                rangeBtn.disabled = money < rangeCost;
-                speedBtn.disabled = money < speedCost;
-            }
-        }
-
         function updateUpgradeButtonsOverlay(tower) {
             const config = gameModes[currentGameMode];
 
@@ -1661,21 +1638,6 @@
             return Math.sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY));
         }
 
-        function hitEnemiesAtPosition(x, y, damage, piercing) {
-            const hitRadius = 20;
-            let enemiesHit = 0;
-
-            for (let enemy of enemies) {
-                const distance = Math.sqrt((x - enemy.x) ** 2 + (y - enemy.y) ** 2);
-                if (distance <= hitRadius) {
-                    enemy.hp -= damage;
-                    enemiesHit++;
-
-                    if (!piercing) break; // Only hit one enemy unless piercing
-                }
-            }
-        }
-
         function updateExplosions() {
             for (let i = explosions.length - 1; i >= 0; i--) {
                 const explosion = explosions[i];
@@ -1935,7 +1897,7 @@
 
             const towerType = towerTypes[selectedTowerType];
             const canPlace = canPlaceTower(mouseX, mouseY);
-            const canAfford = canAffordTower(selectedTowerType);            // Determine preview colors based on validity
+            const canAfford = canAffordTower(selectedTowerType); // Determine preview colors based on validity
             let towerAlpha = 0.8;
             let towerColor = towerType.color;
             let rangeStroke, rangeFill;
