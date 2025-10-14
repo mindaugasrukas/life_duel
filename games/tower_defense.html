@@ -57,6 +57,39 @@
             text-align: right;
         }
 
+        #wave-preview-overlay {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+            text-align: center;
+            display: none;
+            min-width: 200px;
+        }
+
+        .wave-preview-title {
+            color: #FFD700;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .enemy-preview {
+            display: inline-block;
+            padding: 2px 6px;
+            margin: 1px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
         #tower-upgrade-overlay {
             position: absolute;
             bottom: 10px;
@@ -352,23 +385,6 @@
             margin-top: 2px;
         }
 
-        .wave-info {
-            background: #e3f2fd;
-            padding: 10px;
-            border-radius: 6px;
-            margin: 10px 0;
-            border-left: 4px solid #1976d2;
-        }
-
-        .enemy-type {
-            display: inline-block;
-            padding: 4px 8px;
-            margin: 2px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            color: white;
-        }
-
         .enemy-basic { background: #ff9800; }
         .enemy-fast { background: #ffeb3b; color: #333; }
         .enemy-tank { background: #d32f2f; }
@@ -436,6 +452,71 @@
             display: none;
             z-index: 1000;
         }
+
+        #help-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        #help-modal h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        #help-modal ul {
+            text-align: left;
+            padding-left: 20px;
+        }
+
+        #help-modal .strategy {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .help-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .help-btn:hover {
+            background: #45a049;
+        }
+
+        .close-help-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .close-help-btn:hover {
+            background: #1976D2;
+        }
     </style>
 </head>
 
@@ -464,6 +545,13 @@
                     <div class="stat-row"><span class="stat-label">Wave:</span> <span id="current-wave">1/20</span></div>
                     <div class="stat-row"><span class="stat-label">Enemies:</span> <span id="enemies-remaining-overlay">10</span></div>
                     <div class="stat-row" id="wave-status"><span class="stat-label">Status:</span> <span id="wave-status-text">Ready</span></div>
+                </div>
+
+                <div id="wave-preview-overlay">
+                    <div class="wave-preview-title">Next Wave Preview</div>
+                    <div id="wave-preview-content">
+                        <!-- Wave enemies will be populated here -->
+                    </div>
                 </div>
 
                 <div id="tower-upgrade-overlay">
@@ -568,6 +656,80 @@
                     <button onclick="showGameModeSelection()">Play Again</button>
                     <button onclick="restartSameMode()" style="margin-left: 10px;">Same Mode</button>
                 </div>
+
+                <!-- Help Modal -->
+                <div id="help-modal">
+                    <h3>❓ Tower Defense Guide</h3>
+                    <div id="help-content">
+                        <div style="margin-bottom: 20px;">
+                            <h4>🎯 Game Objective</h4>
+                            <ul>
+                                <li><strong>Goal:</strong> Stop enemies from reaching the end of the path</li>
+                                <li><strong>Build Towers:</strong> Select a tower type and click on green areas to build</li>
+                                <li><strong>Start Waves:</strong> Click "Start Wave" to begin enemy attacks</li>
+                                <li><strong>Earn Money:</strong> Destroy enemies to earn money for more towers</li>
+                                <li><strong>Survive:</strong> Don't let your lives reach zero!</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <h4>🏰 Tower Types</h4>
+                            <ul>
+                                <li><strong>Basic Tower ($10):</strong> Balanced damage and range (Ground only)</li>
+                                <li><strong>Heavy Tower ($25):</strong> High damage, slower fire rate (Ground only)</li>
+                                <li><strong>Rapid Tower ($30):</strong> Fast firing, lower damage (Ground only)</li>
+                                <li><strong>Laser Tower ($50):</strong> Pierces through multiple enemies (All targets)</li>
+                                <li><strong>Anti-Air Tower ($35):</strong> Specialized against flying enemies (Air only)</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <h4>🔧 Upgrade System</h4>
+                            <ul>
+                                <li><span style="color: #FF0000;">● Red dots</span> - Damage upgrades</li>
+                                <li><span style="color: #0080FF;">● Blue dots</span> - Range upgrades</li>
+                                <li><span style="color: #00FF00;">● Green dots</span> - Speed upgrades</li>
+                                <li><strong>Click towers to upgrade them between waves!</strong></li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <h4>⌨️ Keyboard Controls</h4>
+                            <ul>
+                                <li><strong>Space:</strong> Start wave / Pause game</li>
+                                <li><strong>Escape:</strong> Cancel tower selection</li>
+                                <li><strong>S:</strong> Cycle game speed (0.5x - 3x)</li>
+                                <li><strong>M:</strong> Game mode selection</li>
+                                <li><strong>1-5:</strong> Select tower types (Basic/Heavy/Rapid/Laser/Anti-Air)</li>
+                                <li><strong>Click tower:</strong> Select for upgrades</li>
+                            </ul>
+                        </div>
+
+                        <div class="strategy">
+                            <h4>💡 Strategy Tips</h4>
+                            <ul>
+                                <li>Place towers at corners where enemies turn for maximum coverage</li>
+                                <li>Use rapid towers for groups of weak enemies</li>
+                                <li>Save heavy/laser towers for tank enemies</li>
+                                <li>Anti-air towers are essential for flying enemies</li>
+                                <li>Upgrade towers between waves for better efficiency</li>
+                                <li>Speed up the game to make enemies spawn faster!</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h4>🎮 Game Modes</h4>
+                            <ul>
+                                <li><strong>Classic:</strong> Traditional 20 waves with increasing difficulty</li>
+                                <li><strong>Sandbox:</strong> Free build mode - click enemies to spawn them</li>
+                                <li><strong>Survival:</strong> Endless waves with progressive enemy variety</li>
+                                <li><strong>Speed:</strong> Fast-paced action with quick waves</li>
+                                <li><strong>Economy:</strong> Limited resources challenge</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <button class="close-help-btn" onclick="closeHelp()">Close</button>
+                </div>
             </div>
 
             <div id="controls">
@@ -576,86 +738,7 @@
                 <button id="speed-btn">Speed: 1.0x</button>
                 <button id="restart-btn">Restart Game</button>
                 <button onclick="cancelTowerSelection()" style="background: #f44336;">Cancel Selection (Esc)</button>
-            </div>
-        </div>
-
-        <div id="rules">
-            <h3>How to Play</h3>
-            <ul>
-                <li><strong>Objective:</strong> Stop enemies from reaching the end of the path</li>
-                <li><strong>Build Towers:</strong> Select a tower type and click on green areas to build</li>
-                <li><strong>Start Waves:</strong> Click "Start Wave" to begin enemy attacks</li>
-                <li><strong>Earn Money:</strong> Destroy enemies to earn money for more towers</li>
-                <li><strong>Survive:</strong> Don't let your lives reach zero!</li>
-            </ul>
-
-            <div class="wave-info">
-                <h4>Wave <span id="wave-number">1</span> Preview</h4>
-                <div id="wave-enemies">
-                    <span class="enemy-type enemy-basic">Basic x10</span>
-                </div>
-                <div style="margin-top: 8px; font-size: 0.9em;">
-                    Enemies: <span id="enemies-remaining">10</span> remaining
-                </div>
-            </div>
-
-            <div class="tower-stats">
-                <h4>Tower Types</h4>
-                <div><strong>Basic Tower ($10):</strong> Balanced damage and range (Ground only)</div>
-                <div><strong>Heavy Tower ($25):</strong> High damage, slower fire rate (Ground only)</div>
-                <div><strong>Rapid Tower ($30):</strong> Fast firing, lower damage (Ground only)</div>
-                <div><strong>Laser Tower ($50):</strong> Pierces through multiple enemies (All targets)</div>
-                <div><strong>Anti-Air Tower ($35):</strong> Specialized against flying enemies (Air only)</div>
-
-                <h4 style="margin-top: 15px;">Upgrade Indicators</h4>
-                <div style="font-size: 0.9em;">
-                    <div><span style="color: #FF0000;">● Red dots</span> - Damage upgrades</div>
-                    <div><span style="color: #0080FF;">● Blue dots</span> - Range upgrades</div>
-                    <div><span style="color: #00FF00;">● Green dots</span> - Speed upgrades</div>
-                    <div style="margin-top: 5px; color: #666;">Click towers to upgrade them!</div>
-                </div>
-            </div>
-
-            <div class="strategy">
-                <h4>Strategy Tips</h4>
-                <ul>
-                    <li>Place towers at corners where enemies turn</li>
-                    <li>Use rapid towers for groups of weak enemies</li>
-                    <li>Save heavy/laser towers for tank enemies</li>
-                    <li>Upgrade towers between waves for better efficiency</li>
-                </ul>
-
-                <h4>Keyboard Controls</h4>
-                <ul>
-                    <li><strong>Space:</strong> Start wave / Pause game</li>
-                    <li><strong>Escape:</strong> Cancel tower selection</li>
-                    <li><strong>S:</strong> Cycle game speed (0.5x - 3x)</li>
-                    <li><strong>M:</strong> Game mode selection</li>
-                    <li><strong>1-5:</strong> Select tower types (Basic/Heavy/Rapid/Laser/Anti-Air)</li>
-                    <li><strong>Click tower:</strong> Select for upgrades</li>
-                </ul>
-            </div>
-
-            <div class="upgrade-section" id="selected-tower-info" style="display: none;">
-                <h4>Selected Tower</h4>
-                <div id="tower-details"></div>
-                <div id="tower-upgrade-buttons">
-                    <button class="upgrade-btn" id="upgrade-damage-btn">
-                        Upgrade Damage (+<span id="damage-increase">10</span>) - $<span id="damage-cost">20</span>
-                    </button>
-                    <button class="upgrade-btn" id="upgrade-range-btn">
-                        Upgrade Range (+<span id="range-increase">20</span>) - $<span id="range-cost">15</span>
-                    </button>
-                    <button class="upgrade-btn" id="upgrade-speed-btn">
-                        Upgrade Speed (+25%) - $<span id="speed-cost">25</span>
-                    </button>
-                    <button class="sell-btn" id="sell-tower-btn">
-                        Sell Tower ($<span id="sell-value">0</span>)
-                    </button>
-                </div>
-                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                    Click elsewhere to deselect tower
-                </div>
+                <button class="help-btn" onclick="openHelp(event)">❓ Help</button>
             </div>
         </div>
     </div>
@@ -870,6 +953,16 @@
             // Keyboard controls
             document.addEventListener('keydown', handleKeyPress);
 
+            // Click outside help modal to close
+            document.addEventListener('click', (e) => {
+                const helpModal = document.getElementById('help-modal');
+                if (helpModal && helpModal.style.display === 'block') {
+                    if (!helpModal.contains(e.target) && !e.target.closest('.help-btn')) {
+                        closeHelp();
+                    }
+                }
+            });
+
             // Tower selection buttons (both old and new overlay versions)
             document.querySelectorAll('.tower-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -919,8 +1012,6 @@
             if (selectedTower) {
                 selectedTower = null;
                 document.getElementById('tower-upgrade-overlay').style.display = 'none';
-                const oldPanel = document.getElementById('selected-tower-info');
-                if (oldPanel) oldPanel.style.display = 'none';
             }
 
             showPreview = true;
@@ -1173,10 +1264,6 @@
             // Hide enemy spawn overlay to make room for tower upgrade overlay
             document.getElementById('enemy-spawn-overlay').style.display = 'none';
 
-            // Hide old sidebar panel if it exists
-            const oldPanel = document.getElementById('selected-tower-info');
-            if (oldPanel) oldPanel.style.display = 'none';
-
             drawGame(); // Redraw to show selection
         }
 
@@ -1190,10 +1277,6 @@
             if (currentGameMode === 'sandbox') {
                 document.getElementById('enemy-spawn-overlay').style.display = 'block';
             }
-
-            // Hide old sidebar panel if it exists
-            const oldPanel = document.getElementById('selected-tower-info');
-            if (oldPanel) oldPanel.style.display = 'none';
 
             // Return to preview mode for building towers
             showPreview = true;
@@ -1214,10 +1297,6 @@
             if (currentGameMode === 'sandbox') {
                 document.getElementById('enemy-spawn-overlay').style.display = 'block';
             }
-
-            // Hide old sidebar panel if it exists
-            const oldPanel = document.getElementById('selected-tower-info');
-            if (oldPanel) oldPanel.style.display = 'none';
 
             // Clear tower type selection for both old and new buttons
             document.querySelectorAll('.tower-btn, .tower-overlay-btn').forEach(btn => {
@@ -2044,6 +2123,14 @@
                 startWaveBtn.textContent = 'Start Wave (Space)';
             }
 
+            // Show/hide wave preview overlay
+            const wavePreviewOverlay = document.getElementById('wave-preview-overlay');
+            if (gameState === 'building' || gameState === 'wave-break') {
+                wavePreviewOverlay.style.display = 'block';
+            } else {
+                wavePreviewOverlay.style.display = 'none';
+            }
+
             // Update upgrade buttons if a tower is selected
             if (selectedTower) {
                 updateUpgradeButtonsOverlay(selectedTower);
@@ -2052,34 +2139,30 @@
 
         function updateWavePreview() {
             const gameConfig = gameModes[currentGameMode];
-            document.getElementById('wave-number').textContent = currentWave;
             const config = getWaveConfig(currentWave);
 
-            const enemiesDiv = document.getElementById('wave-enemies');
-            enemiesDiv.innerHTML = '';
+            // Update the new wave preview overlay
+            const previewContent = document.getElementById('wave-preview-content');
+            if (previewContent) {
+                previewContent.innerHTML = '';
 
-            // Add game mode indicator
-            const modeSpan = document.createElement('div');
-            modeSpan.style.cssText = 'font-size: 0.8em; color: #FFD700; margin-bottom: 5px;';
-            modeSpan.textContent = `${gameConfig.name} Mode`;
-            enemiesDiv.appendChild(modeSpan);
+                // Count enemy types
+                const enemyCounts = {};
+                config.enemies.forEach(type => {
+                    enemyCounts[type] = (enemyCounts[type] || 0) + Math.ceil(config.totalEnemies / config.enemies.length);
+                });
 
-            // Count enemy types
-            const enemyCounts = {};
-            config.enemies.forEach(type => {
-                enemyCounts[type] = (enemyCounts[type] || 0) + Math.ceil(config.totalEnemies / config.enemies.length);
-            });
+                // Display enemy types with proper styling
+                Object.entries(enemyCounts).forEach(([type, count]) => {
+                    const span = document.createElement('span');
+                    span.className = `enemy-preview enemy-${type}`;
+                    span.textContent = `${enemyTypes[type].name} x${count}`;
+                    previewContent.appendChild(span);
+                });
+            }
 
-            // Display enemy types
-            Object.entries(enemyCounts).forEach(([type, count]) => {
-                const span = document.createElement('span');
-                span.className = `enemy-type enemy-${type}`;
-                span.textContent = `${enemyTypes[type].name} x${count}`;
-                enemiesDiv.appendChild(span);
-            });
-
-            document.getElementById('enemies-remaining').textContent = config.totalEnemies;
-            document.getElementById('enemies-remaining-overlay').textContent = config.totalEnemies;
+            const enemiesRemainingOverlayEl = document.getElementById('enemies-remaining-overlay');
+            if (enemiesRemainingOverlayEl) enemiesRemainingOverlayEl.textContent = config.totalEnemies;
         }
 
         function upgradeTower(upgradeType) {
@@ -2210,6 +2293,22 @@
             }
 
             requestAnimationFrame(gameLoop);
+        }
+
+        // Help Modal Functions
+        function openHelp(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const helpModal = document.getElementById('help-modal');
+            if (helpModal) {
+                helpModal.style.display = 'block';
+            }
+        }
+
+        function closeHelp() {
+            document.getElementById('help-modal').style.display = 'none';
         }
 
         // Initialize and start game
