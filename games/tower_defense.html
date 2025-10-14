@@ -1011,6 +1011,11 @@
         }
 
         function selectTowerType(type) {
+            // Prevent tower selection when game is paused
+            if (gameState === 'paused') {
+                return;
+            }
+
             selectedTowerType = type;
 
             // Deselect any selected tower
@@ -1036,6 +1041,11 @@
         }
 
         function handleCanvasClick(event) {
+            // Prevent interactions when game is paused
+            if (gameState === 'paused') {
+                return;
+            }
+
             const rect = canvas.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
@@ -1092,7 +1102,7 @@
         }
 
         function handleCanvasMouseEnter() {
-            if (!selectedTower && gameState !== 'menu' && gameState !== 'game-over') {
+            if (!selectedTower && gameState !== 'menu' && gameState !== 'game-over' && gameState !== 'paused') {
                 showPreview = true;
             }
         }
@@ -1336,6 +1346,9 @@
         }
 
         function startWave() {
+            // Prevent starting wave when game is paused
+            if (gameState === 'paused') return;
+
             document.getElementById('start-wave-btn').disabled = true;
             if (waveInProgress) return;
 
@@ -1473,18 +1486,18 @@
         }
 
         function updateGame() {
-            // Update game objects if game is not over
-            if (gameState !== 'game-over' && gameState !== 'menu') {
-                updateUI();
+            // Always update UI and draw game
+            updateUI();
+            drawGame();
+
+            // Only update game objects if game is actively running (not paused, game over, or in menu)
+            if (gameState === 'playing') {
                 checkGameState();
-                // Always update enemies and projectiles so they keep moving
                 updateEnemies();
                 updateProjectiles();
                 updateExplosions();
                 updateTowers();
             }
-
-            drawGame();
         }
 
         function updateEnemies() {
@@ -2190,6 +2203,8 @@
 
         function upgradeTower(upgradeType) {
             if (!selectedTower) return;
+            // Prevent upgrades when game is paused
+            if (gameState === 'paused') return;
 
             const tower = selectedTower;
             const config = upgradeConfig[upgradeType];
@@ -2244,6 +2259,8 @@
 
         function sellTower() {
             if (!selectedTower) return;
+            // Prevent selling when game is paused
+            if (gameState === 'paused') return;
 
             const sellValue = Math.round(selectedTower.totalInvested * 0.7);
             money += sellValue;
@@ -2270,10 +2287,18 @@
         function togglePause() {
             if (gameState === 'playing') {
                 gameState = 'paused';
-                document.getElementById('pause-btn').textContent = 'Resume';
+                document.getElementById('pause-btn').textContent = 'Resume (Space)';
+                // Disable preview mode when paused
+                showPreview = false;
+                canvas.classList.remove('preview-mode', 'hover-tower');
             } else if (gameState === 'paused') {
                 gameState = 'playing';
-                document.getElementById('pause-btn').textContent = 'Pause';
+                document.getElementById('pause-btn').textContent = 'Pause (Space)';
+                // Re-enable preview mode if no tower selected
+                if (!selectedTower) {
+                    showPreview = true;
+                    canvas.classList.add('preview-mode');
+                }
             }
         }
 
