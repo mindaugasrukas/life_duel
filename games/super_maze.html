@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Super Maze</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #222;
+      color: #eee;
+    }
+    #game-container {
+      position: relative;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+    #maze-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: calc(100vw - 320px);
+      height: 100vh;
+      background: #181818;
+      display: block;
+      margin: 0;
+    }
+    #sidebar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100vh;
+      background: #2a2a2a;
+      padding: 24px 16px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      border-left: 2px solid #444;
+      z-index: 10;
+    }
+    #sidebar h2 {
+      margin-top: 0;
+      font-size: 1.4em;
+      color: #ffd700;
+    }
+    .score, .steps, .timer, .inventory {
+      margin-bottom: 18px;
+      font-size: 1.1em;
+    }
+    #help-btn {
+      background: #444;
+      color: #ffd700;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 1.5em;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+    #help-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      display: none;
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    #help-content {
+      background: #333;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 480px;
+      box-shadow: 0 0 24px #000;
+    }
+    #close-help {
+      margin-top: 24px;
+      background: #444;
+      color: #ffd700;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    #map-size-select {
+      margin-bottom: 18px;
+      font-size: 1.1em;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #222;
+      color: #ffd700;
+    }
+    #start-btn {
+      background: #ffd700;
+      color: #222;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1.1em;
+      cursor: pointer;
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="maze-canvas"></canvas>
+    <div id="sidebar">
+      <h2>Super Maze</h2>
+      <label for="map-size-select">Map Size:</label>
+      <select id="map-size-select">
+        <option value="11">11 x 11</option>
+        <option value="25" selected>25 x 25</option>
+        <option value="51">51 x 51</option>
+        <option value="101">101 x 101</option>
+      </select>
+      <button id="start-btn">Start Game</button>
+      <div class="score">Score: <span id="score">0</span></div>
+      <div class="steps">Steps: <span id="steps">0</span></div>
+      <div class="timer">Time: <span id="timer">0</span>s</div>
+      <div class="inventory">Inventory: <span id="inventory">None</span></div>
+      <button id="help-btn">?</button>
+    </div>
+  </div>
+  <div id="help-modal">
+    <div id="help-content">
+      <h3>How to Play</h3>
+      <ul>
+        <li>Use arrow keys or WASD to move.</li>
+        <li>Find the exit in the maze.</li>
+        <li>Collect items and power-ups as you explore.</li>
+        <li>Map view is fixed until you find location power-ups.</li>
+        <li>Reveal the map with special power-ups.</li>
+      </ul>
+      <button id="close-help">Close</button>
+    </div>
+  </div>
+  <script>
+    // --- Game Constants ---
+    const TILE_SIZE = 32;
+    const VISIBLE_SIZE = 9; // 9x9 visible window
+    // Map size is now selected directly as a number
+    // --- Game State ---
+    let mapSize = 25; // Default demo size
+    let maze = [];
+    let player = { x: 1, y: 1 };
+    let exit = { x: 0, y: 0 };
+    let score = 0;
+    let steps = 0;
+    let timer = 0;
+    let inventory = [];
+    let gameStarted = false;
+    let revealMap = false;
+    let followPlayer = false;
+    let timerInterval = null;
+    // --- DOM Elements ---
+    const canvas = document.getElementById('maze-canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const stepsEl = document.getElementById('steps');
+    const timerEl = document.getElementById('timer');
+    const inventoryEl = document.getElementById('inventory');
+    const helpBtn = document.getElementById('help-btn');
+    const helpModal = document.getElementById('help-modal');
+    const closeHelpBtn = document.getElementById('close-help');
+    const mapSizeSelect = document.getElementById('map-size-select');
+    const startBtn = document.getElementById('start-btn');
+    // --- Utility Functions ---
+    function randInt(a, b) {
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
+    // --- Maze Generation (Recursive Backtracker) ---
+    function generateMaze(size) {
+      // Initialize maze with walls
+      maze = Array(size).fill().map(() =>
+          Array(size).fill().map(() => ({ wall: true, visited: false, explored: false }))
+      );
+      let stack = [];
+      let startX = 1, startY = 1;
+      stack.push([startX, startY]);
+      maze[startY][startX] = { wall: false, visited: true, explored: true };
+      while (stack.length > 0) {
+        let [x, y] = stack[stack.length - 1];
+        let dirs = [ [0,-2], [0,2], [-2,0], [2,0] ];
+        dirs = dirs.sort(() => Math.random()-0.5);
+        let carved = false;
+        for (let [dx, dy] of dirs) {
+          let nx = x + dx, ny = y + dy;
+          if (nx > 0 && ny > 0 && nx < size && ny < size && maze[ny][nx].wall === true) {
+            maze[y + dy/2][x + dx/2].wall = false;
+            maze[ny][nx].wall = false;
+            stack.push([nx, ny]);
+            carved = true;
+            break;
+          }
+        }
+        if (!carved) {
+          stack.pop();
+        }
+      }
+      // Place exit
+      exit = { x: size-2, y: size-2 };
+    }
+    // --- Rendering ---
+    function resizeCanvas() {
+      // Set both CSS and element attributes for canvas size
+      const w = window.innerWidth - 320;
+      const h = window.innerHeight;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      canvas.width = w;
+      canvas.height = h;
+    }
+    function render() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // Center visible window
+      let px = player.x, py = player.y;
+      let half = Math.floor(VISIBLE_SIZE/2);
+      let vx = px - half, vy = py - half;
+      if (followPlayer || revealMap) {
+        // Center view on player, clamp to map
+        vx = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, px-half));
+        vy = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, py-half));
+      } else {
+        // Fixed window in center of map
+        vx = Math.floor((mapSize-VISIBLE_SIZE)/2);
+        vy = Math.floor((mapSize-VISIBLE_SIZE)/2);
+      }
+      // Draw visible tiles
+      for (let y=0; y<VISIBLE_SIZE; y++) {
+        for (let x=0; x<VISIBLE_SIZE; x++) {
+          let mx = vx+x, my = vy+y;
+          let tile = maze[my]?.[mx] ?? { wall: true };
+          let sx = x*TILE_SIZE + (canvas.width-VISIBLE_SIZE*TILE_SIZE)/2;
+          let sy = y*TILE_SIZE + (canvas.height-VISIBLE_SIZE*TILE_SIZE)/2;
+          if (!revealMap && !isTileVisible(mx, my)) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            continue;
+          }
+          if (exit && mx === exit.x && my === exit.y) {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          } else if (tile.wall === true) {
+            ctx.fillStyle = '#444';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          } else if (tile.wall === false) {
+            ctx.fillStyle = '#eee';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          }
+          // Player
+          if (mx === player.x && my === player.y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/2.2, 0, 2*Math.PI);
+            ctx.fill();
+          }
+        }
+      }
+    }
+    // --- Fog of War ---
+    let visibleTiles = new Set();
+    function isTileVisible(x, y) {
+      return visibleTiles.has(`${x},${y}`);
+    }
+    function updateVisibility() {
+      let radius = 4;
+      for (let dy=-radius; dy<=radius; dy++) {
+        for (let dx=-radius; dx<=radius; dx++) {
+          let nx = player.x+dx, ny = player.y+dy;
+          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize) {
+            visibleTiles.add(`${nx},${ny}`);
+            // Only mark as explored in movePlayer
+          }
+        }
+      }
+    }
+    // --- Game Logic ---
+    function startGame() {
+      mapSize = parseInt(mapSizeSelect.value);
+      // Show loading indicator for large mazes
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#ffd700';
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Generating maze...', canvas.width/2, canvas.height/2);
+      setTimeout(() => {
+        generateMaze(mapSize);
+        // Find a valid starting position (first open path near top-left)
+        let found = false;
+        for (let y = 1; y < Math.min(10, mapSize) && !found; y++) {
+          for (let x = 1; x < Math.min(10, mapSize) && !found; x++) {
+            if (maze[y][x].wall === false) {
+              player = { x, y };
+              found = true;
+            }
+          }
+        }
+        if (!found) player = { x: 1, y: 1 };
+        score = 0;
+        steps = 0;
+        timer = 0;
+        inventory = [];
+        visibleTiles = new Set();
+        // Always show full maze and follow player
+        revealMap = true;
+        followPlayer = true;
+        gameStarted = true;
+        // Mark starting cell as visited and explored
+        maze[player.y][player.x].visited = true;
+        if (!maze[player.y][player.x].explored) {
+          maze[player.y][player.x].explored = true;
+          score = 1;
+          scoreEl.textContent = score;
+        }
+        updateVisibility();
+        render();
+        scoreEl.textContent = score;
+        stepsEl.textContent = steps;
+        timerEl.textContent = timer;
+        inventoryEl.textContent = 'None';
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+          timer++;
+          timerEl.textContent = timer;
+        }, 1000);
+      }, 50);
+    }
+    function movePlayer(dx, dy) {
+      if (!gameStarted) return;
+      let nx = player.x+dx, ny = player.y+dy;
+      if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && maze[ny][nx].wall === false) {
+        player.x = nx;
+        player.y = ny;
+        steps++;
+        stepsEl.textContent = steps;
+        // Mark cell as visited
+        maze[ny][nx].visited = true;
+        // Mark cell as explored and increment score only if first time
+        if (!maze[ny][nx].explored) {
+          maze[ny][nx].explored = true;
+          score++;
+          scoreEl.textContent = score;
+        }
+        updateVisibility();
+        render();
+        // Check exit
+        if (ny === exit.y && nx === exit.x) {
+          endGame(true);
+        }
+      }
+    }
+    function endGame(won) {
+      gameStarted = false;
+      if (timerInterval) clearInterval(timerInterval);
+      setTimeout(() => {
+        alert(won ? `You escaped the maze!\nScore: ${score}\nTime: ${timer}s` : 'Game Over');
+      }, 100);
+    }
+    // --- Event Listeners ---
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      render();
+    });
+    document.addEventListener('keydown', e => {
+      if (!gameStarted) return;
+      if (e.key === 'ArrowUp' || e.key === 'w') movePlayer(0,-1);
+      if (e.key === 'ArrowDown' || e.key === 's') movePlayer(0,1);
+      if (e.key === 'ArrowLeft' || e.key === 'a') movePlayer(-1,0);
+      if (e.key === 'ArrowRight' || e.key === 'd') movePlayer(1,0);
+    });
+    startBtn.addEventListener('click', startGame);
+    helpBtn.addEventListener('click', () => {
+      helpModal.style.display = 'flex';
+    });
+    closeHelpBtn.addEventListener('click', () => {
+      helpModal.style.display = 'none';
+    });
+    window.addEventListener('DOMContentLoaded', () => {
+      resizeCanvas();
+      startGame();
+    });
+    </script>
+</body>
+</html>
