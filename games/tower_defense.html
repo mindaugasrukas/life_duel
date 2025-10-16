@@ -517,6 +517,70 @@
         .close-help-btn:hover {
             background: #1976D2;
         }
+
+        /* Map Selection Overlay */
+        #map-selection-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            z-index: 1001;
+            max-width: 400px;
+            width: 90%;
+            display: none;
+        }
+
+        #map-selection-overlay h2 {
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .map-btn {
+            display: block;
+            margin: 10px 0;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-align: left;
+        }
+
+        .map-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #1976d2;
+            transform: translateY(-2px);
+        }
+
+        .map-desc {
+            font-size: 12px;
+            color: #ccc;
+            line-height: 1.4;
+            margin-top: 5px;
+        }
+
+        #map-selection-overlay {
+            position:absolute;
+            top:50%;
+            left:50%;
+            transform:translate(-50%,-50%);
+            background:rgba(0,0,0,0.95);
+            color:white;
+            padding:30px;
+            border-radius:12px;
+            z-index:1001;
+            max-width:400px;
+            width:90%;
+            display:none;
+        }
     </style>
 </head>
 
@@ -655,6 +719,14 @@
                     <p id="waves-completed">Waves Completed: 0/20</p>
                     <button onclick="showGameModeSelection()">Play Again</button>
                     <button onclick="restartSameMode()" style="margin-left: 10px;">Same Mode</button>
+                </div>
+
+                <!-- Map Selection Overlay -->
+                <div id="map-selection-overlay">
+                    <h2 style="color:#FFD700;text-align:center;margin-bottom:20px;">Select Map</h2>
+                    <div id="map-options">
+                        <!-- Map options will be populated here -->
+                    </div>
                 </div>
 
                 <!-- Help Modal -->
@@ -827,6 +899,43 @@
             }
         };
 
+        // Map path definitions
+        const maps = {
+            original: {
+                description: 'The original map with a balanced path.',
+                path: [
+                    {x: 0, y: 360}, {x: 150, y: 360}, {x: 150, y: 180},
+                    {x: 300, y: 180}, {x: 300, y: 540}, {x: 600, y: 540},
+                    {x: 600, y: 120}, {x: 750, y: 120}, {x: 750, y: 360}, {x: 900, y: 360}
+                ]
+            },
+            classic: {
+                description: 'A classic map with a straightforward path.',
+                path: [
+                    {x: 50, y: 360}, {x: 200, y: 360}, {x: 200, y: 150}, {x: 700, y: 150}, {x: 700, y: 570}, {x: 400, y: 570}, {x: 400, y: 360}, {x: 850, y: 360}
+                ]
+            },
+            zigzag: {
+                description: 'A zigzag path for more strategic tower placement.',
+                path: [
+                    {x: 50, y: 120}, {x: 850, y: 120}, {x: 850, y: 250}, {x: 50, y: 250}, {x: 50, y: 400}, {x: 850, y: 400}, {x: 850, y: 570}, {x: 50, y: 570}
+                ]
+            },
+            spiral: {
+                description: 'A spiral path with tight corners and long straights.',
+                path: [
+                    {x: 450, y: 360}, {x: 800, y: 360}, {x: 800, y: 120}, {x: 100, y: 120}, {x: 100, y: 620}, {x: 800, y: 620}, {x: 800, y: 360}, {x: 450, y: 360}
+                ]
+            },
+            linear: {
+                description: 'A simple straight path from left to right.',
+                path: [
+                    {x: 50, y: 360}, {x: 850, y: 360}
+                ]
+            }
+        };
+        let selectedMap = 'original'; // Default map
+
         // Game objects
         let towers = [];
         let enemies = [];
@@ -857,36 +966,30 @@
             flying: { hp: 40, speed: 3, reward: 4, color: '#03A9F4', name: 'Flying', isFlying: true }
         };
 
-        // Path definition (simplified - we'll make this more complex later)
-        const path = [
-            {x: 0, y: 360}, {x: 150, y: 360}, {x: 150, y: 180},
-            {x: 300, y: 180}, {x: 300, y: 540}, {x: 600, y: 540},
-            {x: 600, y: 120}, {x: 750, y: 120}, {x: 750, y: 360}, {x: 900, y: 360}
-        ];
-
         // Initialize game
         function initGame() {
-            showGameModeSelection();
+            showMapSelection(); // Show map selection first
             setupEventListeners();
+        }
+
+        // Use selected map's path for enemy movement
+        function getCurrentPath() {
+            return maps[selectedMap].path;
         }
 
         function showGameModeSelection() {
             gameState = 'menu';
-            document.getElementById('game-mode-overlay').style.display = 'block';
-            document.getElementById('game-over-screen').style.display = 'none';
-
             // Hide all game overlays
-            document.getElementById('tower-upgrade-overlay').style.display = 'none';
-            document.getElementById('tower-selection-overlay').style.display = 'none';
-            document.getElementById('enemy-spawn-overlay').style.display = 'none';
+            hideOverlays();
+            document.getElementById('game-mode-overlay').style.display = 'block';
         }
 
         function startGameMode(mode) {
             currentGameMode = mode;
             const config = gameModes[mode];
 
-            document.getElementById('game-mode-overlay').style.display = 'none';
-            document.getElementById('game-over-screen').style.display = 'none';
+            // Hide overlays
+            hideOverlays();
 
             // Initialize game with mode-specific settings
             gameState = 'building';
@@ -917,7 +1020,6 @@
 
             // Deselect everything
             selectedTower = null;
-            document.getElementById('tower-upgrade-overlay').style.display = 'none';
 
             // Show game overlays
             document.getElementById('tower-selection-overlay').style.display = 'block';
@@ -1149,7 +1251,7 @@
                     break;
                 case 'KeyM':
                     if (gameState !== 'menu') {
-                        showGameModeSelection();
+                        showMapSelection();
                     }
                     break;
                 case 'KeyS':
@@ -1182,8 +1284,9 @@
 
         function canPlaceTower(x, y) {
             // Check if position is on path or too close to path
-            for (let i = 0; i < path.length - 1; i++) {
-                const dist = distanceToLineSegment(x, y, path[i], path[i + 1]);
+            const currentPath = getCurrentPath();
+            for (let i = 0; i < currentPath.length - 1; i++) {
+                const dist = distanceToLineSegment(x, y, currentPath[i], currentPath[i + 1]);
                 if (dist < 40) return false; // Too close to path
             }
 
@@ -1467,8 +1570,8 @@
             enemies.push({
                 ...enemyDef,
                 type,
-                x: path[0].x,
-                y: path[0].y,
+                x: getCurrentPath()[0].x,
+                y: getCurrentPath()[0].y,
                 pathIndex: 0,
                 pathProgress: 0,
                 maxHp: enemyDef.hp,
@@ -1508,7 +1611,8 @@
                 moveEnemyAlongPath(enemy);
 
                 // Check if enemy reached end
-                if (enemy.pathIndex >= path.length - 1) {
+                const currentPath = getCurrentPath();
+                if (enemy.pathIndex >= currentPath.length - 1) {
                     const config = gameModes[currentGameMode];
 
                     // Lose life (unless infinite lives mode)
@@ -1540,17 +1644,18 @@
         function moveEnemyAlongPath(enemy) {
             if (enemy.isFlying) {
                 // Flying enemies take direct path from start to end
-                const startX = path[0].x;
-                const startY = path[0].y;
-                const endX = path[path.length - 1].x;
-                const endY = path[path.length - 1].y;
+                const currentPath = getCurrentPath();
+                const startX = currentPath[0].x;
+                const startY = currentPath[0].y;
+                const endX = currentPath[currentPath.length - 1].x;
+                const endY = currentPath[currentPath.length - 1].y;
 
                 const totalDistance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
                 enemy.pathProgress += (enemy.speed * gameSpeed) / totalDistance;
 
                 if (enemy.pathProgress >= 1) {
                     // Reached the end
-                    enemy.pathIndex = path.length;
+                    enemy.pathIndex = currentPath.length;
                     enemy.x = endX;
                     enemy.y = endY;
                 } else {
@@ -1559,10 +1664,10 @@
                 }
             } else {
                 // Ground enemies follow the path
-                if (enemy.pathIndex >= path.length - 1) return;
+                if (enemy.pathIndex >= currentPath.length - 1) return;
 
-                const current = path[enemy.pathIndex];
-                const next = path[enemy.pathIndex + 1];
+                const current = currentPath[enemy.pathIndex];
+                const next = currentPath[enemy.pathIndex + 1];
 
                 const dx = next.x - current.x;
                 const dy = next.y - current.y;
@@ -1573,9 +1678,9 @@
                 if (enemy.pathProgress >= 1) {
                     enemy.pathIndex++;
                     enemy.pathProgress = 0;
-                    if (enemy.pathIndex < path.length) {
-                        enemy.x = path[enemy.pathIndex].x;
-                        enemy.y = path[enemy.pathIndex].y;
+                    if (enemy.pathIndex < currentPath.length) {
+                        enemy.x = currentPath[enemy.pathIndex].x;
+                        enemy.y = currentPath[enemy.pathIndex].y;
                     }
                 } else {
                     enemy.x = current.x + (dx * enemy.pathProgress);
@@ -1840,9 +1945,10 @@
             ctx.lineJoin = 'round';
 
             ctx.beginPath();
-            ctx.moveTo(path[0].x, path[0].y);
-            for (let i = 1; i < path.length; i++) {
-                ctx.lineTo(path[i].x, path[i].y);
+            currentPath = getCurrentPath();
+            ctx.moveTo(currentPath[0].x, currentPath[0].y);
+            for (let i = 1; i < currentPath.length; i++) {
+                ctx.lineTo(currentPath[i].x, currentPath[i].y);
             }
             ctx.stroke();
         }
@@ -2312,10 +2418,22 @@
         }
 
         function restartGame() {
-            showGameModeSelection();
+            showMapSelection();
         }
 
+        function hideOverlays() {
+            document.getElementById('game-mode-overlay').style.display = 'none';
+            document.getElementById('map-selection-overlay').style.display = 'none';
+            document.getElementById('tower-upgrade-overlay').style.display = 'none';
+            document.getElementById('tower-selection-overlay').style.display = 'none';
+            document.getElementById('enemy-spawn-overlay').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'none';
+        }
+
+        // TODO: tower selection should be disabled at game over
         function showGameEndScreen(victory = false) {
+            hideOverlays();
+
             if (victory) {
                 document.getElementById('waves-completed').textContent = 'All waves completed!';
                 document.getElementById('game-over-title').textContent = 'Victory!';
@@ -2325,10 +2443,79 @@
             }
             document.getElementById('game-over-screen').style.display = 'block';
             document.getElementById('final-score').textContent = `Final Score: ${score}`;
+        }
 
-            document.getElementById('tower-upgrade-overlay').style.display = 'none';
-            document.getElementById('tower-selection-overlay').style.display = 'none';
-            document.getElementById('enemy-spawn-overlay').style.display = 'none';
+        // Map selection functions
+        function selectMap(mapKey) {
+            selectedMap = mapKey;
+            showGameModeSelection();
+        }
+
+        function showMapSelection() {
+            hideOverlays();
+            document.getElementById('map-selection-overlay').style.display = 'block';
+            let maps_options = document.getElementById('map-options');
+            maps_options.innerHTML = '';
+            for (let key in maps) {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                div.style.marginBottom = '18px';
+
+                // Map preview canvas
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = 120;
+                previewCanvas.height = 80;
+                previewCanvas.style.border = '1px solid #444';
+                previewCanvas.style.marginRight = '16px';
+                // Draw the path preview
+                const pctx = previewCanvas.getContext('2d');
+                pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+                pctx.strokeStyle = '#8B4513';
+                pctx.lineWidth = 8;
+                pctx.lineCap = 'round';
+                pctx.lineJoin = 'round';
+                const path = maps[key].path;
+                // Scale and center path to fit preview
+                let minX = Math.min(...path.map(p => p.x));
+                let maxX = Math.max(...path.map(p => p.x));
+                let minY = Math.min(...path.map(p => p.y));
+                let maxY = Math.max(...path.map(p => p.y));
+                let scale = Math.min(100 / (maxX - minX), 60 / (maxY - minY));
+                let offsetX = (previewCanvas.width - (maxX - minX) * scale) / 2 - minX * scale;
+                let offsetY = (previewCanvas.height - (maxY - minY) * scale) / 2 - minY * scale;
+                pctx.beginPath();
+                pctx.moveTo(path[0].x * scale + offsetX, path[0].y * scale + offsetY);
+                for (let i = 1; i < path.length; i++) {
+                    pctx.lineTo(path[i].x * scale + offsetX, path[i].y * scale + offsetY);
+                }
+                pctx.stroke();
+                // Draw start/end points
+                pctx.fillStyle = '#FFD700';
+                pctx.beginPath();
+                pctx.arc(path[0].x * scale + offsetX, path[0].y * scale + offsetY, 7, 0, Math.PI * 2);
+                pctx.fill();
+                pctx.fillStyle = '#FF6B6B';
+                pctx.beginPath();
+                pctx.arc(path[path.length-1].x * scale + offsetX, path[path.length-1].y * scale + offsetY, 7, 0, Math.PI * 2);
+                pctx.fill();
+
+                div.appendChild(previewCanvas);
+
+                const btn = document.createElement('button');
+                btn.className = 'game-mode-btn';
+                btn.textContent = key;
+                btn.onclick = () => selectMap(key);
+                btn.style.marginRight = '12px';
+                div.appendChild(btn);
+
+                const desc = document.createElement('div');
+                desc.className = 'game-mode-desc';
+                desc.textContent = maps[key].description;
+                div.appendChild(desc);
+
+                maps_options.appendChild(div);
+            }
         }
 
         // Start game loop
