@@ -636,26 +636,31 @@
                 </div>
 
                 <div id="tower-selection-overlay">
-                    <h4>Select Tower to Build:</h4>
-                    <div class="tower-overlay-btn" data-tower="basic" id="basic-overlay-btn">
-                        <div>Basic Tower - $10 <span style="color: #6BCF7F;">[1]</span></div>
-                        <div class="tower-overlay-info">Damage: 20 | Range: 100</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <h4>Select Tower to Build:</h4>
+                        <button id="collapse-tower-overlay-btn" style="margin-left:10px;padding:2px 10px;font-size:16px;">–</button>
                     </div>
-                    <div class="tower-overlay-btn" data-tower="heavy" id="heavy-overlay-btn">
-                        <div>Heavy Tower - $25 <span style="color: #6BCF7F;">[2]</span></div>
-                        <div class="tower-overlay-info">Damage: 50 | Range: 80</div>
-                    </div>
-                    <div class="tower-overlay-btn" data-tower="rapid" id="rapid-overlay-btn">
-                        <div>Rapid Tower - $30 <span style="color: #6BCF7F;">[3]</span></div>
-                        <div class="tower-overlay-info">Damage: 15 | Range: 120</div>
-                    </div>
-                    <div class="tower-overlay-btn" data-tower="laser" id="laser-overlay-btn">
-                        <div>Laser Tower - $50 <span style="color: #6BCF7F;">[4]</span></div>
-                        <div class="tower-overlay-info">Damage: 100 | Range: 150</div>
-                    </div>
-                    <div class="tower-overlay-btn" data-tower="antiair" id="antiair-overlay-btn">
-                        <div>Anti-Air Tower - $35 <span style="color: #6BCF7F;">[5]</span></div>
-                        <div class="tower-overlay-info">Damage: 60 | Range: 130 | Air Only</div>
+                    <div id="tower-overlay-content">
+                        <div class="tower-overlay-btn" data-tower="basic" id="basic-overlay-btn">
+                            <div>Basic Tower - $10 <span style="color: #6BCF7F;">[1]</span></div>
+                            <div class="tower-overlay-info">Damage: 20 | Range: 100</div>
+                        </div>
+                        <div class="tower-overlay-btn" data-tower="heavy" id="heavy-overlay-btn">
+                            <div>Heavy Tower - $25 <span style="color: #6BCF7F;">[2]</span></div>
+                            <div class="tower-overlay-info">Damage: 50 | Range: 80</div>
+                        </div>
+                        <div class="tower-overlay-btn" data-tower="rapid" id="rapid-overlay-btn">
+                            <div>Rapid Tower - $30 <span style="color: #6BCF7F;">[3]</span></div>
+                            <div class="tower-overlay-info">Damage: 15 | Range: 120</div>
+                        </div>
+                        <div class="tower-overlay-btn" data-tower="laser" id="laser-overlay-btn">
+                            <div>Laser Tower - $50 <span style="color: #6BCF7F;">[4]</span></div>
+                            <div class="tower-overlay-info">Damage: 100 | Range: 150</div>
+                        </div>
+                        <div class="tower-overlay-btn" data-tower="antiair" id="antiair-overlay-btn">
+                            <div>Anti-Air Tower - $35 <span style="color: #6BCF7F;">[5]</span></div>
+                            <div class="tower-overlay-info">Damage: 60 | Range: 130 | Air Only</div>
+                        </div>
                     </div>
                 </div>
 
@@ -1109,6 +1114,20 @@
                         spawnEnemyManually(btn.dataset.enemy);
                     }
                 });
+            });
+
+            // Collapse/expand button for tower selection overlay
+            let towerOverlayCollapsed = false;
+            document.getElementById('collapse-tower-overlay-btn').addEventListener('click', function() {
+                towerOverlayCollapsed = !towerOverlayCollapsed;
+                const content = document.getElementById('tower-overlay-content');
+                if (towerOverlayCollapsed) {
+                    content.style.display = 'none';
+                    this.textContent = '+';
+                } else {
+                    content.style.display = 'block';
+                    this.textContent = '-';
+                }
             });
         }
 
