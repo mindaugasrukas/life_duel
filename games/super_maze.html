@@ -234,19 +234,29 @@
         let powerUps = [
             {
                 type: 'fog',
+                description: 'Fog of War: Hides unexplored areas of the maze',
                 color: '#a020f0',
                 probability: 0.3,
                 isActive: false // TODO: not used yet
             },
             {
                 type: 'markVisited',
+                description: 'Mark Visited: Marks all visited tiles on the map',
                 color: '#ff9800',
                 probability: 0.5,
                 isActive: false  // TODO: not used yet
             },
             {
                 type: 'showPath',
+                description: 'Show Path: Reveals the optimal path to the exit',
                 color: '#00ffea',
+                probability: 0.1,
+                isActive: false  // TODO: not used yet
+            },
+            {
+                type: 'revealMap',
+                description: 'Reveal Map: Shows the entire maze layout until moved',
+                color: '#00ff00',
                 probability: 0.1,
                 isActive: false  // TODO: not used yet
             }
@@ -557,6 +567,11 @@
                             powerUpMarkVisitedActive = true;
                         } else if (p.powerUp.type === 'showPath') {
                             activateShowPathPowerUp(nx, ny);
+                        } else if (p.powerUp.type === 'revealMap') {
+                            revealMap = true;
+                            renderFullMaze();
+                            placedPowerUps.splice(i, 1);
+                            return; // Don't render viewport after full map
                         }
                         placedPowerUps.splice(i, 1);
                     }
