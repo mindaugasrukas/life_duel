@@ -168,19 +168,19 @@
             type: 'fog',
             color: '#a020f0',
             probability: 0.3,
-            isActive: false
+            isActive: false // TODO: not used yet
         },
         {
             type: 'markVisited',
             color: '#ff9800',
             probability: 0.5,
-            isActive: false
+            isActive: false  // TODO: not used yet
         },
         {
             type: 'showPath',
             color: '#00ffea',
             probability: 0.1,
-            isActive: false
+            isActive: false  // TODO: not used yet
         }
     ]
     let placedPowerUps = [];
@@ -198,11 +198,6 @@
     const closeHelpBtn = document.getElementById('close-help');
     const mapSizeSelect = document.getElementById('map-size-select');
     const startBtn = document.getElementById('start-btn');
-
-    // --- Utility Functions ---
-    function randInt(a, b) {
-      return Math.floor(Math.random() * (b - a + 1)) + a;
-    }
 
     // --- Maze Generation (Recursive Backtracker) ---
     function generateMaze(size) {
@@ -237,23 +232,6 @@
       exit = { x: size-2, y: size-2 };
     }
 
-    function findDeadEnds() {
-      let deadEnds = [];
-      for (let y = 1; y < mapSize-1; y++) {
-        for (let x = 1; x < mapSize-1; x++) {
-          if (maze[y][x].wall === false && !(x === player.x && y === player.y) && !(x === exit.x && y === exit.y)) {
-            let open = 0;
-            if (maze[y-1][x].wall === false) open++;
-            if (maze[y+1][x].wall === false) open++;
-            if (maze[y][x-1].wall === false) open++;
-            if (maze[y][x+1].wall === false) open++;
-            if (open === 1) deadEnds.push({x, y});
-          }
-        }
-      }
-      return deadEnds;
-    }
-
     function placePowerUps() {
       placedPowerUps = [];
       let deadEnds = findDeadEnds();
@@ -275,7 +253,6 @@
           used.add(key);
         }
       }
-      let totalProb = powerUps.reduce((sum, p) => sum + p.probability, 0);
       for (let i = 0; i < chosen.length; i++) {
         let pos = chosen[i];
         const randomPowerUp = getRandomPowerUp();
@@ -382,8 +359,56 @@
         }
       }
     }
+
+    function renderFullMaze() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // Calculate tile size to fit the whole maze in the canvas
+      let tileSize = Math.min((canvas.width-10)/mapSize, (canvas.height-10)/mapSize);
+      let offsetX = (canvas.width - tileSize*mapSize)/2;
+      let offsetY = (canvas.height - tileSize*mapSize)/2;
+      for (let y=0; y<mapSize; y++) {
+        for (let x=0; x<mapSize; x++) {
+          let tile = maze[y][x];
+          let sx = offsetX + x*tileSize;
+          let sy = offsetY + y*tileSize;
+          if (exit && x === exit.x && y === exit.y) {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.wall === true) {
+            ctx.fillStyle = '#444';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.visited) {
+            ctx.fillStyle = '#b7e4c7'; // visited cell color
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.explored) {
+            ctx.fillStyle = '#8ecae6'; // explored cell color
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.wall === false) {
+            ctx.fillStyle = '#eee';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          }
+          if (x === player.x && y === player.y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/2.2, 0, 2*Math.PI);
+            ctx.fill();
+          }
+          // Draw power-ups
+          for (const p of placedPowerUps) {
+            if (p.x === x && p.y === y) {
+              ctx.fillStyle = p.powerUp.color;
+              ctx.beginPath();
+              ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/3, 0, 2*Math.PI);
+              ctx.fill();
+            }
+          }
+        }
+      }
+    }
+
     // --- Fog of War ---
     let visibleTiles = new Set();
+
     function isTileVisible(x, y) {
       return visibleTiles.has(`${x},${y}`);
     }
@@ -402,35 +427,6 @@
     }
 
     // --- Game Logic ---
-    function isMazeFullyReachable() {
-      // BFS from player, do not go through exit
-      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
-      let queue = [];
-      queue.push({x: player.x, y: player.y});
-      visited[player.y][player.x] = true;
-      while (queue.length > 0) {
-        let {x, y} = queue.shift();
-        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
-          let nx = x+dx, ny = y+dy;
-          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx]) {
-            if (maze[ny][nx].wall === false && !(nx === exit.x && ny === exit.y)) {
-              visited[ny][nx] = true;
-              queue.push({x: nx, y: ny});
-            }
-          }
-        }
-      }
-      // Check all non-wall, non-exit cells are visited
-      for (let y=0; y<mapSize; y++) {
-        for (let x=0; x<mapSize; x++) {
-          if (maze[y][x].wall === false && !(x === exit.x && y === exit.y)) {
-            if (!visited[y][x]) return false;
-          }
-        }
-      }
-      return true;
-    }
-
     function startGame() {
       mapSize = parseInt(mapSizeSelect.value);
       // Show loading indicator for large mazes
@@ -538,70 +534,6 @@
       }, 100);
     }
 
-    function renderFullMaze() {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      // Calculate tile size to fit the whole maze in the canvas
-      let tileSize = Math.min((canvas.width-10)/mapSize, (canvas.height-10)/mapSize);
-      let offsetX = (canvas.width - tileSize*mapSize)/2;
-      let offsetY = (canvas.height - tileSize*mapSize)/2;
-      for (let y=0; y<mapSize; y++) {
-        for (let x=0; x<mapSize; x++) {
-          let tile = maze[y][x];
-          let sx = offsetX + x*tileSize;
-          let sy = offsetY + y*tileSize;
-          if (exit && x === exit.x && y === exit.y) {
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.wall === true) {
-            ctx.fillStyle = '#444';
-            ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.visited) {
-            ctx.fillStyle = '#b7e4c7'; // visited cell color
-            ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.explored) {
-            ctx.fillStyle = '#8ecae6'; // explored cell color
-            ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.wall === false) {
-            ctx.fillStyle = '#eee';
-            ctx.fillRect(sx, sy, tileSize, tileSize);
-          }
-          if (x === player.x && y === player.y) {
-            ctx.fillStyle = '#00f';
-            ctx.beginPath();
-            ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/2.2, 0, 2*Math.PI);
-            ctx.fill();
-          }
-          // Draw power-ups
-          for (const p of placedPowerUps) {
-            if (p.x === x && p.y === y) {
-              ctx.fillStyle = p.powerUp.color;
-              ctx.beginPath();
-              ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/3, 0, 2*Math.PI);
-              ctx.fill();
-            }
-          }
-        }
-      }
-    }
-
-    function findShortestPath(sx, sy, ex, ey) {
-      let queue = [{x: sx, y: sy, path: []}];
-      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
-      visited[sy][sx] = true;
-      while (queue.length > 0) {
-        let {x, y, path} = queue.shift();
-        if (x === ex && y === ey) return [...path, {x, y}];
-        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
-          let nx = x+dx, ny = y+dy;
-          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx] && maze[ny][nx].wall === false) {
-            visited[ny][nx] = true;
-            queue.push({x: nx, y: ny, path: [...path, {x, y}]});
-          }
-        }
-      }
-      return null;
-    }
-
     let guidePath = null;
     let guideStep = 0;
     let guideActive = false;
@@ -623,6 +555,75 @@
       render();
       guideStep++;
       setTimeout(animateGuide, 50); // Faster movement (was 120)
+    }
+
+    // --- Utility Functions ---
+    function randInt(a, b) {
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
+
+    function findDeadEnds() {
+      let deadEnds = [];
+      for (let y = 1; y < mapSize-1; y++) {
+        for (let x = 1; x < mapSize-1; x++) {
+          if (maze[y][x].wall === false && !(x === player.x && y === player.y) && !(x === exit.x && y === exit.y)) {
+            let open = 0;
+            if (maze[y-1][x].wall === false) open++;
+            if (maze[y+1][x].wall === false) open++;
+            if (maze[y][x-1].wall === false) open++;
+            if (maze[y][x+1].wall === false) open++;
+            if (open === 1) deadEnds.push({x, y});
+          }
+        }
+      }
+      return deadEnds;
+    }
+
+    function findShortestPath(sx, sy, ex, ey) {
+      let queue = [{x: sx, y: sy, path: []}];
+      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
+      visited[sy][sx] = true;
+      while (queue.length > 0) {
+        let {x, y, path} = queue.shift();
+        if (x === ex && y === ey) return [...path, {x, y}];
+        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+          let nx = x+dx, ny = y+dy;
+          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx] && maze[ny][nx].wall === false) {
+            visited[ny][nx] = true;
+            queue.push({x: nx, y: ny, path: [...path, {x, y}]});
+          }
+        }
+      }
+      return null;
+    }
+
+    function isMazeFullyReachable() {
+      // BFS from player, do not go through exit
+      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
+      let queue = [];
+      queue.push({x: player.x, y: player.y});
+      visited[player.y][player.x] = true;
+      while (queue.length > 0) {
+        let {x, y} = queue.shift();
+        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+          let nx = x+dx, ny = y+dy;
+          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx]) {
+            if (maze[ny][nx].wall === false && !(nx === exit.x && ny === exit.y)) {
+              visited[ny][nx] = true;
+              queue.push({x: nx, y: ny});
+            }
+          }
+        }
+      }
+      // Check all non-wall, non-exit cells are visited
+      for (let y=0; y<mapSize; y++) {
+        for (let x=0; x<mapSize; x++) {
+          if (maze[y][x].wall === false && !(x === exit.x && y === exit.y)) {
+            if (!visited[y][x]) return false;
+          }
+        }
+      }
+      return true;
     }
 
     // --- Event Listeners ---
