@@ -163,6 +163,9 @@
     let revealMap = false;
     let followPlayer = false;
     let timerInterval = null;
+    let powerUps = [];
+    let powerUpFogActive = false;
+    let powerUpMarkVisitedActive = false;
     // --- DOM Elements ---
     const canvas = document.getElementById('maze-canvas');
     const ctx = canvas.getContext('2d');
@@ -175,10 +178,12 @@
     const closeHelpBtn = document.getElementById('close-help');
     const mapSizeSelect = document.getElementById('map-size-select');
     const startBtn = document.getElementById('start-btn');
+
     // --- Utility Functions ---
     function randInt(a, b) {
       return Math.floor(Math.random() * (b - a + 1)) + a;
     }
+
     // --- Maze Generation (Recursive Backtracker) ---
     function generateMaze(size) {
       // Initialize maze with walls
@@ -211,6 +216,52 @@
       // Place exit
       exit = { x: size-2, y: size-2 };
     }
+
+    function findDeadEnds() {
+      let deadEnds = [];
+      for (let y = 1; y < mapSize-1; y++) {
+        for (let x = 1; x < mapSize-1; x++) {
+          if (maze[y][x].wall === false && !(x === player.x && y === player.y) && !(x === exit.x && y === exit.y)) {
+            let open = 0;
+            if (maze[y-1][x].wall === false) open++;
+            if (maze[y+1][x].wall === false) open++;
+            if (maze[y][x-1].wall === false) open++;
+            if (maze[y][x+1].wall === false) open++;
+            if (open === 1) deadEnds.push({x, y});
+          }
+        }
+      }
+      return deadEnds;
+    }
+
+    function placePowerUps() {
+      powerUps = [];
+      let deadEnds = findDeadEnds();
+      // If not enough dead-ends, regenerate maze
+      let tries = 0;
+      while (deadEnds.length < 4 && tries < 10) {
+        generateMaze(mapSize);
+        deadEnds = findDeadEnds();
+        tries++;
+      }
+      // Place 4-10 power-ups on random dead-ends
+      let count = Math.min(deadEnds.length, randInt(4, Math.min(10, deadEnds.length)));
+      let chosen = [];
+      let used = new Set();
+      while (chosen.length < count) {
+        let idx = randInt(0, deadEnds.length-1);
+        let key = `${deadEnds[idx].x},${deadEnds[idx].y}`;
+        if (!used.has(key)) {
+          chosen.push(deadEnds[idx]);
+          used.add(key);
+        }
+      }
+      for (const pos of chosen) {
+        type = Math.random() < 0.5 ? 'fog' : 'markVisited';
+        powerUps.push({type, x: pos.x, y: pos.y});
+      }
+    }
+
     // --- Rendering ---
     function resizeCanvas() {
       // Set both CSS and element attributes for canvas size
@@ -221,29 +272,33 @@
       canvas.width = w;
       canvas.height = h;
     }
+
     function render() {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       // Center visible window
       let px = player.x, py = player.y;
       let half = Math.floor(VISIBLE_SIZE/2);
       let vx = px - half, vy = py - half;
-      if (followPlayer || revealMap) {
-        // Center view on player, clamp to map
+      if (followPlayer || revealMap || powerUpFogActive) {
         vx = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, px-half));
         vy = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, py-half));
       } else {
-        // Fixed window in center of map
         vx = Math.floor((mapSize-VISIBLE_SIZE)/2);
         vy = Math.floor((mapSize-VISIBLE_SIZE)/2);
       }
-      // Draw visible tiles
       for (let y=0; y<VISIBLE_SIZE; y++) {
         for (let x=0; x<VISIBLE_SIZE; x++) {
           let mx = vx+x, my = vy+y;
           let tile = maze[my]?.[mx] ?? { wall: true };
           let sx = x*TILE_SIZE + (canvas.width-VISIBLE_SIZE*TILE_SIZE)/2;
           let sy = y*TILE_SIZE + (canvas.height-VISIBLE_SIZE*TILE_SIZE)/2;
-          if (!revealMap && !isTileVisible(mx, my)) {
+          // Fog of war logic
+          if (powerUpFogActive && !tile.explored) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+            continue;
+          }
+          if (!powerUpFogActive && !revealMap && !isTileVisible(mx, my)) {
             ctx.fillStyle = '#111';
             ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
             continue;
@@ -254,9 +309,27 @@
           } else if (tile.wall === true) {
             ctx.fillStyle = '#444';
             ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          } else if (powerUpMarkVisitedActive && tile.visited) {
+            ctx.fillStyle = '#b7e4c7';
+            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
           } else if (tile.wall === false) {
             ctx.fillStyle = '#eee';
             ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          }
+          // Draw power-ups
+          for (const p of powerUps) {
+            if (p.x === mx && p.y === my && p.type === 'fog') {
+              ctx.fillStyle = '#a020f0';
+              ctx.beginPath();
+              ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/3, 0, 2*Math.PI);
+              ctx.fill();
+            }
+            if (p.x === mx && p.y === my && p.type === 'markVisited') {
+              ctx.fillStyle = '#ff9800';
+              ctx.beginPath();
+              ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/3, 0, 2*Math.PI);
+              ctx.fill();
+            }
           }
           // Player
           if (mx === player.x && my === player.y) {
@@ -273,6 +346,7 @@
     function isTileVisible(x, y) {
       return visibleTiles.has(`${x},${y}`);
     }
+
     function updateVisibility() {
       let radius = 4;
       for (let dy=-radius; dy<=radius; dy++) {
@@ -285,7 +359,37 @@
         }
       }
     }
+
     // --- Game Logic ---
+    function isMazeFullyReachable() {
+      // BFS from player, do not go through exit
+      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
+      let queue = [];
+      queue.push({x: player.x, y: player.y});
+      visited[player.y][player.x] = true;
+      while (queue.length > 0) {
+        let {x, y} = queue.shift();
+        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+          let nx = x+dx, ny = y+dy;
+          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx]) {
+            if (maze[ny][nx].wall === false && !(nx === exit.x && ny === exit.y)) {
+              visited[ny][nx] = true;
+              queue.push({x: nx, y: ny});
+            }
+          }
+        }
+      }
+      // Check all non-wall, non-exit cells are visited
+      for (let y=0; y<mapSize; y++) {
+        for (let x=0; x<mapSize; x++) {
+          if (maze[y][x].wall === false && !(x === exit.x && y === exit.y)) {
+            if (!visited[y][x]) return false;
+          }
+        }
+      }
+      return true;
+    }
+
     function startGame() {
       mapSize = parseInt(mapSizeSelect.value);
       // Show loading indicator for large mazes
@@ -295,18 +399,23 @@
       ctx.textAlign = 'center';
       ctx.fillText('Generating maze...', canvas.width/2, canvas.height/2);
       setTimeout(() => {
-        generateMaze(mapSize);
-        // Find a valid starting position (first open path near top-left)
-        let found = false;
-        for (let y = 1; y < Math.min(10, mapSize) && !found; y++) {
-          for (let x = 1; x < Math.min(10, mapSize) && !found; x++) {
-            if (maze[y][x].wall === false) {
-              player = { x, y };
-              found = true;
+        let tries = 0;
+        do {
+          generateMaze(mapSize);
+          // Find a valid starting position (first open path near top-left)
+          let found = false;
+          for (let y = 1; y < Math.min(10, mapSize) && !found; y++) {
+            for (let x = 1; x < Math.min(10, mapSize) && !found; x++) {
+              if (maze[y][x].wall === false) {
+                player = { x, y };
+                found = true;
+              }
             }
           }
-        }
-        if (!found) player = { x: 1, y: 1 };
+          if (!found) player = { x: 1, y: 1 };
+          exit = { x: mapSize-2, y: mapSize-2 };
+          tries++;
+        } while (!isMazeFullyReachable() && tries < 20);
         score = 0;
         steps = 0;
         timer = 0;
@@ -323,6 +432,7 @@
           score = 1;
           scoreEl.textContent = score;
         }
+        placePowerUps();
         updateVisibility();
         render();
         scoreEl.textContent = score;
@@ -334,8 +444,11 @@
           timer++;
           timerEl.textContent = timer;
         }, 1000);
+        powerUpFogActive = false;
+        powerUpMarkVisitedActive = false;
       }, 50);
     }
+
     function movePlayer(dx, dy) {
       if (!gameStarted) return;
       let nx = player.x+dx, ny = player.y+dy;
@@ -344,29 +457,90 @@
         player.y = ny;
         steps++;
         stepsEl.textContent = steps;
-        // Mark cell as visited
         maze[ny][nx].visited = true;
-        // Mark cell as explored and increment score only if first time
         if (!maze[ny][nx].explored) {
           maze[ny][nx].explored = true;
           score++;
           scoreEl.textContent = score;
         }
+        // Check for power-up
+        for (let i=powerUps.length-1; i>=0; i--) {
+          const p = powerUps[i];
+          if (p.x === nx && p.y === ny) {
+            if (p.type === 'fog') {
+              powerUpFogActive = true;
+            } else if (p.type === 'markVisited') {
+              powerUpMarkVisitedActive = true;
+            }
+            powerUps.splice(i, 1);
+          }
+        }
         updateVisibility();
         render();
-        // Check exit
         if (ny === exit.y && nx === exit.x) {
           endGame(true);
         }
       }
     }
+
     function endGame(won) {
       gameStarted = false;
       if (timerInterval) clearInterval(timerInterval);
+      // Reveal the entire maze and show the full map with track
+      revealMap = true;
+      renderFullMaze();
       setTimeout(() => {
         alert(won ? `You escaped the maze!\nScore: ${score}\nTime: ${timer}s` : 'Game Over');
       }, 100);
     }
+
+    function renderFullMaze() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // Calculate tile size to fit the whole maze in the canvas
+      let tileSize = Math.min((canvas.width-10)/mapSize, (canvas.height-10)/mapSize);
+      let offsetX = (canvas.width - tileSize*mapSize)/2;
+      let offsetY = (canvas.height - tileSize*mapSize)/2;
+      for (let y=0; y<mapSize; y++) {
+        for (let x=0; x<mapSize; x++) {
+          let tile = maze[y][x];
+          let sx = offsetX + x*tileSize;
+          let sy = offsetY + y*tileSize;
+          if (exit && x === exit.x && y === exit.y) {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.wall === true) {
+            ctx.fillStyle = '#444';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.visited) {
+            ctx.fillStyle = '#b7e4c7'; // visited cell color
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.explored) {
+            ctx.fillStyle = '#8ecae6'; // explored cell color
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.wall === false) {
+            ctx.fillStyle = '#eee';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          }
+          if (x === player.x && y === player.y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/2.2, 0, 2*Math.PI);
+            ctx.fill();
+          }
+          // Draw power-ups
+          for (const p of powerUps) {
+            if (p.x === x && p.y === y) {
+              const color = p.type === 'fog' ? '#a020f0' : '#ff9800';
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/3, 0, 2*Math.PI);
+              ctx.fill();
+            }
+          }
+        }
+      }
+    }
+
     // --- Event Listeners ---
     window.addEventListener('resize', () => {
       resizeCanvas();
