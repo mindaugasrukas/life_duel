@@ -266,12 +266,20 @@
                 color: '#0000ff',
                 probability: 0.1,
                 isActive: false  // TODO: not used yet
+            },
+            {
+                type: 'followLocation',
+                description: 'Follow Location: Shows full map, but only viewport is visible, rest is dark',
+                color: '#ff00ff',
+                probability: 0.1,
+                isActive: false
             }
         ]
         let placedPowerUps = [];
         let powerUpFogActive = false;
         let powerUpMarkVisitedActive = false;
         let showFullMapActive = false;
+        let followLocationActive = false;
         // --- DOM Elements ---
         const canvas = document.getElementById('maze-canvas');
         const ctx = canvas.getContext('2d');
@@ -376,19 +384,22 @@
             canvas.height = h;
         }
 
-        function renderMaze({ full = false } = {}) {
+        function renderMaze({ mode = 'normal' } = {}) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             let tileSize, offsetX, offsetY, startX, startY, endX, endY;
-            if (full) {
+            let px = player.x, py = player.y;
+            let half = Math.floor(VISIBLE_SIZE / 2);
+            let vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
+            let vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
+            if (mode === 'full' || mode === 'followLocation') {
                 tileSize = Math.min((canvas.width - 10) / mapSize, (canvas.height - 10) / mapSize);
                 offsetX = (canvas.width - tileSize * mapSize) / 2;
                 offsetY = (canvas.height - tileSize * mapSize) / 2;
                 startX = 0; startY = 0; endX = mapSize; endY = mapSize;
             } else {
                 tileSize = TILE_SIZE;
-                let px = player.x, py = player.y;
-                let half = Math.floor(VISIBLE_SIZE / 2);
-                let vx = px - half, vy = py - half;
+                vx = px - half;
+                vy = py - half;
                 if (followPlayer || revealMap || powerUpFogActive) {
                     vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
                     vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
@@ -405,13 +416,22 @@
                     let tile = maze[y]?.[x] ?? { wall: true };
                     let sx = offsetX + (x - startX) * tileSize;
                     let sy = offsetY + (y - startY) * tileSize;
+                    let inViewport = true;
+                    if (mode === 'followLocation') {
+                        inViewport = x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
+                        if (!inViewport) {
+                            ctx.fillStyle = '#111';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                            continue;
+                        }
+                    }
                     // Fog of war logic (only for viewport)
-                    if (powerUpFogActive && !tile.explored) {
+                    if (mode === 'normal' && powerUpFogActive && !tile.explored) {
                         ctx.fillStyle = '#111';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
                         continue;
                     }
-                    if (!powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
+                    if (mode === 'normal' && !powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
                         ctx.fillStyle = '#111';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
                         continue;
@@ -425,10 +445,10 @@
                     } else if (powerUpMarkVisitedActive && tile.visited) {
                         ctx.fillStyle = '#b7e4c7';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.visited && full) {
+                    } else if (tile.visited && mode === 'full') {
                         ctx.fillStyle = '#b7e4c7';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.explored && full) {
+                    } else if (tile.explored && mode === 'full') {
                         ctx.fillStyle = '#8ecae6';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
                     } else if (tile.wall === false) {
@@ -448,14 +468,29 @@
                     if (guideActive && guidePath) {
                         for (let i = 0; i < guideStep; i++) {
                             let gp = guidePath[i];
-                            let gx = gp.x - startX, gy = gp.y - startY;
-                            // For full map, use mapSize bounds; for viewport, use VISIBLE_SIZE
-                            let size = full ? mapSize : VISIBLE_SIZE;
-                            if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
-                                let sx = offsetX + gx * tileSize;
-                                let sy = offsetY + gy * tileSize;
-                                ctx.fillStyle = '#00ffea';
-                                ctx.fillRect(sx + tileSize / 4, sy + tileSize / 4, tileSize / 2, tileSize / 2);
+                            if (mode === 'full') {
+                                let gx = gp.x - startX, gy = gp.y - startY;
+                                let size = mapSize;
+                                if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
+                                    let sx2 = offsetX + gx * tileSize;
+                                    let sy2 = offsetY + gy * tileSize;
+                                    ctx.fillStyle = '#00ffea';
+                                    ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                                }
+                            } else if (mode === 'followLocation') {
+                                if (gp.x === x && gp.y === y) {
+                                    ctx.fillStyle = '#00ffea';
+                                    ctx.fillRect(sx + tileSize / 4, sy + tileSize / 4, tileSize / 2, tileSize / 2);
+                                }
+                            } else {
+                                let gx = gp.x - startX, gy = gp.y - startY;
+                                let size = VISIBLE_SIZE;
+                                if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
+                                    let sx2 = offsetX + gx * tileSize;
+                                    let sy2 = offsetY + gy * tileSize;
+                                    ctx.fillStyle = '#00ffea';
+                                    ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                                }
                             }
                         }
                     }
@@ -469,14 +504,20 @@
                 }
             }
         }
+
         function render() {
             if (showFullMapActive) {
-                renderMaze({ full: true });
+                renderMaze({ mode: 'full' });
+            } else if (followLocationActive) {
+                renderMaze({ mode: 'followLocation' });
             } else {
-                renderMaze({ full: false });
+                renderMaze({ mode: 'normal' });
             }
         }
-        function renderFullMaze() { renderMaze({ full: true }); }
+
+        function renderFullMaze() {
+            renderMaze({ mode: 'full' });
+        }
 
         // --- Fog of War ---
         let visibleTiles = new Set();
@@ -590,6 +631,8 @@
                             return;
                         } else if (p.powerUp.type === 'showFullMap') {
                             showFullMapActive = true;
+                        } else if (p.powerUp.type === 'followLocation') {
+                            followLocationActive = true;
                         }
                         placedPowerUps.splice(i, 1);
                     }
@@ -615,6 +658,7 @@
             // Reveal the entire maze and show the full map with track
             revealMap = true;
             showFullMapActive = false;
+            followLocationActive = false;
             renderFullMaze();
         }
         document.getElementById('close-endgame').onclick = function () {
