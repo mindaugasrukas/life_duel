@@ -209,7 +209,6 @@
     <script>
         /*
             TODO:
-            - ensure every power-up is included at least once
             - place power-ups more evenly throughout the maze
             - calculate the amount of power-ups based on maze size
               or refactor so every map has a set number of power-ups
@@ -308,27 +307,28 @@
             let deadEnds = findDeadEnds();
             // If not enough dead-ends, regenerate maze
             let tries = 0;
-            while (deadEnds.length < 4 && tries < 10) {
+            while (deadEnds.length < powerUps.length && tries < 10) {
                 generateMaze(mapSize);
                 deadEnds = findDeadEnds();
                 tries++;
             }
-            let count = Math.min(deadEnds.length, randInt(4, Math.min(10, deadEnds.length)));
+            // Ensure every power-up is included at least once
             let chosen = [];
-            let used = new Set();
-            while (chosen.length < count) {
+            // Place one of each power-up type
+            for (let i = 0; i < powerUps.length && deadEnds.length > 0; i++) {
                 let idx = randInt(0, deadEnds.length - 1);
-                let key = `${deadEnds[idx].x},${deadEnds[idx].y}`;
-                if (!used.has(key)) {
-                    chosen.push(deadEnds[idx]);
-                    used.add(key);
-                }
+                let pos = deadEnds.splice(idx, 1)[0];
+                chosen.push({ powerUp: powerUps[i], x: pos.x, y: pos.y });
             }
-            for (let i = 0; i < chosen.length; i++) {
-                let pos = chosen[i];
+            // Fill the rest randomly
+            let count = Math.min(deadEnds.length, randInt(4, Math.min(10, deadEnds.length))) + powerUps.length;
+            while (chosen.length < count && deadEnds.length > 0) {
+                let idx = randInt(0, deadEnds.length - 1);
+                let pos = deadEnds.splice(idx, 1)[0];
                 const randomPowerUp = getRandomPowerUp();
-                placedPowerUps.push({ powerUp: randomPowerUp, x: pos.x, y: pos.y });
+                chosen.push({ powerUp: randomPowerUp, x: pos.x, y: pos.y });
             }
+            placedPowerUps = chosen;
         }
 
         // Get a random power-up by wieghted probability
