@@ -259,11 +259,19 @@
                 color: '#00ff00',
                 probability: 0.1,
                 isActive: false  // TODO: not used yet
+            },
+            {
+                type: 'showFullMap',
+                description: 'Show Full Map: Permanently reveals the entire maze',
+                color: '#0000ff',
+                probability: 0.1,
+                isActive: false  // TODO: not used yet
             }
         ]
         let placedPowerUps = [];
         let powerUpFogActive = false;
         let powerUpMarkVisitedActive = false;
+        let showFullMapActive = false;
         // --- DOM Elements ---
         const canvas = document.getElementById('maze-canvas');
         const ctx = canvas.getContext('2d');
@@ -398,12 +406,12 @@
                     let sx = offsetX + (x - startX) * tileSize;
                     let sy = offsetY + (y - startY) * tileSize;
                     // Fog of war logic (only for viewport)
-                    if (!full && powerUpFogActive && !tile.explored) {
+                    if (powerUpFogActive && !tile.explored) {
                         ctx.fillStyle = '#111';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
                         continue;
                     }
-                    if (!full && !powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
+                    if (!powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
                         ctx.fillStyle = '#111';
                         ctx.fillRect(sx, sy, tileSize, tileSize);
                         continue;
@@ -436,12 +444,14 @@
                             ctx.fill();
                         }
                     }
-                    // Draw guide path if active (only for viewport)
-                    if (!full && guideActive && guidePath) {
+                    // Draw guide path if active
+                    if (guideActive && guidePath) {
                         for (let i = 0; i < guideStep; i++) {
                             let gp = guidePath[i];
                             let gx = gp.x - startX, gy = gp.y - startY;
-                            if (gx >= 0 && gx < VISIBLE_SIZE && gy >= 0 && gy < VISIBLE_SIZE) {
+                            // For full map, use mapSize bounds; for viewport, use VISIBLE_SIZE
+                            let size = full ? mapSize : VISIBLE_SIZE;
+                            if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
                                 let sx = offsetX + gx * tileSize;
                                 let sy = offsetY + gy * tileSize;
                                 ctx.fillStyle = '#00ffea';
@@ -459,7 +469,13 @@
                 }
             }
         }
-        function render() { renderMaze({ full: false }); }
+        function render() {
+            if (showFullMapActive) {
+                renderMaze({ full: true });
+            } else {
+                renderMaze({ full: false });
+            }
+        }
         function renderFullMaze() { renderMaze({ full: true }); }
 
         // --- Fog of War ---
@@ -571,7 +587,9 @@
                             revealMap = true;
                             renderFullMaze();
                             placedPowerUps.splice(i, 1);
-                            return; // Don't render viewport after full map
+                            return;
+                        } else if (p.powerUp.type === 'showFullMap') {
+                            showFullMapActive = true;
                         }
                         placedPowerUps.splice(i, 1);
                     }
@@ -596,6 +614,7 @@
             modal.style.display = 'flex';
             // Reveal the entire maze and show the full map with track
             revealMap = true;
+            showFullMapActive = false;
             renderFullMaze();
         }
         document.getElementById('close-endgame').onclick = function () {
