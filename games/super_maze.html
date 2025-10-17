@@ -163,7 +163,27 @@
     let revealMap = false;
     let followPlayer = false;
     let timerInterval = null;
-    let powerUps = [];
+    let powerUps = [
+        {
+            type: 'fog',
+            color: '#a020f0',
+            probability: 0.3,
+            isActive: false
+        },
+        {
+            type: 'markVisited',
+            color: '#ff9800',
+            probability: 0.5,
+            isActive: false
+        },
+        {
+            type: 'showPath',
+            color: '#00ffea',
+            probability: 0.1,
+            isActive: false
+        }
+    ]
+    let placedPowerUps = [];
     let powerUpFogActive = false;
     let powerUpMarkVisitedActive = false;
     // --- DOM Elements ---
@@ -235,7 +255,7 @@
     }
 
     function placePowerUps() {
-      powerUps = [];
+      placedPowerUps = [];
       let deadEnds = findDeadEnds();
       // If not enough dead-ends, regenerate maze
       let tries = 0;
@@ -244,7 +264,6 @@
         deadEnds = findDeadEnds();
         tries++;
       }
-      // Place 4-10 power-ups on random dead-ends
       let count = Math.min(deadEnds.length, randInt(4, Math.min(10, deadEnds.length)));
       let chosen = [];
       let used = new Set();
@@ -256,10 +275,25 @@
           used.add(key);
         }
       }
-      for (const pos of chosen) {
-        type = Math.random() < 0.5 ? 'fog' : 'markVisited';
-        powerUps.push({type, x: pos.x, y: pos.y});
+      let totalProb = powerUps.reduce((sum, p) => sum + p.probability, 0);
+      for (let i = 0; i < chosen.length; i++) {
+        let pos = chosen[i];
+        const randomPowerUp = getRandomPowerUp();
+        placedPowerUps.push({powerUp: randomPowerUp, x: pos.x, y: pos.y});
       }
+    }
+
+    // Get a random power-up by wieghted probability
+    function getRandomPowerUp() {
+      let totalProb = powerUps.reduce((sum, p) => sum + p.probability, 0);
+      let rand = Math.random() * totalProb;
+      for (const p of powerUps) {
+        if (rand < p.probability) {
+          return p;
+        }
+        rand -= p.probability;
+      }
+      return null;
     }
 
     // --- Rendering ---
@@ -317,18 +351,25 @@
             ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
           }
           // Draw power-ups
-          for (const p of powerUps) {
-            if (p.x === mx && p.y === my && p.type === 'fog') {
-              ctx.fillStyle = '#a020f0';
+          for (const p of placedPowerUps) {
+            if (p.x === mx && p.y === my) {
+              ctx.fillStyle = p.powerUp.color;
               ctx.beginPath();
               ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/3, 0, 2*Math.PI);
               ctx.fill();
             }
-            if (p.x === mx && p.y === my && p.type === 'markVisited') {
-              ctx.fillStyle = '#ff9800';
-              ctx.beginPath();
-              ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/3, 0, 2*Math.PI);
-              ctx.fill();
+          }
+          // Draw guide path if active
+          if (guideActive && guidePath) {
+            for (let i = 0; i < guideStep; i++) {
+              let gp = guidePath[i];
+              let gx = gp.x - vx, gy = gp.y - vy;
+              if (gx >= 0 && gx < VISIBLE_SIZE && gy >= 0 && gy < VISIBLE_SIZE) {
+                let sx = gx*TILE_SIZE + (canvas.width-VISIBLE_SIZE*TILE_SIZE)/2;
+                let sy = gy*TILE_SIZE + (canvas.height-VISIBLE_SIZE*TILE_SIZE)/2;
+                ctx.fillStyle = '#00ffea';
+                ctx.fillRect(sx+TILE_SIZE/4, sy+TILE_SIZE/4, TILE_SIZE/2, TILE_SIZE/2);
+              }
             }
           }
           // Player
@@ -464,15 +505,18 @@
           scoreEl.textContent = score;
         }
         // Check for power-up
-        for (let i=powerUps.length-1; i>=0; i--) {
-          const p = powerUps[i];
+        for (let i=placedPowerUps.length-1; i>=0; i--) {
+          const p = placedPowerUps[i];
           if (p.x === nx && p.y === ny) {
-            if (p.type === 'fog') {
+            p.powerUp.isActive = true;
+            if (p.powerUp.type === 'fog') {
               powerUpFogActive = true;
-            } else if (p.type === 'markVisited') {
+            } else if (p.powerUp.type === 'markVisited') {
               powerUpMarkVisitedActive = true;
+            } else if (p.powerUp.type === 'showPath') {
+              activateShowPathPowerUp(nx, ny);
             }
-            powerUps.splice(i, 1);
+            placedPowerUps.splice(i, 1);
           }
         }
         updateVisibility();
@@ -528,10 +572,9 @@
             ctx.fill();
           }
           // Draw power-ups
-          for (const p of powerUps) {
+          for (const p of placedPowerUps) {
             if (p.x === x && p.y === y) {
-              const color = p.type === 'fog' ? '#a020f0' : '#ff9800';
-              ctx.fillStyle = color;
+              ctx.fillStyle = p.powerUp.color;
               ctx.beginPath();
               ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/3, 0, 2*Math.PI);
               ctx.fill();
@@ -539,6 +582,47 @@
           }
         }
       }
+    }
+
+    function findShortestPath(sx, sy, ex, ey) {
+      let queue = [{x: sx, y: sy, path: []}];
+      let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
+      visited[sy][sx] = true;
+      while (queue.length > 0) {
+        let {x, y, path} = queue.shift();
+        if (x === ex && y === ey) return [...path, {x, y}];
+        for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+          let nx = x+dx, ny = y+dy;
+          if (nx>=0 && ny>=0 && nx<mapSize && ny<mapSize && !visited[ny][nx] && maze[ny][nx].wall === false) {
+            visited[ny][nx] = true;
+            queue.push({x: nx, y: ny, path: [...path, {x, y}]});
+          }
+        }
+      }
+      return null;
+    }
+
+    let guidePath = null;
+    let guideStep = 0;
+    let guideActive = false;
+
+    function activateShowPathPowerUp(px, py) {
+      guidePath = findShortestPath(px, py, exit.x, exit.y);
+      guideStep = 0;
+      guideActive = true;
+      animateGuide();
+    }
+
+    function animateGuide() {
+      if (!guideActive || !guidePath || guideStep >= guidePath.length) {
+        guideActive = false;
+        guidePath = null;
+        render();
+        return;
+      }
+      render();
+      guideStep++;
+      setTimeout(animateGuide, 50); // Faster movement (was 120)
     }
 
     // --- Event Listeners ---
