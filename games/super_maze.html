@@ -536,18 +536,16 @@
     function endGame(won) {
       gameStarted = false;
       if (timerInterval) clearInterval(timerInterval);
+      // Show custom modal instead of alert
+      const modal = document.getElementById('endgame-modal');
+      const title = document.getElementById('endgame-title');
+      const details = document.getElementById('endgame-details');
+      title.textContent = won ? 'You Escaped the Maze!' : 'Game Over';
+      details.innerHTML = won ? `<p>Score: <b>${score}</b></p><p>Time: <b>${timer}s</b></p>` : '';
+      modal.style.display = 'flex';
       // Reveal the entire maze and show the full map with track
       revealMap = true;
       renderFullMaze();
-      setTimeout(() => {
-        // Show custom modal instead of alert
-        const modal = document.getElementById('endgame-modal');
-        const title = document.getElementById('endgame-title');
-        const details = document.getElementById('endgame-details');
-        title.textContent = won ? 'You Escaped the Maze!' : 'Game Over';
-        details.innerHTML = won ? `<p>Score: <b>${score}</b></p><p>Time: <b>${timer}s</b></p>` : '';
-        modal.style.display = 'flex';
-      }, 100);
     }
     document.getElementById('close-endgame').onclick = function() {
       document.getElementById('endgame-modal').style.display = 'none';
