@@ -210,8 +210,6 @@
         /*
             TODO:
             - place power-ups more evenly throughout the maze
-            - calculate the amount of power-ups based on maze size
-              or refactor so every map has a set number of power-ups
             - refactor powerUp.isActive flags
             - refactor the exit as special power-up
         */
@@ -312,6 +310,12 @@
                 deadEnds = findDeadEnds();
                 tries++;
             }
+            // Calculate number of power-ups based on maze size
+            let ratio = 1/60; // 1 power-up per 60 cells
+            let minPowerUps = powerUps.length;
+            let maxPowerUps = Math.max(minPowerUps, Math.floor(mapSize * mapSize / 8));
+            let count = Math.max(minPowerUps, Math.min(deadEnds.length, Math.round(mapSize * mapSize * ratio)));
+            count = Math.min(count, maxPowerUps);
             // Ensure every power-up is included at least once
             let chosen = [];
             // Place one of each power-up type
@@ -321,7 +325,6 @@
                 chosen.push({ powerUp: powerUps[i], x: pos.x, y: pos.y });
             }
             // Fill the rest randomly
-            let count = Math.min(deadEnds.length, randInt(4, Math.min(10, deadEnds.length))) + powerUps.length;
             while (chosen.length < count && deadEnds.length > 0) {
                 let idx = randInt(0, deadEnds.length - 1);
                 let pos = deadEnds.splice(idx, 1)[0];
