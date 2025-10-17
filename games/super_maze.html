@@ -322,114 +322,64 @@
       canvas.height = h;
     }
 
-    function render() {
+    function renderMaze({full=false}={}) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      // Center visible window
-      let px = player.x, py = player.y;
-      let half = Math.floor(VISIBLE_SIZE/2);
-      let vx = px - half, vy = py - half;
-      if (followPlayer || revealMap || powerUpFogActive) {
-        vx = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, px-half));
-        vy = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, py-half));
+      let tileSize, offsetX, offsetY, startX, startY, endX, endY;
+      if (full) {
+        tileSize = Math.min((canvas.width-10)/mapSize, (canvas.height-10)/mapSize);
+        offsetX = (canvas.width - tileSize*mapSize)/2;
+        offsetY = (canvas.height - tileSize*mapSize)/2;
+        startX = 0; startY = 0; endX = mapSize; endY = mapSize;
       } else {
-        vx = Math.floor((mapSize-VISIBLE_SIZE)/2);
-        vy = Math.floor((mapSize-VISIBLE_SIZE)/2);
-      }
-      for (let y=0; y<VISIBLE_SIZE; y++) {
-        for (let x=0; x<VISIBLE_SIZE; x++) {
-          let mx = vx+x, my = vy+y;
-          let tile = maze[my]?.[mx] ?? { wall: true };
-          let sx = x*TILE_SIZE + (canvas.width-VISIBLE_SIZE*TILE_SIZE)/2;
-          let sy = y*TILE_SIZE + (canvas.height-VISIBLE_SIZE*TILE_SIZE)/2;
-          // Fog of war logic
-          if (powerUpFogActive && !tile.explored) {
-            ctx.fillStyle = '#111';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-            continue;
-          }
-          if (!powerUpFogActive && !revealMap && !isTileVisible(mx, my)) {
-            ctx.fillStyle = '#111';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-            continue;
-          }
-          if (exit && mx === exit.x && my === exit.y) {
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          } else if (tile.wall === true) {
-            ctx.fillStyle = '#444';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          } else if (powerUpMarkVisitedActive && tile.visited) {
-            ctx.fillStyle = '#b7e4c7';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          } else if (tile.wall === false) {
-            ctx.fillStyle = '#eee';
-            ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-          }
-          // Draw power-ups
-          for (const p of placedPowerUps) {
-            if (p.x === mx && p.y === my) {
-              ctx.fillStyle = p.powerUp.color;
-              ctx.beginPath();
-              ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/3, 0, 2*Math.PI);
-              ctx.fill();
-            }
-          }
-          // Draw guide path if active
-          if (guideActive && guidePath) {
-            for (let i = 0; i < guideStep; i++) {
-              let gp = guidePath[i];
-              let gx = gp.x - vx, gy = gp.y - vy;
-              if (gx >= 0 && gx < VISIBLE_SIZE && gy >= 0 && gy < VISIBLE_SIZE) {
-                let sx = gx*TILE_SIZE + (canvas.width-VISIBLE_SIZE*TILE_SIZE)/2;
-                let sy = gy*TILE_SIZE + (canvas.height-VISIBLE_SIZE*TILE_SIZE)/2;
-                ctx.fillStyle = '#00ffea';
-                ctx.fillRect(sx+TILE_SIZE/4, sy+TILE_SIZE/4, TILE_SIZE/2, TILE_SIZE/2);
-              }
-            }
-          }
-          // Player
-          if (mx === player.x && my === player.y) {
-            ctx.fillStyle = '#00f';
-            ctx.beginPath();
-            ctx.arc(sx+TILE_SIZE/2, sy+TILE_SIZE/2, TILE_SIZE/2.2, 0, 2*Math.PI);
-            ctx.fill();
-          }
+        tileSize = TILE_SIZE;
+        let px = player.x, py = player.y;
+        let half = Math.floor(VISIBLE_SIZE/2);
+        let vx = px - half, vy = py - half;
+        if (followPlayer || revealMap || powerUpFogActive) {
+          vx = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, px-half));
+          vy = Math.max(0, Math.min(mapSize-VISIBLE_SIZE, py-half));
+        } else {
+          vx = Math.floor((mapSize-VISIBLE_SIZE)/2);
+          vy = Math.floor((mapSize-VISIBLE_SIZE)/2);
         }
+        offsetX = (canvas.width-VISIBLE_SIZE*tileSize)/2;
+        offsetY = (canvas.height-VISIBLE_SIZE*tileSize)/2;
+        startX = vx; startY = vy; endX = vx+VISIBLE_SIZE; endY = vy+VISIBLE_SIZE;
       }
-    }
-
-    function renderFullMaze() {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      // Calculate tile size to fit the whole maze in the canvas
-      let tileSize = Math.min((canvas.width-10)/mapSize, (canvas.height-10)/mapSize);
-      let offsetX = (canvas.width - tileSize*mapSize)/2;
-      let offsetY = (canvas.height - tileSize*mapSize)/2;
-      for (let y=0; y<mapSize; y++) {
-        for (let x=0; x<mapSize; x++) {
-          let tile = maze[y][x];
-          let sx = offsetX + x*tileSize;
-          let sy = offsetY + y*tileSize;
+      for (let y=startY; y<endY; y++) {
+        for (let x=startX; x<endX; x++) {
+          let tile = maze[y]?.[x] ?? { wall: true };
+          let sx = offsetX + (x-startX)*tileSize;
+          let sy = offsetY + (y-startY)*tileSize;
+          // Fog of war logic (only for viewport)
+          if (!full && powerUpFogActive && !tile.explored) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+            continue;
+          }
+          if (!full && !powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+            continue;
+          }
           if (exit && x === exit.x && y === exit.y) {
             ctx.fillStyle = '#ffd700';
             ctx.fillRect(sx, sy, tileSize, tileSize);
           } else if (tile.wall === true) {
             ctx.fillStyle = '#444';
             ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.visited) {
-            ctx.fillStyle = '#b7e4c7'; // visited cell color
+          } else if (powerUpMarkVisitedActive && tile.visited) {
+            ctx.fillStyle = '#b7e4c7';
             ctx.fillRect(sx, sy, tileSize, tileSize);
-          } else if (tile.explored) {
-            ctx.fillStyle = '#8ecae6'; // explored cell color
+          } else if (tile.visited && full) {
+            ctx.fillStyle = '#b7e4c7';
+            ctx.fillRect(sx, sy, tileSize, tileSize);
+          } else if (tile.explored && full) {
+            ctx.fillStyle = '#8ecae6';
             ctx.fillRect(sx, sy, tileSize, tileSize);
           } else if (tile.wall === false) {
             ctx.fillStyle = '#eee';
             ctx.fillRect(sx, sy, tileSize, tileSize);
-          }
-          if (x === player.x && y === player.y) {
-            ctx.fillStyle = '#00f';
-            ctx.beginPath();
-            ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/2.2, 0, 2*Math.PI);
-            ctx.fill();
           }
           // Draw power-ups
           for (const p of placedPowerUps) {
@@ -440,9 +390,31 @@
               ctx.fill();
             }
           }
+          // Draw guide path if active (only for viewport)
+          if (!full && guideActive && guidePath) {
+            for (let i = 0; i < guideStep; i++) {
+              let gp = guidePath[i];
+              let gx = gp.x - startX, gy = gp.y - startY;
+              if (gx >= 0 && gx < VISIBLE_SIZE && gy >= 0 && gy < VISIBLE_SIZE) {
+                let sx = offsetX + gx*tileSize;
+                let sy = offsetY + gy*tileSize;
+                ctx.fillStyle = '#00ffea';
+                ctx.fillRect(sx+tileSize/4, sy+tileSize/4, tileSize/2, tileSize/2);
+              }
+            }
+          }
+          // Player
+          if (x === player.x && y === player.y) {
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(sx+tileSize/2, sy+tileSize/2, tileSize/2.2, 0, 2*Math.PI);
+            ctx.fill();
+          }
         }
       }
     }
+    function render() { renderMaze({full:false}); }
+    function renderFullMaze() { renderMaze({full:true}); }
 
     // --- Fog of War ---
     let visibleTiles = new Set();
