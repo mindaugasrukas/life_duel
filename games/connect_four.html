@@ -331,7 +331,26 @@
 
         // Handle AI move
         function aiMove() {
-            const [score, col] = minimax(board, 5, true);
+            // First, check if human has an immediate winning move and block it
+            let blockCol = null;
+            for (let c = 0; c < COLS; c++) {
+                let r = getNextOpenRow(board, c);
+                if (r !== -1) {
+                    const temp = board.map(row => [...row]);
+                    temp[r][c] = HUMAN;
+                    if (checkWinner(temp, HUMAN)) {
+                        blockCol = c;
+                        break;
+                    }
+                }
+            }
+            let col;
+            if (blockCol !== null) {
+                col = blockCol;
+            } else {
+                const [score, bestCol] = minimax(board, 5, true);
+                col = bestCol;
+            }
             dropPiece(col, AI);
             setTimeout(() => {
                 if (checkWinner(board, AI)) return endGame("AI wins!", AI);
