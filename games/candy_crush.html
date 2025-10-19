@@ -192,11 +192,51 @@
             <button id="close-gameover" onclick="restartGame()">Restart</button>
         </div>
     </div>
-    <audio id="bg-music" src="sounds/epic-chase.mp3" loop autoplay muted></audio>
-    <audio id="sound-match" src="sounds/mixkit-video-game-treasure-2066.wav"></audio>
-    <audio id="sound-invalid" src="sounds/mixkit-negative-guitar-tone-2324.wav"></audio>
-    <audio id="sound-gameover" src="sounds/mixkit-wrong-answer-fail-notification-946.wav"></audio>
     <script>
+const bgMusicList = [
+    'sounds/mixkit-sweet-september-282.mp3',
+    'sounds/mixkit-harp-relax-669.mp3',
+    'sounds/mixkit-rebel-wayz-232.mp3',
+    'sounds/mixkit-relaxation-02-746.mp3',
+    'sounds/mixkit-relaxation-03-747.mp3',
+    'sounds/mixkit-relaxation-04-750.mp3',
+    // 'sounds/video-game-loop-2-390279.mp3',
+    // 'sounds/mixkit-relax-658.mp3',
+    // 'sounds/keys-of-moon-under-the-sun.mp3',
+    // 'sounds/game-music-loop-4-144341.mp3',
+    // 'sounds/epic-chase.mp3',
+    // 'sounds/mixkit-lo-fi-02-764.mp3',
+    // 'sounds/mixkit-relaxation-06-748.mp3',
+];
+const soundInvalidMatch = 'sounds/mixkit-interface-option-select-2573.wav';
+const soundMatch = 'sounds/mixkit-video-game-treasure-2066.wav';
+const soundGameover = 'sounds/mixkit-wrong-answer-fail-notification-946.wav';
+const soundNew = 'sounds/fall-394469.mp3';
+
+function pickRandomMusic() {
+    return bgMusicList[Math.floor(Math.random() * bgMusicList.length)];
+}
+function setBgMusic(trackUrl) {
+    let music = document.getElementById('bg-music');
+    if (!music) {
+        music = document.createElement('audio');
+        music.id = 'bg-music';
+        music.loop = true;
+        music.autoplay = true;
+        document.body.insertBefore(music, document.body.firstChild);
+    }
+    music.src = trackUrl;
+    music.load();
+    music.play().catch(()=>{});
+}
+// On page load, pick and play a random track
+setBgMusic(pickRandomMusic());
+// On restart, pick a new track
+const origRestartGame = window.restartGame;
+window.restartGame = function() {
+    setBgMusic(pickRandomMusic());
+    origRestartGame && origRestartGame();
+};
         function hasPossibleMoves() {
             // Check for any possible swap that would result in a match
             for (let r = 0; r < gridSize; r++) {
@@ -284,7 +324,7 @@
             setTimeout(() => {
                 if (!hasPossibleMoves()) {
                     document.getElementById('gameover-modal').style.display = 'flex';
-                    document.getElementById('sound-gameover').play();
+                    playSound(soundGameover, false);
                 }
             }, 10);
         }
@@ -313,7 +353,7 @@
                         moves--;
                         selected = null;
                         setTimeout(() => {
-                            document.getElementById('sound-match').play();
+                            playSound(soundMatch);
                         }, 200);
                         renderGrid();
                         setTimeout(() => {
@@ -330,8 +370,8 @@
                         window.invalidSwap = { r1: selected.r, c1: selected.c, r2: r, c2: c };
                         selected = null;
                         setTimeout(() => {
-                            document.getElementById('sound-invalid').play();
-                        }, 200);
+                            playSound(soundInvalidMatch);
+                        }, 10);
                         renderGrid();
                         setTimeout(() => {
                             swapCandies(window.invalidSwap.r1, window.invalidSwap.c1, window.invalidSwap.r2, window.invalidSwap.c2);
@@ -407,7 +447,16 @@
             return matched;
         }
 
+        function playSound(sound, checkMuted = true) {
+            const snd = new Audio(sound);
+            if (checkMuted) {
+                snd.volume = document.getElementById('bg-music')?.muted ? 0 : 1;
+            }
+            snd.play();
+        }
+
         function refillGrid() {
+            let newCandyCount = 0;
             for (let c = 0; c < gridSize; c++) {
                 for (let r = gridSize - 1; r >= 0; r--) {
                     if (!grid[r][c]) {
@@ -419,6 +468,10 @@
                             grid[rr][c] = null;
                         } else {
                             grid[r][c] = randomCandy();
+                            newCandyCount++;
+                            setTimeout(() => {
+                                playSound(soundNew);
+                            }, newCandyCount * 40); // stagger sounds for effect
                         }
                     }
                 }
