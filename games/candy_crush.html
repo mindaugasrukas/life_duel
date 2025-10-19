@@ -320,9 +320,9 @@ window.restartGame = function() {
             }
             document.getElementById('score').textContent = score;
             document.getElementById('moves').textContent = moves;
-            // Check for possible moves after rendering
+            // Show end game modal if no moves left or no possible moves
             setTimeout(() => {
-                if (!hasPossibleMoves()) {
+                if (moves <= 0 || !hasPossibleMoves()) {
                     document.getElementById('gameover-modal').style.display = 'flex';
                     playSound(soundGameover, false);
                 }
@@ -485,6 +485,7 @@ window.restartGame = function() {
         }
 
         function restartGame() {
+            document.getElementById('gameover-modal').style.display = 'none';
             score = 0;
             moves = 20;
             selected = null;
