@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Puzzles</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .fade-message {
+            position: absolute;
+            left: 50%;
+            top: 20%;
+            transform: translate(-50%, 0);
+            background: #ffd700;
+            color: #222;
+            padding: 12px 32px;
+            border-radius: 24px;
+            font-size: 2em;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.7s;
+            z-index: 10;
+        }
+        .fade-message.show {
+            opacity: 1;
+        }
+        .score {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .streak {
+            color: #2e8b57;
+            font-weight: bold;
+        }
+        .puzzle-area {
+            margin: 30px auto;
+            max-width: 400px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #0001;
+            padding: 32px 24px;
+        }
+        .input-area {
+            margin-top: 18px;
+        }
+        .input-area input {
+            font-size: 1.1em;
+            padding: 6px 12px;
+            width: 120px;
+        }
+        .input-area button {
+            font-size: 1.1em;
+            margin-left: 10px;
+            padding: 6px 18px;
+        }
+        .feedback {
+            margin-top: 18px;
+            min-height: 24px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+    </a>
+    <div class="container">
+        <h1>Math Puzzles</h1>
+        <div class="score">Score: <span id="score">0</span> | Streak: <span id="streak">0</span> | Multiplier: <span id="multiplier">1x</span></div>
+        <div class="puzzle-area">
+            <div id="puzzle-text">Loading...</div>
+            <div class="input-area">
+                <input type="text" id="answer" autocomplete="off" />
+                <button id="submit">Submit</button>
+            </div>
+            <div class="feedback" id="feedback"></div>
+        </div>
+        <div style="margin-top: 24px;">
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+    <div class="fade-message" id="fade-message"></div>
+    <script src="math_puzzles.js"></script>
+</body>
+</html>
