@@ -159,6 +159,15 @@
         .home-link svg {
             margin-right: 8px;
         }
+        .candy.falling {
+            animation: candy-fall 0.4s cubic-bezier(.4,2,.6,1) forwards;
+            z-index: 2;
+        }
+        @keyframes candy-fall {
+            0% { transform: translateY(-60px) scale(1.1); opacity: 0.2; }
+            80% { transform: translateY(0) scale(1.05); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -188,7 +197,8 @@
     <div id="gameover-modal">
         <div>
             <h3>Game Over</h3>
-            <div>No more possible moves!</div>
+            <div id="gameover-reason"></div>
+            <div style="margin-top:12px;font-size:1.1em;">Final Score: <span id="final-score">0</span></div>
             <button id="close-gameover" onclick="restartGame()">Restart</button>
         </div>
     </div>
@@ -300,7 +310,7 @@ window.restartGame = function() {
             }
         }
 
-        function renderGrid(matchedMap) {
+        function renderGrid(matchedMap, fallingMap) {
             const gridDiv = document.getElementById('candyGrid');
             gridDiv.innerHTML = '';
             for (let r = 0; r < gridSize; r++) {
@@ -309,6 +319,7 @@ window.restartGame = function() {
                     let classes = 'candy';
                     if (selected && selected.r === r && selected.c === c) classes += ' selected';
                     if (matchedMap && matchedMap[r][c]) classes += ' matched';
+                    if (fallingMap && fallingMap[r][c]) classes += ' falling';
                     if (window.invalidSwap && ((r === window.invalidSwap.r1 && c === window.invalidSwap.c1) || (r === window.invalidSwap.r2 && c === window.invalidSwap.c2))) {
                         classes += ' invalid-swap';
                     }
@@ -322,8 +333,16 @@ window.restartGame = function() {
             document.getElementById('moves').textContent = moves;
             // Show end game modal if no moves left or no possible moves
             setTimeout(() => {
-                if (moves <= 0 || !hasPossibleMoves()) {
+                let reason = '';
+                if (moves <= 0) {
+                    reason = 'Out of moves!';
+                } else if (!hasPossibleMoves()) {
+                    reason = 'No more possible moves!';
+                }
+                if (reason) {
                     document.getElementById('gameover-modal').style.display = 'flex';
+                    document.getElementById('gameover-reason').textContent = reason;
+                    document.getElementById('final-score').textContent = score;
                     playSound(soundGameover, false);
                 }
             }, 10);
@@ -350,21 +369,24 @@ window.restartGame = function() {
                         }
                     }
                     if (matched > 0) {
-                        moves--;
-                        selected = null;
-                        setTimeout(() => {
-                            playSound(soundMatch);
-                        }, 200);
-                        renderGrid();
-                        setTimeout(() => {
-                            renderGrid(matchInfo);
+                            moves--;
+                            selected = null;
                             setTimeout(() => {
-                                findAndClearMatches();
-                                score += matched * 10;
-                                refillGrid();
-                                renderGrid();
-                            }, 400);
-                        }, 200);
+                                playSound(soundMatch);
+                            }, 200);
+                            // Step 1: show normal grid
+                            renderGrid();
+                            // Step 2: show match animation only
+                            setTimeout(() => {
+                                renderGrid(matchInfo);
+                                // Step 3: clear matches and show falling animation only
+                                setTimeout(() => {
+                                    findAndClearMatches();
+                                    score += matched * 10;
+                                    // refillGrid will show falling animation, then normal grid
+                                    refillGrid();
+                                }, 400);
+                            }, 200); // increase delay to ensure match animation is visible
                     } else {
                         // No match, animate swap back
                         window.invalidSwap = { r1: selected.r, c1: selected.c, r2: r, c2: c };
@@ -457,6 +479,7 @@ window.restartGame = function() {
 
         function refillGrid() {
             let newCandyCount = 0;
+            let fallingMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
             for (let c = 0; c < gridSize; c++) {
                 for (let r = gridSize - 1; r >= 0; r--) {
                     if (!grid[r][c]) {
@@ -469,6 +492,7 @@ window.restartGame = function() {
                         } else {
                             grid[r][c] = randomCandy();
                             newCandyCount++;
+                            fallingMap[r][c] = true;
                             setTimeout(() => {
                                 playSound(soundNew);
                             }, newCandyCount * 40); // stagger sounds for effect
@@ -476,12 +500,17 @@ window.restartGame = function() {
                     }
                 }
             }
-            // Check for new matches
-            let matched = findAndClearMatches();
-            if (matched > 0) {
-                score += matched * 10;
-                refillGrid();
-            }
+            renderGrid(undefined, fallingMap);
+            setTimeout(() => {
+                // Check for new matches
+                let matched = findAndClearMatches();
+                if (matched > 0) {
+                    score += matched * 10;
+                    refillGrid();
+                } else {
+                    renderGrid();
+                }
+            }, 500);
         }
 
         function restartGame() {
