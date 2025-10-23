@@ -135,12 +135,13 @@
             margin-bottom: 18px;
         }
         .game-buttons button {
-            background: #ffd700;
-            color: #222;
+            background: #444;
+            color: #ffd700;
             border: none;
             border-radius: 6px;
             padding: 8px 18px;
-            font-size: 1.1em;
+            margin: 6px 0;
+            font-size: 1em;
             cursor: pointer;
         }
         .instructions {
@@ -186,7 +187,10 @@
             <div class="score">Score: <span id="score">0</span></div>
             <div class="moves">Moves: <span id="moves">20</span></div>
             <div class="game-buttons">
-                <button onclick="restartGame()">Restart</button>
+                <button onclick="restartGame()">Restart</button><br />
+                <button onclick="setBgMusic(pickRandomMusic())"> Change Music</button><br />
+                <button onclick="toggleMusic()" id="toggle-music-btn">🔊 Music</button><br />
+                <button onclick="toggleSoundEffects()" id="toggle-sound-effects-btn">🔊 Sound Effects</button><br />
             </div>
             <div class="instructions">
                 <strong>How to play:</strong><br>
@@ -203,50 +207,52 @@
         </div>
     </div>
     <script>
-const bgMusicList = [
-    'sounds/mixkit-sweet-september-282.mp3',
-    'sounds/mixkit-harp-relax-669.mp3',
-    'sounds/mixkit-rebel-wayz-232.mp3',
-    'sounds/mixkit-relaxation-02-746.mp3',
-    'sounds/mixkit-relaxation-03-747.mp3',
-    'sounds/mixkit-relaxation-04-750.mp3',
-    // 'sounds/video-game-loop-2-390279.mp3',
-    // 'sounds/mixkit-relax-658.mp3',
-    // 'sounds/keys-of-moon-under-the-sun.mp3',
-    // 'sounds/game-music-loop-4-144341.mp3',
-    // 'sounds/epic-chase.mp3',
-    // 'sounds/mixkit-lo-fi-02-764.mp3',
-    // 'sounds/mixkit-relaxation-06-748.mp3',
-];
-const soundInvalidMatch = 'sounds/mixkit-interface-option-select-2573.wav';
-const soundMatch = 'sounds/mixkit-video-game-treasure-2066.wav';
-const soundGameover = 'sounds/mixkit-wrong-answer-fail-notification-946.wav';
-const soundNew = 'sounds/fall-394469.mp3';
+        const bgMusicList = [
+            'sounds/mixkit-sweet-september-282.mp3',
+            'sounds/mixkit-harp-relax-669.mp3',
+            'sounds/mixkit-rebel-wayz-232.mp3',
+            'sounds/mixkit-relaxation-02-746.mp3',
+            'sounds/mixkit-relaxation-03-747.mp3',
+            'sounds/mixkit-relaxation-04-750.mp3',
+            // 'sounds/video-game-loop-2-390279.mp3',
+            // 'sounds/mixkit-relax-658.mp3',
+            // 'sounds/keys-of-moon-under-the-sun.mp3',
+            // 'sounds/game-music-loop-4-144341.mp3',
+            // 'sounds/epic-chase.mp3',
+            // 'sounds/mixkit-lo-fi-02-764.mp3',
+            // 'sounds/mixkit-relaxation-06-748.mp3',
+        ];
+        const soundInvalidMatch = 'sounds/mixkit-interface-option-select-2573.wav';
+        const soundMatch = 'sounds/mixkit-video-game-treasure-2066.wav';
+        const soundGameover = 'sounds/mixkit-wrong-answer-fail-notification-946.wav';
+        const soundNew = 'sounds/fall-394469.mp3';
+        let soundEffectsEnabled = true;
 
-function pickRandomMusic() {
-    return bgMusicList[Math.floor(Math.random() * bgMusicList.length)];
-}
-function setBgMusic(trackUrl) {
-    let music = document.getElementById('bg-music');
-    if (!music) {
-        music = document.createElement('audio');
-        music.id = 'bg-music';
-        music.loop = true;
-        music.autoplay = true;
-        document.body.insertBefore(music, document.body.firstChild);
-    }
-    music.src = trackUrl;
-    music.load();
-    music.play().catch(()=>{});
-}
-// On page load, pick and play a random track
-setBgMusic(pickRandomMusic());
-// On restart, pick a new track
-const origRestartGame = window.restartGame;
-window.restartGame = function() {
-    setBgMusic(pickRandomMusic());
-    origRestartGame && origRestartGame();
-};
+        function pickRandomMusic() {
+            return bgMusicList[Math.floor(Math.random() * bgMusicList.length)];
+        }
+        function setBgMusic(trackUrl) {
+            let music = document.getElementById('bg-music');
+            if (!music) {
+                music = document.createElement('audio');
+                music.id = 'bg-music';
+                music.loop = true;
+                music.autoplay = true;
+                document.body.insertBefore(music, document.body.firstChild);
+            }
+            music.src = trackUrl;
+            music.load();
+            music.play().catch(()=>{});
+        }
+        // On page load, pick and play a random track
+        setBgMusic(pickRandomMusic());
+        // On restart, pick a new track
+        const origRestartGame = window.restartGame;
+        window.restartGame = function() {
+            setBgMusic(pickRandomMusic());
+            origRestartGame && origRestartGame();
+        };
+
         function hasPossibleMoves() {
             // Check for any possible swap that would result in a match
             for (let r = 0; r < gridSize; r++) {
@@ -470,6 +476,7 @@ window.restartGame = function() {
         }
 
         function playSound(sound, checkMuted = true) {
+            if (!soundEffectsEnabled) return;
             const snd = new Audio(sound);
             if (checkMuted) {
                 snd.volume = document.getElementById('bg-music')?.muted ? 0 : 1;
@@ -528,6 +535,29 @@ window.restartGame = function() {
             renderGrid();
         }
 
+        function toggleMusic() {
+            const music = document.getElementById('bg-music');
+            if (music) {
+                music.muted = !music.muted;
+            }
+
+            toggleMusicBtn = document.getElementById('toggle-music-btn');
+            if (toggleMusicBtn) {
+                toggleMusicBtn.textContent = music.muted ? '🔇 Music' : '🔊 Music';
+            }
+
+            if (!music.paused) return;
+            music.play().catch(()=>{});
+        }
+
+        function toggleSoundEffects() {
+            soundEffectsEnabled = !soundEffectsEnabled;
+            toggleSoundEffectsBtn = document.getElementById('toggle-sound-effects-btn');
+            if (toggleSoundEffectsBtn) {
+                toggleSoundEffectsBtn.textContent = soundEffectsEnabled ? '🔊 Sound Effects' : '🔇 Sound Effects';
+            }
+        }
+
         // Initialize
         createGrid();
         // Remove any initial matches
@@ -537,56 +567,31 @@ window.restartGame = function() {
             if (initialMatched > 0) refillGrid();
         } while (initialMatched > 0);
         renderGrid();
-        // Add mute/unmute button to sidebar
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) {
-            const musicBtn = document.createElement('button');
-            musicBtn.textContent = '🔊 Music';
-            musicBtn.style.marginBottom = '12px';
-            musicBtn.style.background = '#444';
-            musicBtn.style.color = '#ffd700';
-            musicBtn.style.border = 'none';
-            musicBtn.style.borderRadius = '6px';
-            musicBtn.style.padding = '8px 18px';
-            musicBtn.style.fontSize = '1em';
-            musicBtn.style.cursor = 'pointer';
-            let muted = false;
-            musicBtn.onclick = function() {
-                const music = document.getElementById('bg-music');
-                muted = !muted;
-                music.muted = muted;
-                musicBtn.textContent = muted ? '🔇 Music' : '🔊 Music';
-                if (!music.paused) return;
-                music.play().catch(()=>{});
-            };
-            sidebar.insertBefore(musicBtn, sidebar.firstChild.nextSibling);
-            // Try to play music on load (may require user interaction)
-            setTimeout(() => {
-                const music = document.getElementById('bg-music');
-                music.play().catch(() => {
-                    // If autoplay fails, show Play Music button
-                    let playBtn = document.getElementById('play-music-btn');
-                    if (!playBtn) {
-                        playBtn = document.createElement('button');
-                        playBtn.id = 'play-music-btn';
-                        playBtn.textContent = '▶️ Play Music';
-                        playBtn.style.background = '#ffd700';
-                        playBtn.style.color = '#222';
-                        playBtn.style.border = 'none';
-                        playBtn.style.borderRadius = '6px';
-                        playBtn.style.padding = '8px 18px';
-                        playBtn.style.fontSize = '1em';
-                        playBtn.style.cursor = 'pointer';
-                        playBtn.onclick = function() {
-                            music.play().then(() => {
-                                playBtn.remove();
-                            }).catch(()=>{});
-                        };
-                        sidebar.insertBefore(playBtn, musicBtn.nextSibling);
-                    }
-                });
-            }, 500);
-        }
+
+        // Try to play music on load (may require user interaction)
+        setTimeout(() => {
+            const music = document.getElementById('bg-music');
+            music.play().catch(() => {
+                // If autoplay fails, show Play Music button
+                const toggleMusicBtn = document.getElementById('toggle-music-btn');
+                const gameButtons = document.querySelector('.game-buttons');
+                let playBtn = document.getElementById('play-music-btn');
+                if (!playBtn) {
+                    playBtn = document.createElement('button');
+                    playBtn.id = 'play-music-btn';
+                    playBtn.textContent = '▶️ Play Music';
+                    playBtn.style.background = '#ffd700';
+                    playBtn.style.color = '#222';
+                    playBtn.onclick = function() {
+                        music.play().then(() => {
+                            playBtn.remove();
+                        }).catch(()=>{});
+                    };
+                    gameButtons.appendChild(playBtn);
+                }
+            });
+        }, 500);
+
         setTimeout(() => {
             document.getElementById('bg-music').muted = false;
         }, 500);
