@@ -335,6 +335,8 @@
                     gridDiv.appendChild(candyDiv);
                 }
             }
+            // Add touch listeners for tablet play
+            addTouchListeners();
             document.getElementById('score').textContent = score;
             document.getElementById('moves').textContent = moves;
             // Show end game modal if no moves left or no possible moves
@@ -352,6 +354,38 @@
                     playSound(soundGameover, false);
                 }
             }, 10);
+        }
+
+        // Touch swipe support for tablet play
+        function addTouchListeners() {
+            const gridDiv = document.getElementById('candyGrid');
+            let touchStart = null;
+            gridDiv.querySelectorAll('.candy').forEach((cell, idx) => {
+                cell.addEventListener('touchstart', function(e) {
+                    touchStart = e.touches[0];
+                    e.preventDefault();
+                }, { passive: false });
+                cell.addEventListener('touchend', function(e) {
+                    if (!touchStart) return;
+                    const touchEnd = e.changedTouches[0];
+                    const dx = touchEnd.clientX - touchStart.clientX;
+                    const dy = touchEnd.clientY - touchStart.clientY;
+                    const threshold = 30; // Minimum swipe distance
+                    const r = Math.floor(idx / gridSize);
+                    const c = idx % gridSize;
+                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold) {
+                        // Horizontal swipe
+                        if (dx > 0 && c < gridSize - 1) selectCandy(r, c + 1); // right
+                        else if (dx < 0 && c > 0) selectCandy(r, c - 1); // left
+                    } else if (Math.abs(dy) > threshold) {
+                        // Vertical swipe
+                        if (dy > 0 && r < gridSize - 1) selectCandy(r + 1, c); // down
+                        else if (dy < 0 && r > 0) selectCandy(r - 1, c); // up
+                    }
+                    touchStart = null;
+                    e.preventDefault();
+                }, { passive: false });
+            });
         }
 
         function selectCandy(r, c) {
@@ -411,29 +445,30 @@
                     selected = { r, c };
                     renderGrid();
                 }
-        // Returns a map of matched candies for visual effect
-        function getMatchedMap() {
-            let matchedMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
-            // Horizontal
-            for (let r = 0; r < gridSize; r++) {
-                for (let c = 0; c < gridSize - 2; c++) {
-                    let candy = grid[r][c];
-                    if (candy && candy === grid[r][c+1] && candy === grid[r][c+2]) {
-                        matchedMap[r][c] = matchedMap[r][c+1] = matchedMap[r][c+2] = true;
+
+                // Returns a map of matched candies for visual effect
+                function getMatchedMap() {
+                    let matchedMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
+                    // Horizontal
+                    for (let r = 0; r < gridSize; r++) {
+                        for (let c = 0; c < gridSize - 2; c++) {
+                            let candy = grid[r][c];
+                            if (candy && candy === grid[r][c+1] && candy === grid[r][c+2]) {
+                                matchedMap[r][c] = matchedMap[r][c+1] = matchedMap[r][c+2] = true;
+                            }
+                        }
                     }
-                }
-            }
-            // Vertical
-            for (let c = 0; c < gridSize; c++) {
-                for (let r = 0; r < gridSize - 2; r++) {
-                    let candy = grid[r][c];
-                    if (candy && candy === grid[r+1][c] && candy === grid[r+2][c]) {
-                        matchedMap[r][c] = matchedMap[r+1][c] = matchedMap[r+2][c] = true;
+                    // Vertical
+                    for (let c = 0; c < gridSize; c++) {
+                        for (let r = 0; r < gridSize - 2; r++) {
+                            let candy = grid[r][c];
+                            if (candy && candy === grid[r+1][c] && candy === grid[r+2][c]) {
+                                matchedMap[r][c] = matchedMap[r+1][c] = matchedMap[r+2][c] = true;
+                            }
+                        }
                     }
+                    return matchedMap;
                 }
-            }
-            return matchedMap;
-        }
             }
         }
         function swapCandies(r1, c1, r2, c2) {
