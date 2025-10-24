@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Guessing Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .word-tiles { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+        .tile { width: 40px; height: 40px; border: 2px solid #333; display: flex; align-items: center; justify-content: center; font-size: 1.5em; background: #fff; border-radius: 6px; text-transform: uppercase; }
+        .tile.correct { background: #6aaa64; color: #fff; border-color: #6aaa64; }
+        .tile.present { background: #c9b458; color: #fff; border-color: #c9b458; }
+        .tile.absent { background: #787c7e; color: #fff; border-color: #787c7e; }
+        .guesses { margin: 20px auto; max-width: 320px; justify-content: center; display: flex; flex-wrap: wrap;}
+        .guess-row { display: flex; gap: 8px; margin-bottom: 6px; }
+        .input-area { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+        .status { text-align: center; margin: 16px 0; font-weight: bold; }
+        .attempts { text-align: center; margin-bottom: 10px; }
+        @media (max-width: 500px) {
+            .tile { width: 28px; height: 28px; font-size: 1em; }
+            .guesses { max-width: 200px; }
+        }
+        #keyboard-area {
+            display: block;
+            text-align: center;
+            margin: 20px auto;
+            width: 500px;
+        }
+        .letter-btn {
+            background: #e0e0e0;
+            color: #222;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            margin: 2px;
+            height: 40px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .letter-btn:active {
+            background: #bdbdbd;
+        }
+        .letter-btn:disabled {
+            background: #f5f5f5;
+            color: #aaa;
+            cursor: not-allowed;
+        }
+        .letter-btn.correct { background: #6aaa64; color: #fff; border-color: #6aaa64; }
+        .letter-btn.present { background: #c9b458; color: #fff; border-color: #c9b458; }
+        .letter-btn.absent { background: #787c7e; color: #fff; border-color: #787c7e; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align:center">Word Guessing Game</h1>
+    <div class="status" id="status">Guess the word! You have 6 tries.</div>
+    <div class="attempts" id="attempts"></div>
+    <div class="word-tiles" id="word-tiles"></div>
+    <div class="guesses" id="guesses"></div>
+    <div class="input-area" id="keyboard-area"></div>
+    <div class="input-area">
+        <button id="submit-btn">Submit</button>
+        <button id="backspace-btn">⌫</button>
+    </div>
+    <div style="text-align:center">
+        <button id="restart-btn" style="display:none">Play Again</button>
+    </div>
+    <script src="word_guessing.js"></script>
+</body>
+</html>
