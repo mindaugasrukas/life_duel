@@ -10,7 +10,24 @@
         .hangman-container { text-align: center; margin-top: 40px; }
         .hangman-title { font-size: 2em; margin-bottom: 10px; }
         .hangman-figure { height: 120px; margin-bottom: 20px; }
-        .word-display { font-size: 2em; letter-spacing: 0.5em; margin-bottom: 20px; }
+        .word-display {
+            font-size: 2em;
+            letter-spacing: 0.5em;
+            margin-bottom: 20px;
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+            .word-display {
+                font-size: 2em;
+                letter-spacing: 0.35em;
+                padding: 0 2vw;
+            }
+        }
         .letters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
         .letter-btn { font-size: 1.2em; padding: 8px 14px; border-radius: 5px; border: 1px solid #888; background: #000; cursor: pointer; transition: background 0.2s; }
         .letter-btn:disabled { background: #ddd; color: #aaa; cursor: not-allowed; }
