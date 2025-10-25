@@ -53,11 +53,20 @@
             background: #ffd700;
             color: #222;
         }
-        @keyframes match-pop {
-            0% { transform: scale(1); opacity: 1; }
-            60% { transform: scale(1.3); opacity: 0.7; }
-            100% { transform: scale(0.7); opacity: 0.2; }
+        .candy.bomb-exploding {
+            animation: bomb-explode 0.5s cubic-bezier(.7,-0.2,.7,1.5);
+            box-shadow: 0 0 32px 12px #ff5252, 0 0 64px 24px #fff;
+            background: #ff5252 !important;
+            color: #fff !important;
+            z-index: 10;
         }
+        @keyframes bomb-explode {
+            0% { transform: scale(1); opacity: 1; }
+            30% { transform: scale(1.3) rotate(-8deg); opacity: 1; }
+            60% { transform: scale(1.5) rotate(8deg); opacity: 0.8; }
+            100% { transform: scale(0.7); opacity: 0.1; }
+        }
+
         html, body {
             height: 100%;
             margin: 0;
@@ -185,6 +194,7 @@
             </a>
             <h2>Candy Crush</h2>
             <div class="score">Score: <span id="score">0</span></div>
+            <div class="target-score">Target: <span id="target-score">1000</span></div>
             <div class="moves">Moves: <span id="moves">20</span></div>
             <div class="game-buttons">
                 <button onclick="restartGame()">Restart</button><br />
@@ -194,7 +204,8 @@
             </div>
             <div class="instructions">
                 <strong>How to play:</strong><br>
-                Swap adjacent candies to make lines of 3 or more matching candies. Matches disappear, candies fall down, and new candies appear. Reach the highest score in 20 moves!
+                Swap adjacent candies to make lines of 3 or more matching candies. Matches disappear, candies fall down, and new candies appear.<br>
+                Reach at least <span id="target-score-instr">1000</span> points in 20 moves to win!
             </div>
         </div>
     </div>
@@ -226,11 +237,13 @@
         const soundMatch = 'sounds/mixkit-video-game-treasure-2066.wav';
         const soundGameover = 'sounds/mixkit-wrong-answer-fail-notification-946.wav';
         const soundNew = 'sounds/fall-394469.mp3';
+        const victorySound = 'sounds/level-complete-394515.mp3';
         let soundEffectsEnabled = true;
 
         function pickRandomMusic() {
             return bgMusicList[Math.floor(Math.random() * bgMusicList.length)];
         }
+
         function setBgMusic(trackUrl) {
             let music = document.getElementById('bg-music');
             if (!music) {
@@ -244,6 +257,7 @@
             music.load();
             music.play().catch(()=>{});
         }
+
         // On page load, pick and play a random track
         setBgMusic(pickRandomMusic());
         // On restart, pick a new track
@@ -294,12 +308,15 @@
             if (count >= 3) return true;
             return false;
         }
+
         const gridSize = 8;
         const candyTypes = ['🍒', '🍋', '🍇', '🍬', '🍫', '🍊'];
+        const bombCandy = '💣';
         let grid = [];
         let score = 0;
         let moves = 20;
         let selected = null;
+        let targetScore = 1000;
 
         function randomCandy() {
             return candyTypes[Math.floor(Math.random() * candyTypes.length)];
@@ -316,7 +333,9 @@
             }
         }
 
-        function renderGrid(matchedMap, fallingMap) {
+        // bombExplodeMap: optional 2D array, true for candies to animate as bomb explosion
+        let gameEnded = false;
+        function renderGrid(matchedMap, fallingMap, bombExplodeMap) {
             const gridDiv = document.getElementById('candyGrid');
             gridDiv.innerHTML = '';
             for (let r = 0; r < gridSize; r++) {
@@ -326,8 +345,16 @@
                     if (selected && selected.r === r && selected.c === c) classes += ' selected';
                     if (matchedMap && matchedMap[r][c]) classes += ' matched';
                     if (fallingMap && fallingMap[r][c]) classes += ' falling';
+                    if (bombExplodeMap && bombExplodeMap[r][c]) classes += ' bomb-exploding';
                     if (window.invalidSwap && ((r === window.invalidSwap.r1 && c === window.invalidSwap.c1) || (r === window.invalidSwap.r2 && c === window.invalidSwap.c2))) {
                         classes += ' invalid-swap';
+                    }
+                    // Bomb special effect
+                    if (grid[r][c] === bombCandy) {
+                        candyDiv.style.background = '#222';
+                        candyDiv.style.color = '#ff5252';
+                        candyDiv.style.fontWeight = 'bold';
+                        candyDiv.style.textShadow = '0 0 8px #fff, 0 0 16px #ff5252';
                     }
                     candyDiv.className = classes;
                     candyDiv.textContent = grid[r][c];
@@ -337,10 +364,24 @@
             }
             // Add touch listeners for tablet play
             addTouchListeners();
-            document.getElementById('score').textContent = score;
             document.getElementById('moves').textContent = moves;
+            document.getElementById('target-score').textContent = targetScore;
+            let instr = document.getElementById('target-score-instr');
+            if (instr) instr.textContent = targetScore;
+            // End game immediately if target score is reached
+            if (!gameEnded && score >= targetScore) {
+                gameEnded = true;
+                setTimeout(() => {
+                    document.getElementById('gameover-modal').style.display = 'flex';
+                    document.getElementById('gameover-reason').textContent = 'Congratulations! You reached the target!';
+                    document.getElementById('final-score').textContent = score;
+                    playSound(victorySound, false);
+                }, 10);
+                return;
+            }
             // Show end game modal if no moves left or no possible moves
             setTimeout(() => {
+                if (gameEnded) return;
                 let reason = '';
                 if (moves <= 0) {
                     reason = 'Out of moves!';
@@ -348,6 +389,7 @@
                     reason = 'No more possible moves!';
                 }
                 if (reason) {
+                    gameEnded = true;
                     document.getElementById('gameover-modal').style.display = 'flex';
                     document.getElementById('gameover-reason').textContent = reason;
                     document.getElementById('final-score').textContent = score;
@@ -373,19 +415,107 @@
                     const threshold = 30; // Minimum swipe distance
                     const r = Math.floor(idx / gridSize);
                     const c = idx % gridSize;
+                    let r2 = r, c2 = c;
                     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold) {
                         // Horizontal swipe
-                        if (dx > 0 && c < gridSize - 1) selectCandy(r, c + 1); // right
-                        else if (dx < 0 && c > 0) selectCandy(r, c - 1); // left
+                        if (dx > 0 && c < gridSize - 1) c2 = c + 1; // right
+                        else if (dx < 0 && c > 0) c2 = c - 1; // left
                     } else if (Math.abs(dy) > threshold) {
                         // Vertical swipe
-                        if (dy > 0 && r < gridSize - 1) selectCandy(r + 1, c); // down
-                        else if (dy < 0 && r > 0) selectCandy(r - 1, c); // up
+                        if (dy > 0 && r < gridSize - 1) r2 = r + 1; // down
+                        else if (dy < 0 && r > 0) r2 = r - 1; // up
+                    }
+                    // Only swap if destination is different
+                    if (r !== r2 || c !== c2) {
+                        swapCandies(r, c, r2, c2);
+                        // After swap, run match logic as if selected
+                        let matchInfo = getMatchedMap();
+                        let matched = 0;
+                        for (let rr = 0; rr < gridSize; rr++) {
+                            for (let cc = 0; cc < gridSize; cc++) {
+                                if (matchInfo[rr][cc]) matched++;
+                            }
+                        }
+                        if (matched > 0) {
+                            moves--;
+                            setTimeout(() => { playSound(soundMatch); }, 200);
+                            renderGrid();
+                            setTimeout(() => {
+                                renderGrid(matchInfo);
+                                setTimeout(() => {
+                                    findAndClearMatches();
+                                    updateScore(matched);
+                                    refillGrid();
+                                }, 400);
+                            }, 200);
+                        } else {
+                            // No match, animate swap back
+                            window.invalidSwap = { r1: r, c1: c, r2: r2, c2: c2 };
+                            setTimeout(() => { playSound(soundInvalidMatch); }, 10);
+                            renderGrid();
+                            setTimeout(() => {
+                                swapCandies(window.invalidSwap.r1, window.invalidSwap.c1, window.invalidSwap.r2, window.invalidSwap.c2);
+                                window.invalidSwap = null;
+                                renderGrid();
+                            }, 400);
+                        }
                     }
                     touchStart = null;
                     e.preventDefault();
                 }, { passive: false });
             });
+        }
+
+        function explodeBombAt(r, c) {
+            // Clear 3x3 area centered on (r, c)
+            let toClear = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    let rr = r + dr, cc = c + dc;
+                    if (rr >= 0 && rr < gridSize && cc >= 0 && cc < gridSize) {
+                        toClear[rr][cc] = true;
+                    }
+                }
+            }
+            // Show bomb explosion effect first
+            renderGrid(undefined, undefined, toClear);
+            playSound(soundMatch);
+            setTimeout(() => {
+                // Clear and count
+                let matched = 0;
+                for (let rr = 0; rr < gridSize; rr++) {
+                    for (let cc = 0; cc < gridSize; cc++) {
+                        if (toClear[rr][cc] && grid[rr][cc]) {
+                            grid[rr][cc] = null;
+                            matched++;
+                        }
+                    }
+                }
+                // Bomb explosion always scores 100
+                score += 100;
+                renderGrid();
+                setTimeout(refillGrid, 400);
+            }, 500);
+        }
+
+        function explodeWholeBoard() {
+            // Mark all cells for explosion effect
+            let toClear = Array.from({ length: gridSize }, () => Array(gridSize).fill(true));
+            renderGrid(undefined, undefined, toClear);
+            playSound(soundMatch);
+            setTimeout(() => {
+                for (let rr = 0; rr < gridSize; rr++) {
+                    for (let cc = 0; cc < gridSize; cc++) {
+                        if (grid[rr][cc]) {
+                            grid[rr][cc] = null;
+                        }
+                    }
+                }
+                // Double bomb swap always scores 1000
+                score += 1000;
+                renderGrid();
+                setTimeout(refillGrid, 400);
+            }, 700);
         }
 
         function selectCandy(r, c) {
@@ -401,6 +531,23 @@
                 // Only allow adjacent swap
                 if ((Math.abs(selected.r - r) + Math.abs(selected.c - c)) === 1) {
                     swapCandies(selected.r, selected.c, r, c);
+                    // Bomb swap logic
+                    if (grid[r][c] === bombCandy && grid[selected.r][selected.c] === bombCandy) {
+                        moves--;
+                        selected = null;
+                        explodeWholeBoard();
+                        return;
+                    } else if (grid[r][c] === bombCandy) {
+                        moves--;
+                        selected = null;
+                        explodeBombAt(r, c);
+                        return;
+                    } else if (grid[selected.r][selected.c] === bombCandy) {
+                        moves--;
+                        selected = null;
+                        explodeBombAt(selected.r, selected.c);
+                        return;
+                    }
                     let matchInfo = getMatchedMap();
                     let matched = 0;
                     for (let rr = 0; rr < gridSize; rr++) {
@@ -409,24 +556,24 @@
                         }
                     }
                     if (matched > 0) {
-                            moves--;
-                            selected = null;
+                        moves--;
+                        selected = null;
+                        setTimeout(() => {
+                            playSound(soundMatch);
+                        }, 200);
+                        // Step 1: show normal grid
+                        renderGrid();
+                        // Step 2: show match animation only
+                        setTimeout(() => {
+                            renderGrid(matchInfo);
+                            // Step 3: clear matches and show falling animation only
                             setTimeout(() => {
-                                playSound(soundMatch);
-                            }, 200);
-                            // Step 1: show normal grid
-                            renderGrid();
-                            // Step 2: show match animation only
-                            setTimeout(() => {
-                                renderGrid(matchInfo);
-                                // Step 3: clear matches and show falling animation only
-                                setTimeout(() => {
-                                    findAndClearMatches();
-                                    score += matched * 10;
-                                    // refillGrid will show falling animation, then normal grid
-                                    refillGrid();
-                                }, 400);
-                            }, 200); // increase delay to ensure match animation is visible
+                                findAndClearMatches();
+                                updateScore(matched);
+                                // refillGrid will show falling animation, then normal grid
+                                refillGrid();
+                            }, 400);
+                        }, 200); // increase delay to ensure match animation is visible
                     } else {
                         // No match, animate swap back
                         window.invalidSwap = { r1: selected.r, c1: selected.c, r2: r, c2: c };
@@ -445,32 +592,46 @@
                     selected = { r, c };
                     renderGrid();
                 }
-
-                // Returns a map of matched candies for visual effect
-                function getMatchedMap() {
-                    let matchedMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
-                    // Horizontal
-                    for (let r = 0; r < gridSize; r++) {
-                        for (let c = 0; c < gridSize - 2; c++) {
-                            let candy = grid[r][c];
-                            if (candy && candy === grid[r][c+1] && candy === grid[r][c+2]) {
-                                matchedMap[r][c] = matchedMap[r][c+1] = matchedMap[r][c+2] = true;
-                            }
-                        }
-                    }
-                    // Vertical
-                    for (let c = 0; c < gridSize; c++) {
-                        for (let r = 0; r < gridSize - 2; r++) {
-                            let candy = grid[r][c];
-                            if (candy && candy === grid[r+1][c] && candy === grid[r+2][c]) {
-                                matchedMap[r][c] = matchedMap[r+1][c] = matchedMap[r+2][c] = true;
-                            }
-                        }
-                    }
-                    return matchedMap;
-                }
             }
         }
+
+        // Returns a map of matched candies for visual effect, and marks 2x2 bombs
+        function getMatchedMap() {
+            let matchedMap = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
+            // Horizontal
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize - 2; c++) {
+                    let candy = grid[r][c];
+                    if (candy && candy === grid[r][c+1] && candy === grid[r][c+2]) {
+                        matchedMap[r][c] = matchedMap[r][c+1] = matchedMap[r][c+2] = true;
+                    }
+                }
+            }
+            // Vertical
+            for (let c = 0; c < gridSize; c++) {
+                for (let r = 0; r < gridSize - 2; r++) {
+                    let candy = grid[r][c];
+                    if (candy && candy === grid[r+1][c] && candy === grid[r+2][c]) {
+                        matchedMap[r][c] = matchedMap[r+1][c] = matchedMap[r+2][c] = true;
+                    }
+                }
+            }
+            // 2x2 bomb pattern
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    let candy = grid[r][c];
+                    if (candy && candy !== bombCandy &&
+                        grid[r][c+1] === candy &&
+                        grid[r+1][c] === candy &&
+                        grid[r+1][c+1] === candy) {
+                        // Mark all 2x2 as matched for animation
+                        matchedMap[r][c] = matchedMap[r][c+1] = matchedMap[r+1][c] = matchedMap[r+1][c+1] = true;
+                    }
+                }
+            }
+            return matchedMap;
+        }
+
         function swapCandies(r1, c1, r2, c2) {
             let temp = grid[r1][c1];
             grid[r1][c1] = grid[r2][c2];
@@ -495,6 +656,40 @@
                     let candy = grid[r][c];
                     if (candy && candy === grid[r+1][c] && candy === grid[r+2][c]) {
                         toClear[r][c] = toClear[r+1][c] = toClear[r+2][c] = true;
+                    }
+                }
+            }
+            // 2x2 bomb pattern
+            let bombCreated = false;
+            for (let r = 0; r < gridSize - 1; r++) {
+                for (let c = 0; c < gridSize - 1; c++) {
+                    let candy = grid[r][c];
+                    if (candy && candy !== bombCandy &&
+                        grid[r][c+1] === candy &&
+                        grid[r+1][c] === candy &&
+                        grid[r+1][c+1] === candy) {
+                        // Place bomb at top-left of 2x2, clear others
+                        grid[r][c] = bombCandy;
+                        toClear[r][c+1] = toClear[r+1][c] = toClear[r+1][c+1] = true;
+                        bombCreated = true;
+                    }
+                }
+            }
+            // Bomb activation: if a bomb is matched, clear 3x3 area
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (toClear[r][c] && grid[r][c] === bombCandy) {
+                        // Clear 3x3 area centered on bomb
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                let rr = r + dr, cc = c + dc;
+                                if (rr >= 0 && rr < gridSize && cc >= 0 && cc < gridSize) {
+                                    if (grid[rr][cc]) {
+                                        toClear[rr][cc] = true;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -546,8 +741,8 @@
             setTimeout(() => {
                 // Check for new matches
                 let matched = findAndClearMatches();
+                updateScore(matched);
                 if (matched > 0) {
-                    score += matched * 10;
                     refillGrid();
                 } else {
                     renderGrid();
@@ -555,16 +750,30 @@
             }, 500);
         }
 
+        function updateScore(matchCount) {
+            switch (matchCount) {
+                case 3: score += 30; break;
+                case 4: score += 50; break;
+                case 5: score += 80; break;
+                case 6: score += 130; break;
+                case 7: score += 210; break;
+            }
+            document.getElementById('score').textContent = score;
+        }
+
         function restartGame() {
             document.getElementById('gameover-modal').style.display = 'none';
             score = 0;
             moves = 20;
             selected = null;
+            gameEnded = false;
+            // targetScore = 1000; // You can randomize or set dynamically if desired
             createGrid();
             // Remove any initial matches
             let initialMatched;
             do {
                 initialMatched = findAndClearMatches();
+                updateScore(initialMatched);
                 if (initialMatched > 0) refillGrid();
             } while (initialMatched > 0);
             renderGrid();
@@ -599,6 +808,7 @@
         let initialMatched;
         do {
             initialMatched = findAndClearMatches();
+            updateScore(initialMatched);
             if (initialMatched > 0) refillGrid();
         } while (initialMatched > 0);
         renderGrid();
