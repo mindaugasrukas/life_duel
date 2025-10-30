@@ -320,6 +320,7 @@
         const maxWrong = 9;
         let answer = "";
         let guessed = [];
+        let guessedWords = [];
         let wrong = 0;
 
         const wordDisplay = document.getElementById("wordDisplay");
@@ -330,7 +331,14 @@
         const hangmanCanvas = document.getElementById("hangmanCanvas");
 
         function pickWord() {
-            return words[Math.floor(Math.random() * words.length)];
+            const word = words[Math.floor(Math.random() * words.length)];
+            // Reset guessedWords if all words have been used
+            if(guessedWords.length >= words.length) guessedWords = [];
+            // Avoid repeating the same word
+            if(guessedWords.includes(word)) return pickWord();
+            // Record the guessed word
+            guessedWords.push(word);
+            return word;
         }
 
         function drawHangman(stage) {
