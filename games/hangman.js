@@ -252,7 +252,7 @@ const words = [
     "ZIGZAG",
     "ZOMBIE",
 ];
-const maxWrong = 6;
+const maxWrong = 9;
 let answer = "";
 let guessed = [];
 let wrong = 0;
@@ -275,14 +275,17 @@ function drawHangman(stage) {
     ctx.lineWidth = 3;
     // Gallows
     ctx.beginPath(); ctx.moveTo(30,110); ctx.lineTo(150,110); ctx.stroke(); // base
-    ctx.beginPath(); ctx.moveTo(60,110); ctx.lineTo(60,20); ctx.lineTo(110,20); ctx.lineTo(110,35); ctx.stroke();
     // Hangman parts
-    if(stage>0) { ctx.beginPath(); ctx.arc(110,45,10,0,2*Math.PI); ctx.stroke(); } // head
-    if(stage>1) { ctx.beginPath(); ctx.moveTo(110,55); ctx.lineTo(110,85); ctx.stroke(); } // body
-    if(stage>2) { ctx.beginPath(); ctx.moveTo(110,65); ctx.lineTo(95,75); ctx.stroke(); } // left arm
-    if(stage>3) { ctx.beginPath(); ctx.moveTo(110,65); ctx.lineTo(125,75); ctx.stroke(); } // right arm
-    if(stage>4) { ctx.beginPath(); ctx.moveTo(110,85); ctx.lineTo(95,105); ctx.stroke(); } // left leg
-    if(stage>5) { ctx.beginPath(); ctx.moveTo(110,85); ctx.lineTo(125,105); ctx.stroke(); } // right leg
+    // ctx.beginPath(); ctx.moveTo(60,110); ctx.lineTo(60,20); ctx.lineTo(110,20); ctx.lineTo(110,35); ctx.stroke();
+    if(stage>0) { ctx.beginPath(); ctx.moveTo(60,110); ctx.lineTo(60,20); ctx.stroke(); }
+    if(stage>1) { ctx.beginPath(); ctx.moveTo(60,20); ctx.lineTo(110,20); ctx.stroke(); }
+    if(stage>2) { ctx.beginPath(); ctx.moveTo(110,20); ctx.lineTo(110,35); ctx.stroke(); }
+    if(stage>3) { ctx.beginPath(); ctx.arc(110,45,10,0,2*Math.PI); ctx.stroke(); } // head
+    if(stage>4) { ctx.beginPath(); ctx.moveTo(110,55); ctx.lineTo(110,85); ctx.stroke(); } // body
+    if(stage>5) { ctx.beginPath(); ctx.moveTo(110,65); ctx.lineTo(95,75); ctx.stroke(); } // left arm
+    if(stage>6) { ctx.beginPath(); ctx.moveTo(110,65); ctx.lineTo(125,75); ctx.stroke(); } // right arm
+    if(stage>7) { ctx.beginPath(); ctx.moveTo(110,85); ctx.lineTo(95,105); ctx.stroke(); } // left leg
+    if(stage>8) { ctx.beginPath(); ctx.moveTo(110,85); ctx.lineTo(125,105); ctx.stroke(); } // right leg
 }
 
 function updateDisplay() {
