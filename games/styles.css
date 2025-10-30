@@ -13,6 +13,10 @@ body {
     max-width: 1200px;
 }
 
+.game-container {
+    margin-top: 40px;
+}
+
 #game {
     background: #fff;
     border-radius: 12px;
