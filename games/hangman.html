@@ -21,20 +21,23 @@
             overflow-wrap: break-word;
             text-align: center;
         }
+        .letters {
+            width: 580px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin: 20px auto;
+        }
         @media (max-width: 600px) {
             .word-display {
                 font-size: 2em;
                 letter-spacing: 0.35em;
                 padding: 0 2vw;
             }
-        }
-        .letters {
-            width: 460px;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 8px;
-            margin: 20px auto;
+            .letters {
+                width: 90%;
+            }
         }
         .letter-btn { font-size: 1.2em; padding: 8px 14px; border-radius: 5px; border: 1px solid #888; background: #000; cursor: pointer; transition: background 0.2s; }
         .letter-btn:disabled { background: #ddd; color: #aaa; cursor: not-allowed; }
