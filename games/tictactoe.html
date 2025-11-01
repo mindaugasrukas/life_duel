@@ -37,11 +37,7 @@
             font-size: 1em;
         }
 
-        #ai-mode {
-            margin: 20px 0;
-        }
-
-        #aiMode {
+        #gameMode {
             padding: 5px 10px;
             font-size: 1em;
             margin-left: 10px;
@@ -59,11 +55,11 @@
     <h1>Tic-Tac-Toe</h1>
     <div id="game-container">
         <div id="game">
-            <label for="aiMode">AI Difficulty:</label>
-            <select id="aiMode" onchange="updateAIMode()">
-                <option selected value="random">Random (Easy)</option>
-                <option value="minimax">Minimax (Impossible)</option>
-                <option value="dqn">DQN (Trained AI)</option>
+            <label for="gameMode">Game Mode:</label>
+            <select id="gameMode" onchange="updateGameMode()">
+                <option selected value="random">Random Bot (Easy)</option>
+                <option value="minimax">Minimax Bot (Impossible)</option>
+                <option value="dqn">DQN Bot (Trained AI)</option>
                 <option value="human">Human (2 Players)</option>
             </select>
             <div id="board"></div>
@@ -102,7 +98,7 @@
             [0, 4, 8], [2, 4, 6] // Diagonal
         ];
         let board = Array(9).fill(EMPTY);
-        let aiMode = 'random'; // Default AI mode
+        let gameMode = document.getElementById('gameMode').value; // Default game mode
         let currentPlayer = HUMAN; // Track whose turn it is
 
         const boardDiv = document.getElementById('board');
@@ -134,7 +130,7 @@
             let turn;
 
             // In human vs human mode, alternate between X and O
-            if (aiMode === 'human') {
+            if (gameMode === 'human') {
                 turn = currentPlayer === HUMAN ? 1 : -1;
                 board[idx] = currentPlayer;
             } else {
@@ -155,7 +151,7 @@
             if (result !== null) {
                 endGame(result);
             } else {
-                if (aiMode === 'human') {
+                if (gameMode === 'human') {
                     currentPlayer = currentPlayer === HUMAN ? AI : HUMAN;
                 } else {
                     setTimeout(makeAIMove, 200);
@@ -165,19 +161,19 @@
 
         // Make AI move based on selected mode
         function makeAIMove() {
-            if (aiMode === 'minimax') {
+            if (gameMode === 'minimax') {
                 aiMiniMaxMove();
-            } else if (aiMode === 'dqn') {
+            } else if (gameMode === 'dqn') {
                 aiDQNMove();
             } else {
                 aiRandomMove();
             }
         }
 
-        // Update AI mode when dropdown changes
-        function updateAIMode() {
-            aiMode = document.getElementById('aiMode').value;
-            if (aiMode === 'dqn') loadDQNModel();
+        // Update game mode when dropdown changes
+        function updateGameMode() {
+            gameMode = document.getElementById('gameMode').value;
+            if (gameMode === 'dqn') loadDQNModel();
             resetGame();
         }
 
