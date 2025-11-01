@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <title>Tic-Tac-Toe</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
     <style>
         #board {
             display: grid;
@@ -62,6 +63,7 @@
             <select id="aiMode" onchange="updateAIMode()">
                 <option selected value="random">Random (Easy)</option>
                 <option value="minimax">Minimax (Impossible)</option>
+                <option value="dqn">DQN (Trained AI)</option>
                 <option value="human">Human (2 Players)</option>
             </select>
             <div id="board"></div>
@@ -154,6 +156,8 @@
         function makeAIMove() {
             if (aiMode === 'minimax') {
                 aiMiniMaxMove();
+            } else if (aiMode === 'dqn') {
+                aiDQNMove();
             } else {
                 aiRandomMove();
             }
@@ -162,7 +166,59 @@
         // Update AI mode when dropdown changes
         function updateAIMode() {
             aiMode = document.getElementById('aiMode').value;
+            if (aiMode === 'dqn') loadDQNModel();
             resetGame();
+        }
+
+
+        // --- DQN AI (TensorFlow.js) ---
+        let dqnModel = null;
+        let dqnModelLoaded = false;
+
+        async function loadDQNModel() {
+            if (!dqnModelLoaded) {
+                try {
+                    dqnModel = await tf.loadGraphModel('tfjs_model/model.json');
+                    dqnModelLoaded = true;
+                } catch (e) {
+                    console.error('Failed to load DQN model:', e);
+                }
+            }
+        }
+
+        async function aiDQNMove() {
+            await loadDQNModel();
+            if (!dqnModel) {
+                console.warn('DQN model not loaded, falling back to random move.');
+                // Fallback to random if model not loaded
+                aiRandomMove();
+                return;
+            }
+            // Prepare input: X=1, O=-1, empty=0
+            const inputArr = board.map(cell => cell === HUMAN ? 1 : cell === AI ? -1 : 0);
+            // Mask illegal moves
+            let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
+            if (availableMoves.length === 0) return;
+            // Run inference
+            const inputTensor = tf.tensor2d([inputArr], [1, 9]);
+            let qvals = await dqnModel.predict(inputTensor).array();
+            inputTensor.dispose();
+            qvals = qvals[0];
+            // Mask illegal moves to -Infinity
+            let maskedQ = qvals.map((q, idx) => availableMoves.includes(idx) ? q : -Infinity);
+            // Pick the move with the highest Q value
+            let bestMove = maskedQ.indexOf(Math.max(...maskedQ));
+            if (board[bestMove] === EMPTY) {
+                board[bestMove] = AI;
+                createBoard();
+                const result = checkWinner(board);
+                if (result !== null) {
+                    endGame(result);
+                }
+            } else {
+                console.warn('DQN selected an illegal move:', bestMove, '. Falling back to random move.');
+                aiRandomMove();
+            }
         }
 
         // AI makes a random move
