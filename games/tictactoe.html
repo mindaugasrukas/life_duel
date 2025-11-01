@@ -62,6 +62,7 @@
             <select id="aiMode" onchange="updateAIMode()">
                 <option selected value="random">Random (Easy)</option>
                 <option value="minimax">Minimax (Impossible)</option>
+                <option value="human">Human (2 Players)</option>
             </select>
             <div id="board"></div>
             <div id="message"></div>
@@ -100,6 +101,7 @@
         ];
         let board = Array(9).fill(EMPTY);
         let aiMode = 'random'; // Default AI mode
+        let currentPlayer = HUMAN; // Track whose turn it is
 
         const boardDiv = document.getElementById('board');
         const messageDiv = document.getElementById('message');
@@ -124,13 +126,27 @@
         // If no winner, it triggers the AI to make a move
         function humanMove(idx) {
             if (board[idx] || checkWinner(board)) return;
-            board[idx] = HUMAN;
-            createBoard();
-            const result = checkWinner(board);
-            if (result !== null) {
-                endGame(result);
+            // In human vs human mode, alternate between X and O
+            if (aiMode === 'human') {
+                board[idx] = currentPlayer;
+                createBoard();
+                const result = checkWinner(board);
+                if (result !== null) {
+                    endGame(result);
+                } else {
+                    currentPlayer = currentPlayer === HUMAN ? AI : HUMAN;
+                }
             } else {
-                setTimeout(makeAIMove, 200); // slight delay for realism
+                // Only allow move if it's human's turn
+                if (currentPlayer !== HUMAN) return;
+                board[idx] = HUMAN;
+                createBoard();
+                const result = checkWinner(board);
+                if (result !== null) {
+                    endGame(result);
+                } else {
+                    setTimeout(makeAIMove, 200);
+                }
             }
         }
 
@@ -257,6 +273,7 @@
             board = Array(9).fill(EMPTY);
             messageDiv.textContent = '';
             createBoard();
+            currentPlayer = HUMAN;
         }
 
         // Initialize the game board
