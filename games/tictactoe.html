@@ -131,34 +131,32 @@
         // If no winner, it triggers the AI to make a move
         function humanMove(idx) {
             if (board[idx] || checkWinner(board)) return;
+            let turn;
+
             // In human vs human mode, alternate between X and O
             if (aiMode === 'human') {
-                gameLog.push({
-                    state: translateBoardToInput(board),
-                    action: idx,
-                    turn: currentPlayer === HUMAN ? 1 : -1
-                });
+                turn = currentPlayer === HUMAN ? 1 : -1;
                 board[idx] = currentPlayer;
-                createBoard();
-                const result = checkWinner(board);
-                if (result !== null) {
-                    endGame(result);
-                } else {
-                    currentPlayer = currentPlayer === HUMAN ? AI : HUMAN;
-                }
             } else {
                 // Only allow move if it's human's turn
                 if (currentPlayer !== HUMAN) return;
-                gameLog.push({
-                    state: translateBoardToInput(board),
-                    action: idx,
-                    turn: 1
-                });
+                turn = 1;
                 board[idx] = HUMAN;
-                createBoard();
-                const result = checkWinner(board);
-                if (result !== null) {
-                    endGame(result);
+            }
+
+            gameLog.push({
+                state: translateBoardToInput(board),
+                action: idx,
+                turn: turn
+            });
+            createBoard();
+
+            const result = checkWinner(board);
+            if (result !== null) {
+                endGame(result);
+            } else {
+                if (aiMode === 'human') {
+                    currentPlayer = currentPlayer === HUMAN ? AI : HUMAN;
                 } else {
                     setTimeout(makeAIMove, 200);
                 }
@@ -186,13 +184,11 @@
 
         // --- DQN AI (TensorFlow.js) ---
         let dqnModel = null;
-        let dqnModelLoaded = false;
 
         async function loadDQNModel() {
-            if (!dqnModelLoaded) {
+            if (!dqnModel) {
                 try {
                     dqnModel = await tf.loadGraphModel('tfjs_model/model.json');
-                    dqnModelLoaded = true;
                 } catch (e) {
                     console.error('Failed to load DQN model:', e);
                 }
