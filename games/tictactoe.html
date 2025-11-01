@@ -108,6 +108,9 @@
         const boardDiv = document.getElementById('board');
         const messageDiv = document.getElementById('message');
 
+        // Will store [{state, action, turn}] for each move
+        let gameLog = [];
+
         // Initialize the game board and display it
         function createBoard() {
             boardDiv.innerHTML = '';
@@ -130,6 +133,11 @@
             if (board[idx] || checkWinner(board)) return;
             // In human vs human mode, alternate between X and O
             if (aiMode === 'human') {
+                gameLog.push({
+                    state: translateBoardToInput(board),
+                    action: idx,
+                    turn: currentPlayer === HUMAN ? 1 : -1
+                });
                 board[idx] = currentPlayer;
                 createBoard();
                 const result = checkWinner(board);
@@ -141,6 +149,11 @@
             } else {
                 // Only allow move if it's human's turn
                 if (currentPlayer !== HUMAN) return;
+                gameLog.push({
+                    state: translateBoardToInput(board),
+                    action: idx,
+                    turn: 1
+                });
                 board[idx] = HUMAN;
                 createBoard();
                 const result = checkWinner(board);
@@ -200,14 +213,22 @@
             let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
             if (availableMoves.length === 0) return;
             // Run inference
+            console.log('DQN Input:', inputArr);
             const inputTensor = tf.tensor2d([inputArr], [1, 9]);
             let qvals = await dqnModel.predict(inputTensor).array();
             inputTensor.dispose();
             qvals = qvals[0];
+            console.log('DQN Q-values:', qvals);
             // Mask illegal moves to -Infinity
             let maskedQ = qvals.map((q, idx) => availableMoves.includes(idx) ? q : -Infinity);
             // Pick the move with the highest Q value
             let bestMove = maskedQ.indexOf(Math.max(...maskedQ));
+            // Log the state before the move
+            gameLog.push({
+                state: translateBoardToInput(board),
+                action: bestMove,
+                turn: -1 // AI is O, which is -1
+            });
             if (board[bestMove] === EMPTY) {
                 board[bestMove] = AI;
                 createBoard();
@@ -219,6 +240,20 @@
                 console.warn('DQN selected an illegal move:', bestMove, '. Falling back to random move.');
                 aiRandomMove();
             }
+        }
+
+        function translateBoardToInput(board) {
+            return board.map(cell => cell === HUMAN ? 1 : cell === AI ? -1 : 0).slice();
+        }
+
+        function logGameToConsole() {
+            // Format as Python list of tuples
+            let pyList = gameLog.map(
+                move => `[${JSON.stringify(move.state)}, ${move.action}, ${move.turn}]`
+            ).join(",\n");
+            console.log("Game log for training:\n[\n" + pyList + "\n]");
+            // Optionally, clear the log for the next game
+            gameLog = [];
         }
 
         // AI makes a random move
@@ -322,6 +357,7 @@
             } else {
                 messageDiv.textContent = `${result} wins!`;
             }
+            logGameToConsole();
         }
 
         // Reset the game
@@ -329,6 +365,7 @@
             board = Array(9).fill(EMPTY);
             messageDiv.textContent = '';
             createBoard();
+            gameLog = [];
             currentPlayer = HUMAN;
         }
 
