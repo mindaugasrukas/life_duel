@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Story - Life Duel Games</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            min-height: 100vh;
+        }
+        header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        header p {
+            margin: 1rem 0 0 0;
+            font-style: italic;
+            opacity: 0.9;
+        }
+        header p a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        header p a:hover {
+            color: #66BB6A;
+        }
+        main {
+            padding: 2rem;
+        }
+        .story-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            border-radius: 0 8px 8px 0;
+        }
+        .story-section h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        .goals-list, .non-goals-list {
+            list-style: none;
+            padding: 0;
+        }
+        .goals-list li, .non-goals-list li {
+            padding: 0.5rem 0;
+            font-weight: 500;
+        }
+        .goals-list li:before {
+            content: "✅ ";
+            margin-right: 0.5rem;
+        }
+        .non-goals-list li:before {
+            content: "❌ ";
+            margin-right: 0.5rem;
+        }
+        .highlight {
+            background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .nav-buttons {
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .nav-buttons a {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            border-radius: 25px;
+            margin: 0 1rem;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .nav-buttons a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 1rem;
+        }
+        .project-stats {
+            display: flex;
+            justify-content: space-around;
+            background: #e8f4f8;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>The Story Behind Life Duel</h1>
+            <p>An Experimental Journey Through Code, Games, and AI</p>
+            <p><a href="index.html">Back to Home</a></p>
+        </header>
+
+        <main>
+            <div class="story-section">
+                <h2>The Genesis</h2>
+                <p>This journey began with a simple question: <em>"What are the limits of Large Language Models when it comes to creating interactive experiences?"</em></p>
+
+                <p>The story actually starts with the <a href="https://github.com/mindaugasrukas/wertc" target="_blank">wertc project</a>, where I challenged myself to build a fully functional web chat in a single standalone HTML page. That experiment taught me the power of self-contained web applications and sparked an idea.</p>
+
+                <p>Life Duel was born from wanting to explore LLMs in creating novel games. But why stop at one? Together with my son, we embarked on an ambitious mission: <span class="highlight">create 100 games, learn something new from each one.</span></p>
+            </div>
+
+            <div class="project-stats">
+                <div class="stat">
+                    <div class="stat-number">18</div>
+                    <div class="stat-label">Games Created</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">100</div>
+                    <div class="stat-label">Goal</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">1</div>
+                    <div class="stat-label">HTML File Per Game</div>
+                </div>
+            </div>
+
+            <div class="story-section">
+                <h2>Project Goals</h2>
+                <ul class="goals-list">
+                    <li>Find the limits of LLMs through practical experimentation</li>
+                    <li>Create self-contained single HTML pages (minimal exceptions allowed)</li>
+                    <li>Learn something new from each game implementation</li>
+                    <li>Journey to 100 games - an ambitious learning marathon</li>
+                    <li>Father-son collaboration - making coding a shared adventure</li>
+                    <li>Open source everything - all code available on GitHub</li>
+                </ul>
+            </div>
+
+            <div class="story-section">
+                <h2>What This Project Is NOT</h2>
+                <ul class="non-goals-list">
+                    <li>Using complex frameworks or servers</li>
+                </ul>
+                <p><em>We keep it simple. Each game is a testament to what's possible with vanilla HTML, CSS, and JavaScript.</em></p>
+            </div>
+
+            <div class="story-section">
+                <h2>The Methodology</h2>
+                <p>Every game is an experiment. Take Tic-Tac-Toe: while building it, I dove deep into the minimax algorithm and even trained our own ML model. Each game becomes a learning laboratory.</p>
+
+                <p>The magic happens in the constraints: one HTML file, no server dependencies (except for a few special cases), and always pushing the boundaries of what an LLM can help create.</p>
+
+                <p><strong>The detailed stories of each game's development, challenges, breakthroughs, and lessons learned are embedded within the games themselves.</strong> Click on any game to discover the journey behind its creation.</p>
+            </div>
+
+            <div class="story-section">
+                <h2>The Two-Directional Journey</h2>
+                <p>One fascinating observation while pursuing the 100-games goal: this journey moves in two directions simultaneously. We could implement very simple games and quickly move to the next one, or we could deeply improve each game by adding more levels, testing extensively, and refining the experience.</p>
+
+                <p>The key insight? <span class="highlight">Balance is everything.</span> If we get stuck in the "quick and simple" direction, we end up with 100 stupid or non-playable games. If we get stuck perfecting just one game, we'll never reach 100.</p>
+
+                <p>This tension creates a sweet spot: each game must be <em>complete enough</em> to be engaging and educational, but <em>simple enough</em> to allow progress toward our ambitious goal. It's a constant calibration between depth and breadth.</p>
+            </div>
+
+            <div class="story-section">
+                <h2>The Adventure Continues</h2>
+                <p>We're 18 games into our journey to 100. Each game teaches us something new about AI collaboration, web development, game design, or computer science concepts. Some experiments succeed brilliantly, others teach us valuable lessons about limitations.</p>
+
+                <p>This isn't just about building games—it's about documenting the future of human-AI collaboration in software development, one HTML file at a time.</p>
+            </div>
+
+            <div class="nav-buttons">
+                <a href="index.html">Explore the Games</a>
+                <a href="https://github.com/mindaugasrukas/life_duel" target="_blank">View Source Code</a>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Mindaugas Rukas | An open-source experiment in AI-assisted game development</p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -6,73 +6,133 @@
     <title>My Games</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Georgia', serif;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f4;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            min-height: 100vh;
         }
         header {
-            background-color: #333;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
-            padding: 10px 0;
+            padding: 2rem;
             text-align: center;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        header p {
+            margin: 1rem 0 0 0;
+            font-style: italic;
+            opacity: 0.9;
+        }
+        header p a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        header p a:hover {
+            color: #66BB6A;
         }
         main {
-            padding: 20px;
+            padding: 2rem;
             min-height: 80vh;
-            margin-bottom: 60px;
         }
         footer {
-            background-color: #333;
+            background: #2c3e50;
             color: white;
             text-align: center;
-            padding: 10px 0;
-            position: fixed;
-            width: 100%;
-            bottom: 0;
+            padding: 1rem;
         }
 
         .game-list {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            padding: 20px;
+            gap: 1.5rem;
+            padding: 2rem 0;
         }
         .game-item {
-            background-color: white;
+            background: white;
             border: 1px solid #ddd;
-            border-radius: 5px;
-            margin: 10px;
-            padding: 15px;
-            width: 200px;
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 220px;
+            height: 160px;
             text-align: center;
-            height: 150px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .game-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            background: #f8f9fa;
+        }
+        .game-item h2 {
+            margin: 0 0 0.5rem 0;
+            color: #2c3e50;
+            font-size: 1.2rem;
+        }
+        .game-item p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.4;
         }
         .game-item img {
             max-width: 100%;
             height: auto;
-            border-radius: 5px;
+            border-radius: 8px;
         }
 
         a {
             text-decoration: none;
             color: inherit;
         }
-        a:hover {
-            background-color: #e0e0e0;
+        .nav-buttons {
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .nav-buttons a {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            border-radius: 25px;
+            margin: 0 1rem;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .nav-buttons a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>My Games</h1>
-    </header>
-    <main>
+    <div class="container">
+        <header>
+            <h1>Our Games</h1>
+            <p><a href="story.html">Read the Story Behind This Project</a></p>
+        </header>
+        <main>
         <section class="game-list">
             <a href="games/tictactoe.html">
                 <div class="game-item">
                     <h2>Tic-Tac-Toe</h2>
-                    <p>My first game with an AI opponent</p>
+                    <p>Our first game with an AI opponent</p>
                 </div>
             </a>
             <a href="games/life_duel.html">
@@ -144,7 +204,7 @@
             <a href="games/sudoku.html">
                 <div class="game-item">
                     <h2>Sudoku</h2>
-                    <p>Classic number puzzle! Fill the 9×9 grid with digits 1-9 following Sudoku rules.</p>
+                    <p>Classic number puzzle! Fill the 9x9 grid with digits 1-9 following Sudoku rules.</p>
                 </div>
             </a>
             <a href="games/candy_crush.html">
@@ -172,9 +232,16 @@
                 </div>
             </a>
         </section>
-    </main>
-    <footer>
-        <p>&copy; 2025 Mindaugas Rukas. All rights reserved.</p>
-    </footer>
+
+        <div class="nav-buttons">
+            <a href="story.html">Read Our Story</a>
+            <a href="https://github.com/mindaugasrukas/life_duel" target="_blank">View Source Code</a>
+        </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Mindaugas Rukas | An open-source experiment in AI-assisted game development</p>
+        </footer>
+    </div>
 </body>
 </html>
