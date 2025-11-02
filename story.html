@@ -149,7 +149,7 @@
 
             <div class="project-stats">
                 <div class="stat">
-                    <div class="stat-number">18</div>
+                    <div class="stat-number" id="games-count">0</div>
                     <div class="stat-label">Games Created</div>
                 </div>
                 <div class="stat">
@@ -202,7 +202,7 @@
 
             <div class="story-section">
                 <h2>The Adventure Continues</h2>
-                <p>We're 18 games into our journey to 100. Each game teaches us something new about AI collaboration, web development, game design, or computer science concepts. Some experiments succeed brilliantly, others teach us valuable lessons about limitations.</p>
+                <p>We're <span id="games-progress">0</span> games into our journey to 100. Each game teaches us something new about AI collaboration, web development, game design, or computer science concepts. Some experiments succeed brilliantly, others teach us valuable lessons about limitations.</p>
 
                 <p>This isn't just about building games—it's about documenting the future of human-AI collaboration in software development, one HTML file at a time.</p>
             </div>
@@ -217,5 +217,31 @@
             <p>&copy; 2025 Mindaugas Rukas | An open-source experiment in AI-assisted game development</p>
         </footer>
     </div>
+
+    <script>
+        // Automatically count games by parsing the index.html file
+        async function updateGameCount() {
+            try {
+                const response = await fetch('index.html');
+                const text = await response.text();
+
+                // Count game links in the index.html
+                const gameLinks = text.match(/href="games\/[^"]+\.html"/g);
+                const gameCount = gameLinks ? gameLinks.length : 0;
+
+                // Update all game count elements
+                document.getElementById('games-count').textContent = gameCount;
+                document.getElementById('games-progress').textContent = gameCount;
+            } catch (error) {
+                console.error('Error counting games:', error);
+                // Fallback to manual count if fetch fails
+                document.getElementById('games-count').textContent = '18';
+                document.getElementById('games-progress').textContent = '18';
+            }
+        }
+
+        // Update count when page loads
+        updateGameCount();
+    </script>
 </body>
 </html>
