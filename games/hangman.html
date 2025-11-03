@@ -51,14 +51,16 @@
         </svg>
         <span>Home</span>
     </a>
-    <div class="game-container">
-        <div class="hangman-title">Hangman Word Guess</div>
-        <canvas class="hangman-figure" id="hangmanCanvas" width="180" height="120"></canvas>
-        <div class="word-display" id="wordDisplay">_ _ _ _ _</div>
-        <div class="letters" id="letters"></div>
-        <div class="hangman-status" id="status">Guesses left: 6</div>
-        <div class="hangman-message" id="message"></div>
-        <button class="play-again-btn" id="playAgain" style="display:none;">Play Again</button>
+    <h1>Hangman Word Guess</h1>
+    <div class="center-container">
+        <div class="game-container">
+            <canvas class="hangman-figure" id="hangmanCanvas" width="180" height="120"></canvas>
+            <div class="word-display" id="wordDisplay">_ _ _ _ _</div>
+            <div class="letters" id="letters"></div>
+            <div class="hangman-status" id="status">Guesses left: 6</div>
+            <div class="hangman-message" id="message"></div>
+            <button class="play-again-btn" id="playAgain" style="display:none;">Play Again</button>
+        </div>
     </div>
     <script>
         const words = [

@@ -67,19 +67,21 @@
         </svg>
         <span>Home</span>
     </a>
-    <div class="container">
-        <h1>Math Puzzles</h1>
-        <div class="score">Score: <span id="score">0</span> | Streak: <span id="streak">0</span> | Multiplier: <span id="multiplier">1x</span></div>
-        <div class="puzzle-area">
-            <div id="puzzle-text">Loading...</div>
-            <div class="input-area">
-                <input type="text" id="answer" autocomplete="off" />
-                <button id="submit">Submit</button>
+    <h1>Math Puzzles</h1>
+    <div class="center-container">
+        <div class="container">
+            <div class="score">Score: <span id="score">0</span> | Streak: <span id="streak">0</span> | Multiplier: <span id="multiplier">1x</span></div>
+            <div class="puzzle-area">
+                <div id="puzzle-text">Loading...</div>
+                <div class="input-area">
+                    <input type="text" id="answer" autocomplete="off" />
+                    <button id="submit">Submit</button>
+                </div>
+                <div class="feedback" id="feedback"></div>
             </div>
-            <div class="feedback" id="feedback"></div>
-        </div>
-        <div style="margin-top: 24px;">
-            <button onclick="restartGame()">Restart</button>
+            <div style="margin-top: 24px;">
+                <button onclick="restartGame()">Restart</button>
+            </div>
         </div>
     </div>
     <div class="fade-message" id="fade-message"></div>
