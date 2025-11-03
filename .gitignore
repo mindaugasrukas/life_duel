@@ -1,2 +1,11 @@
 scratch/
 .DS_Store
+
+# Ignore machine learning model files
+*.onnx
+*.pth
+node_modules/
+__pycache__/
+*.pyc
+backup/
+tf_saved_model/
