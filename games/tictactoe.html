@@ -373,16 +373,27 @@
         </div>
         <h3 class="story-subheading">Act I: The Random Beginning</h3>
         <p>We started with what seemed like the easiest approach - a bot that randomly picks from available moves. The LLM helped us quickly scaffold the basic game structure and implement this "brainless" opponent in just a few lines of code:</p>
-        <code class="story-code">
-function randomMove() {
-    const moves = getEmptySpaces();
-    return moves[Math.floor(Math.random() * moves.length)];
-}
-        </code>
+        <pre id="random-move-code-block" class="story-code"></pre>
+        <script id="random-move-source" type="text/javascript">
+            function randomMove() {
+                const moves = getEmptySpaces();
+                return moves[Math.floor(Math.random() * moves.length)];
+            }
+            document.addEventListener('DOMContentLoaded', function() {
+                // Render code in code block from the script tag
+                const codeBlock = document.getElementById('random-move-code-block');
+                let randomMoveSource = randomMove.toString();
+                // Remove leading indentation
+                randomMoveSource = randomMoveSource.replace(/^ {12}/gm, '');
+                if (codeBlock) codeBlock.textContent = randomMoveSource;
+            });
+        </script>
         <p>Surprisingly effective for testing, but after a few games, the predictable randomness became... well, predictable.</p>
-        <h3 class="story-subheading">Act II: The Minimax Revelation</h3>
-        <p>We wanted the <em>perfect</em> opponent - one that would never lose. Enter the <strong>minimax algorithm</strong>, a decision-making strategy that looks ahead to all possible game outcomes.</p>
-        <div class="story-callout-warning">
+
+        <h3 class="story-subheading">Act II: The Smartest Bot Possible</h3>
+        <p>Random bot <em>wasn't</em> interesting to play. We wanted the <em>perfect</em> opponent - one that would never lose.</p>
+        <p>After some research, we discovered the <strong>minimax algorithm</strong>, a decision-making strategy that looks ahead to all possible game outcomes.</p>
+        <div class="story-callout story-callout-warning">
             <strong>Minimax in a Nutshell:</strong><br>
             The algorithm assumes both players play optimally. For each move, it simulates all possible futures:
             <ul>
@@ -391,7 +402,88 @@ function randomMove() {
                 <li><strong>Recursion:</strong> Evaluates every possible game tree branch to the end</li>
             </ul>
             Result: An unbeatable AI that either wins or draws, never loses.
+            It takes at most a few seconds to compute its move, even on simple hardware.
         </div>
+
+        <p>
+            Maximum depth of the game tree is limited (9 moves), in total there are 5,478 possible game states.
+            However, AI starts second, so it only needs to consider moves after the human's first turn, reducing the maximum number of states to evaluate to 5,478 / 9 = 608.
+        </p>
+        <p>Here is a script to calculate all possible tic-tac-toe states:</p>
+        <pre id="minimax-code-block" class="story-code"></pre>
+        <div style="margin: 1em 0;">
+            <button id="execute-minimax-script" style="padding: 0.5em 1em; font-size: 1em;">Execute Code</button>
+            <span id="minimax-script-result" style="margin-left: 1em; font-weight: bold;"></span>
+        </div>
+        <script id="minimax-algo-source" type="text/javascript">
+            function getAllTicTacToeStates() {
+                const results = new Set();
+
+                function serialize(board) {
+                    return board.join('');
+                }
+
+                function isTerminal(board) {
+                    const wins = [
+                        [0,1,2],[3,4,5],[6,7,8], // rows
+                        [0,3,6],[1,4,7],[2,5,8], // cols
+                        [0,4,8],[2,4,6]          // diags
+                    ];
+                    for (const [a,b,c] of wins) {
+                        // Check if there're three in a row
+                        if (board[a] != '-' && board[a] === board[b] && board[a] === board[c])
+                            return true;
+                    }
+                    // If all cells are filled it's a Draw
+                    return board.every(cell => cell != '-');
+                }
+
+                // Depth-first search to explore all game states
+                function dfs(board, xTurn) {
+                    const key = serialize(board);
+                    // Avoid duplicate states
+                    if (results.has(key)) return;
+                    results.add(key);
+
+                    if (isTerminal(board)) return;
+
+                    for (let i = 0; i < 9; i++) {
+                        if (board[i] == '-') {
+                            board[i] = xTurn ? 'X' : 'O';
+                            dfs(board, !xTurn);
+                            board[i] = '-';
+                        }
+                    }
+                }
+
+                // Start DFS with an empty board and X's turn
+                dfs(Array(9).fill('-'), true);
+                return results;
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                // Render code in code block from the script tag
+                const codeBlock = document.getElementById('minimax-code-block');
+                let algoSource = getAllTicTacToeStates.toString();
+                // Remove leading indentation
+                algoSource = algoSource.replace(/^ {12}/gm, '');
+                if (codeBlock) codeBlock.textContent = algoSource;
+
+                // Add event listener for the execute button
+                const btn = document.getElementById('execute-minimax-script');
+                if (btn) {
+                    btn.addEventListener('click', function() {
+                        const allStates = getAllTicTacToeStates();
+                        const resultSpan = document.getElementById('minimax-script-result');
+                        if (resultSpan) {
+                            resultSpan.textContent = `Total unique states: ${allStates.size}`;
+                        }
+                    });
+                }
+            });
+        </script>
+
+        <!-- TODO: Improve text bellow -->
         <p>The LLM was invaluable here, helping us understand the recursive logic and debug edge cases. But minimax had a limitation - it was <em>too perfect</em> and only worked for simple games like tic-tac-toe.</p>
         <h3 class="story-subheading">Act III: The Machine Learning Adventure</h3>
         <p>As we built more complex games, we realized we needed something more flexible than handcrafted algorithms. Could we train an AI to learn tic-tac-toe from scratch? This became our machine learning laboratory.</p>
@@ -407,7 +499,7 @@ function randomMove() {
                 Find patterns in game data
                 <br><em>No clear winning strategy</em>
             </div>
-            <div class="story-grid-box-success">
+            <div class="story-grid-box story-grid-box-success">
                 <strong>Reinforcement Learning:</strong><br>
                 Learn by playing against itself
                 <br><em>Can discover novel strategies</em>
@@ -420,7 +512,7 @@ function randomMove() {
         </div>
         <p><strong>We chose Deep Q-Network (DQN)</strong> - a reinforcement learning approach where the AI learns by playing millions of games against itself, gradually understanding which moves lead to victory.</p>
         <h4 class="story-subheading">The Training Odyssey</h4>
-        <div class="story-callout-error">
+        <div class="story-callout story-callout-error">
             <strong>First Attempt: Disaster</strong><br>
             Our initial model played worse than random! It had no concept of winning or losing.
         </div>
@@ -437,7 +529,7 @@ function randomMove() {
             <li><strong>Training Infrastructure:</strong> CPU vs GPU (GPU was surprisingly slow for this small problem)</li>
             <li><strong>Human Game Integration:</strong> We played against early models and fed our games back into training</li>
         </ul>
-        <div class="story-callout-warning">
+        <div class="story-callout story-callout-warning">
             <strong>The Breakthrough Moment:</strong><br>
             We discovered our training was fundamentally flawed! The model learned from random samples of past games but never guaranteed it would learn from every recent game.
             <br><br>
@@ -445,7 +537,7 @@ function randomMove() {
         </div>
         <h4 class="story-subheading">The Final Model</h4>
         <p>After countless iterations, parameter tuning, and LLM consultations, we achieved:</p>
-        <div class="story-callout-success">
+        <div class="story-callout story-callout-success">
             <strong>&lt;10% Loss Rate</strong><br>
             Not as perfect as minimax, but learned organically through self-play. It developed its own playing style - excellent at blocking opponent moves but occasionally missing obvious wins (keeping games interesting!).
         </div>
@@ -460,7 +552,7 @@ function randomMove() {
         </ul>
         <h3 class="story-subheading">Future Possibilities</h3>
         <p>We might revisit this model to achieve 0% loss rate, or explore other learning algorithms. But the real victory was the journey - from random moves to self-learning AI, with an LLM as our tireless coding companion.</p>
-        <div class="story-callout-center">
+        <div class="story-callout story-callout-center">
             <strong>Try all three AI modes above and see the evolution for yourself!</strong><br>
             <em>Random → Minimax → DQN - each represents a different chapter in AI development</em>
         </div>
