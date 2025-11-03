@@ -98,3 +98,75 @@ button:disabled {
     vertical-align: middle;
     color: #333;
 }
+
+/* --- Story/History Section Styles --- */
+.story-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-family: Georgia, serif;
+    line-height: 1.6;
+}
+.story-section-title {
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+.story-subheading {
+    margin-top: 2rem;
+    color: #1976d2;
+}
+.story-callout {
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+    border-left: 4px solid #3498db;
+    background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+}
+.story-callout-warning {
+    background: #fff3cd;
+    border-left: 4px solid #f39c12;
+}
+.story-callout-error {
+    background: #ffebee;
+    border-left: 4px solid #e74c3c;
+}
+.story-callout-success {
+    background: #e8f6f3;
+    border-left: 4px solid #27ae60;
+}
+.story-callout-center {
+    background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+}
+.story-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+.story-grid-box {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+.story-grid-box-success {
+    background: #e8f6f3;
+    border: 2px solid #27ae60;
+}
+.story-code {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 0.5rem;
+    border-radius: 4px;
+    display: block;
+    margin: 1rem 0;
+    font-family: 'Fira Mono', 'Consolas', monospace;
+    font-size: 0.95em;
+    overflow-x: auto;
+}

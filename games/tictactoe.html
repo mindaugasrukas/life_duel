@@ -364,6 +364,107 @@
         // Initialize the game board
         createBoard();
     </script>
+
+    <!-- Game Development Story -->
+    <div class="story-container">
+        <h2 class="story-section-title">The Tic-Tac-Toe Journey: From Random to AI</h2>
+        <div class="story-callout">
+            <strong>The Challenge:</strong> Create the simplest possible game with an AI opponent, then push it to its limits.
+        </div>
+        <h3 class="story-subheading">Act I: The Random Beginning</h3>
+        <p>We started with what seemed like the easiest approach - a bot that randomly picks from available moves. The LLM helped us quickly scaffold the basic game structure and implement this "brainless" opponent in just a few lines of code:</p>
+        <code class="story-code">
+function randomMove() {
+    const moves = getEmptySpaces();
+    return moves[Math.floor(Math.random() * moves.length)];
+}
+        </code>
+        <p>Surprisingly effective for testing, but after a few games, the predictable randomness became... well, predictable.</p>
+        <h3 class="story-subheading">Act II: The Minimax Revelation</h3>
+        <p>We wanted the <em>perfect</em> opponent - one that would never lose. Enter the <strong>minimax algorithm</strong>, a decision-making strategy that looks ahead to all possible game outcomes.</p>
+        <div class="story-callout-warning">
+            <strong>Minimax in a Nutshell:</strong><br>
+            The algorithm assumes both players play optimally. For each move, it simulates all possible futures:
+            <ul>
+                <li><strong>Maximizing player (AI):</strong> Picks moves that lead to the best outcome</li>
+                <li><strong>Minimizing player (Human):</strong> Assumed to pick moves that minimize AI's advantage</li>
+                <li><strong>Recursion:</strong> Evaluates every possible game tree branch to the end</li>
+            </ul>
+            Result: An unbeatable AI that either wins or draws, never loses.
+        </div>
+        <p>The LLM was invaluable here, helping us understand the recursive logic and debug edge cases. But minimax had a limitation - it was <em>too perfect</em> and only worked for simple games like tic-tac-toe.</p>
+        <h3 class="story-subheading">Act III: The Machine Learning Adventure</h3>
+        <p>As we built more complex games, we realized we needed something more flexible than handcrafted algorithms. Could we train an AI to learn tic-tac-toe from scratch? This became our machine learning laboratory.</p>
+        <h4 class="story-subheading">The Learning Method Decision Tree</h4>
+        <div class="story-grid-2col">
+            <div class="story-grid-box">
+                <strong>Supervised Learning:</strong><br>
+                Train on human expert games
+                <br><em>Limited by human expertise</em>
+            </div>
+            <div class="story-grid-box">
+                <strong>Unsupervised Learning:</strong><br>
+                Find patterns in game data
+                <br><em>No clear winning strategy</em>
+            </div>
+            <div class="story-grid-box-success">
+                <strong>Reinforcement Learning:</strong><br>
+                Learn by playing against itself
+                <br><em>Can discover novel strategies</em>
+            </div>
+            <div class="story-grid-box">
+                <strong>Genetic Algorithms:</strong><br>
+                Evolve strategies over generations
+                <br><em>Too slow for this problem</em>
+            </div>
+        </div>
+        <p><strong>We chose Deep Q-Network (DQN)</strong> - a reinforcement learning approach where the AI learns by playing millions of games against itself, gradually understanding which moves lead to victory.</p>
+        <h4 class="story-subheading">The Training Odyssey</h4>
+        <div class="story-callout-error">
+            <strong>First Attempt: Disaster</strong><br>
+            Our initial model played worse than random! It had no concept of winning or losing.
+        </div>
+        <p><strong>The Debugging Marathon:</strong> With the LLM as our debugging partner, we systematically tackled each issue:</p>
+        <ul>
+            <li><strong>Learning Rate:</strong> Too high = chaotic learning, too low = glacial progress</li>
+            <li><strong>Reward Function Evolution:</strong>
+                <ul>
+                    <li>V1: Only reward the final outcome (+1 win, -1 loss)</li>
+                    <li>V2: Reward all moves with increasing/decreasing values</li>
+                    <li>V3: Heavily penalize missed winning moves (-2.0)</li>
+                </ul>
+            </li>
+            <li><strong>Training Infrastructure:</strong> CPU vs GPU (GPU was surprisingly slow for this small problem)</li>
+            <li><strong>Human Game Integration:</strong> We played against early models and fed our games back into training</li>
+        </ul>
+        <div class="story-callout-warning">
+            <strong>The Breakthrough Moment:</strong><br>
+            We discovered our training was fundamentally flawed! The model learned from random samples of past games but never guaranteed it would learn from every recent game.
+            <br><br>
+            <strong>The Fix:</strong> Train on the most recent game explicitly, plus random historical samples. This ensured every game contributed to learning at least once.
+        </div>
+        <h4 class="story-subheading">The Final Model</h4>
+        <p>After countless iterations, parameter tuning, and LLM consultations, we achieved:</p>
+        <div class="story-callout-success">
+            <strong>&lt;10% Loss Rate</strong><br>
+            Not as perfect as minimax, but learned organically through self-play. It developed its own playing style - excellent at blocking opponent moves but occasionally missing obvious wins (keeping games interesting!).
+        </div>
+        <h3 class="story-subheading">Human-AI Collaboration Insights</h3>
+        <p>This journey revealed fascinating dynamics about working with LLMs:</p>
+        <ul>
+            <li><strong>Rapid Prototyping:</strong> LLMs excel at generating boilerplate code and explaining complex algorithms</li>
+            <li><strong>Debugging Partner:</strong> Perfect for bouncing ideas and systematically exploring solutions</li>
+            <li><strong>Knowledge Bridge:</strong> Translates academic concepts (like minimax) into practical code</li>
+            <li><strong>Iteration Speed:</strong> What used to take days of research now takes hours of conversation</li>
+            <li><strong>But Human Insight Remains Critical:</strong> The breakthrough training fix came from manual analysis, not AI suggestion</li>
+        </ul>
+        <h3 class="story-subheading">Future Possibilities</h3>
+        <p>We might revisit this model to achieve 0% loss rate, or explore other learning algorithms. But the real victory was the journey - from random moves to self-learning AI, with an LLM as our tireless coding companion.</p>
+        <div class="story-callout-center">
+            <strong>Try all three AI modes above and see the evolution for yourself!</strong><br>
+            <em>Random → Minimax → DQN - each represents a different chapter in AI development</em>
+        </div>
+    </div>
 </body>
 
 </html>
