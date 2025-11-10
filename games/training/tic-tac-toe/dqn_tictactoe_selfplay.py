@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import math
 
 # ---------- Game helpers ----------
 WIN_LINES = [(0,1,2),(3,4,5),(6,7,8),
@@ -104,6 +105,10 @@ class DQNAgent:
             # Not enough in replay, just use what we have
             batch.extend(random.sample(self.replay, len(self.replay)))
         else:
+            batch_size = math.ceil(n_needed / 2)
+            # use latest + random
+            batch.extend(list(self.replay)[-batch_size:])
+            n_needed -= batch_size
             batch.extend(random.sample(self.replay, n_needed))
         if len(batch) == 0:
             return 0.0

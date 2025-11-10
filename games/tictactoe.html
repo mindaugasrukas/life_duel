@@ -137,14 +137,17 @@
                 // Only allow move if it's human's turn
                 if (currentPlayer !== HUMAN) return;
                 turn = 1;
+
+                // Log a snapshot of the board before the move
+                gameLog.push({
+                    state: translateBoardToInput(board),
+                    action: idx,
+                    turn: turn
+                });
+
                 board[idx] = HUMAN;
             }
 
-            gameLog.push({
-                state: translateBoardToInput(board),
-                action: idx,
-                turn: turn
-            });
             createBoard();
 
             const result = checkWinner(board);
@@ -484,10 +487,11 @@
         </script>
 
         <!-- TODO: Improve text bellow -->
-        <p>The LLM was invaluable here, helping us understand the recursive logic and debug edge cases. But minimax had a limitation - it was <em>too perfect</em> and only worked for simple games like tic-tac-toe.</p>
+        <p>The LLM was invaluable here, helping us understand the algorithm and debug edge cases. But minimax had a limitation - it was <em>too perfect</em> and only worked for simple games like tic-tac-toe.</p>
         <h3 class="story-subheading">Act III: The Machine Learning Adventure</h3>
         <p>As we built more complex games, we realized we needed something more flexible than handcrafted algorithms. Could we train an AI to learn tic-tac-toe from scratch? This became our machine learning laboratory.</p>
         <h4 class="story-subheading">The Learning Method Decision Tree</h4>
+        <p>We explored various machine learning approaches:</p>
         <div class="story-grid-2col">
             <div class="story-grid-box">
                 <strong>Supervised Learning:</strong><br>
@@ -510,8 +514,9 @@
                 <br><em>Too slow for this problem</em>
             </div>
         </div>
-        <p><strong>We chose Deep Q-Network (DQN)</strong> - a reinforcement learning approach where the AI learns by playing millions of games against itself, gradually understanding which moves lead to victory.</p>
+        <p><strong>We chose Deep Q-Network (DQN)</strong> - a reinforcement learning approach where the AI learns by playing many games against itself, gradually understanding which moves lead to victory.</p>
         <h4 class="story-subheading">The Training Odyssey</h4>
+        <p>We sketched the training script (using LLM) and started training the model.</p>
         <div class="story-callout story-callout-error">
             <strong>First Attempt: Disaster</strong><br>
             Our initial model played worse than random! It had no concept of winning or losing.

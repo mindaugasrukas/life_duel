@@ -2,10 +2,10 @@
 set -e
 
 # backup old model
-if [ -f "../../games/tfjs_model/model.json" ]; then
+if [ -f "../../tfjs_model/model.json" ]; then
     timestamp=$(date +"%Y%m%d_%H%M%S")
-    mv ../../games/tfjs_model ../../games/backup/tfjs_model_backup_$timestamp
-    echo "Backed up old model to ../../games/backup/tfjs_model_backup_$timestamp"
+    mv ../../tfjs_model ../../backup/tfjs_model_backup_$timestamp
+    echo "Backed up old model to ../../backup/tfjs_model_backup_$timestamp"
 fi
 
 # # Export PyTorch model to ONNX
@@ -32,6 +32,6 @@ fi
 onnx-tf convert -i dqn_tictactoe.onnx -o tf_saved_model
 
 # Convert TensorFlow SavedModel to TensorFlow.js format
-tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_model tf_saved_model ../../games/tfjs_model
+tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_model tf_saved_model ../../tfjs_model
 
-echo "Conversion complete. TensorFlow.js model is in ../../games/tfjs_model/"
+echo "Conversion complete. TensorFlow.js model is in ../../tfjs_model/"
