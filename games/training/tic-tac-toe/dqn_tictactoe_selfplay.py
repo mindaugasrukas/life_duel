@@ -69,8 +69,9 @@ class DQNAgent:
         self.eps_decay_steps = eps_decay_steps
         self.steps_done = 0
 
+        # Replay buffer with max size 100,000
         self.replay = deque(maxlen=100_000)
-        self.batch_size = 256 * 4
+        self.batch_size = 256 * 4  # 1024
         self.tau = 0.005  # soft target update
 
     def epsilon(self):
@@ -91,8 +92,11 @@ class DQNAgent:
         masked[legal] = qvals[legal]
         return int(masked.argmax())
 
+    # Store legal_next so we can mask max over legal at target time
     def push(self, s, a, r, s2, done, legal_next):
-        # Store legal_next so we can mask max over legal at target time
+        # Avoid duplicates in replay
+        # if not any(np.array_equal(s, r[0]) for r in self.replay):
+        #     self.replay.append((s.astype(np.float32), a, float(r), s2.astype(np.float32), done, np.array(legal_next, dtype=np.int64)))
         self.replay.append((s.astype(np.float32), a, float(r), s2.astype(np.float32), done, np.array(legal_next, dtype=np.int64)))
 
     def train_step(self, recent_traj=None):
@@ -110,13 +114,18 @@ class DQNAgent:
             batch.extend(list(self.replay)[-batch_size:])
             n_needed -= batch_size
             batch.extend(random.sample(self.replay, n_needed))
+
+        return self.train_batch(batch)
+
+    def train_batch(self, batch):
         if len(batch) == 0:
             return 0.0
-        S = torch.tensor([b[0] for b in batch]).to(self.device)          # (B,9) Initial State
-        A = torch.tensor([b[1] for b in batch]).to(self.device)          # (B,) Action
-        R = torch.tensor([b[2] for b in batch]).to(self.device)          # (B,) Reward
-        S2 = torch.tensor([b[3] for b in batch]).to(self.device)         # (B,9) After State
-        D = torch.tensor([b[4] for b in batch], dtype=torch.bool).to(self.device)  # (B,) Done
+
+        S = torch.tensor(np.array([b[0] for b in batch]), dtype=torch.float32).to(self.device)          # (B,9) Initial State
+        A = torch.tensor(np.array([b[1] for b in batch]), dtype=torch.int64).to(self.device)          # (B,) Action
+        R = torch.tensor(np.array([b[2] for b in batch]), dtype=torch.float32).to(self.device)          # (B,) Reward
+        S2 = torch.tensor(np.array([b[3] for b in batch]), dtype=torch.float32).to(self.device)         # (B,9) After State
+        D = torch.tensor(np.array([b[4] for b in batch]), dtype=torch.bool).to(self.device)  # (B,) Done
         LEGAL_NEXT = [b[5] for b in batch]               # list of arrays
 
         # Q(s,a)
@@ -133,7 +142,6 @@ class DQNAgent:
             target = R + (~D).float() * self.gamma * Q_next_max
 
         loss = nn.MSELoss()(Qsa, target)
-
         self.optim.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.q.parameters(), 1.0)
@@ -143,6 +151,7 @@ class DQNAgent:
         with torch.no_grad():
             for p, tp in zip(self.q.parameters(), self.target.parameters()):
                 tp.copy_(self.tau * p + (1 - self.tau) * tp)
+
         return float(loss.item())
 
 # ---------- Self-play environment wrapper ----------
@@ -183,7 +192,8 @@ def episode_self_play(agent: DQNAgent, max_turns=9):
         if terminal(board):
             w = winner(board)
             # reward from perspective of the player who JUST played:
-            r = 1.0 if w == turn else (-1.0 if (w != 0) else 0.0)
+            # 1 for win, -1 for loss, 0.5 for draw
+            r = 1.0 if w == turn else (-1.0 if (w != 0) else 0.5)
             s2_canon = canonical(board, -turn)  # next player's view (unused when done)
             traj.append((s_canon.copy(), a, r, s2_canon.copy(), True, []))
             break
@@ -191,7 +201,9 @@ def episode_self_play(agent: DQNAgent, max_turns=9):
             # Penalize this move if a win was possible but not taken
             reward = 0.0
             if win_move is not None and a != win_move:
-                reward = -2.0  # Strong penalty for missing a win
+                reward = -1.0  # Strong penalty for missing a win
+                # log win_move as the action that should have been taken
+                traj.append((s_canon.copy(), win_move, 1.0, s2_canon.copy(), True, []))
             s2_canon = canonical(board, -turn)  # next player's perspective
             legal_next = legal_moves(board)
             traj.append((s_canon.copy(), a, reward, s2_canon.copy(), False, legal_next))
@@ -238,14 +250,18 @@ def train(episodes=50_000):
         traj, _ = episode_self_play(agent)
         # Always train on the most recent game steps plus random from replay
         agent.train_step(recent_traj=traj)
+
         # Push the recent steps to replay
         for (s,a,r,s2,done,legal_next) in traj:
             agent.push(s, a, r, s2, done, legal_next)
 
+        # # Train on a full batch from replay
+        # agent.train_batch(agent.replay)
+
         # Evaluate every 1000 episodes
         if ep % 1000 == 0:
             w, d, l = play_vs_random(agent, n=1000)
-            print(f"EP {ep:6d} | eps={agent.epsilon():.3f} | vs random W/D/L = {w}/{d}/{l}")
+            print(f"EP {ep:6d} | eps={agent.epsilon():.3f} | replay={len(agent.replay):6d} | vs random W/D/L = {w}/{d}/{l}")
             save_checkpoint(agent)
     return agent
 
@@ -292,7 +308,7 @@ def load_checkpoint(agent, filename="dqn_checkpoint.pth"):
     agent.steps_done = checkpoint["steps_done"]
 
 if __name__ == "__main__":
-    agent = train(episodes=20_000)
+    agent = train(episodes=10_000)
     w,d,l = play_vs_random(agent, n=1000)
     print("FINAL vs random W/D/L =", w, d, l)
     torch.save(agent.q.state_dict(), "dqn_tictactoe_model.pth")
