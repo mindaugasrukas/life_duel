@@ -203,7 +203,9 @@
                 return;
             }
             // Prepare input: X=1, O=-1, empty=0
-            const inputArr = board.map(cell => cell === HUMAN ? 1 : cell === AI ? -1 : 0);
+            let inputArr = board.map(cell => cell === HUMAN ? 1 : cell === AI ? -1 : 0);
+            // Canonicalize board (AI is always -1), so invert is necessary
+            inputArr = inputArr.map(v => -v);
             // Mask illegal moves
             let availableMoves = board.map((cell, idx) => cell === EMPTY ? idx : null).filter(idx => idx !== null);
             if (availableMoves.length === 0) return;

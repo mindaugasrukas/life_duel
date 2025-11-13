@@ -92,18 +92,13 @@ class DQNAgent:
         masked[legal] = qvals[legal]
         return int(masked.argmax())
 
-    # Store legal_next so we can mask max over legal at target time
     def push(self, s, a, r, s2, done, legal_next):
-        # Avoid duplicates in replay
-        # if not any(np.array_equal(s, r[0]) for r in self.replay):
-        #     self.replay.append((s.astype(np.float32), a, float(r), s2.astype(np.float32), done, np.array(legal_next, dtype=np.int64)))
-        self.replay.append((s.astype(np.float32), a, float(r), s2.astype(np.float32), done, np.array(legal_next, dtype=np.int64)))
+        # Store legal_next so we can mask max over legal at target time
+        transition = (s.astype(np.float32), a, float(r), s2.astype(np.float32), done, np.array(legal_next, dtype=np.int64))
+        self.replay.append(transition)
 
     def train_step(self, recent_traj=None):
-        # recent_traj: list of (s, a, r, s2, done, legal_next) from the most recent game
-        batch = []
-        if recent_traj is not None and len(recent_traj) > 0:
-            batch.extend(recent_traj)
+        batch = recent_traj.copy() if recent_traj is not None else []
         n_needed = self.batch_size - len(batch)
         if len(self.replay) < n_needed:
             # Not enough in replay, just use what we have
@@ -188,14 +183,14 @@ def episode_self_play(agent: DQNAgent, max_turns=9):
 
         a = agent.select_action(s_canon, legal)
         board = play(board, a, turn)
+        s2_canon = canonical(board, -turn)  # next player's perspective (unused when done)
 
         if terminal(board):
             w = winner(board)
             # reward from perspective of the player who JUST played:
             # 1 for win, -1 for loss, 0.5 for draw
-            r = 1.0 if w == turn else (-1.0 if (w != 0) else 0.5)
-            s2_canon = canonical(board, -turn)  # next player's view (unused when done)
-            traj.append((s_canon.copy(), a, r, s2_canon.copy(), True, []))
+            reward = 1.0 if w == turn else (-1.0 if (w != 0) else 0.5)
+            traj.append((s_canon.copy(), a, reward, s2_canon.copy(), True, []))
             break
         else:
             # Penalize this move if a win was possible but not taken
@@ -204,12 +199,38 @@ def episode_self_play(agent: DQNAgent, max_turns=9):
                 reward = -1.0  # Strong penalty for missing a win
                 # log win_move as the action that should have been taken
                 traj.append((s_canon.copy(), win_move, 1.0, s2_canon.copy(), True, []))
-            s2_canon = canonical(board, -turn)  # next player's perspective
             legal_next = legal_moves(board)
             traj.append((s_canon.copy(), a, reward, s2_canon.copy(), False, legal_next))
             turn *= -1
 
+    # Propagate final reward back through the trajectory
+    traj = propagate_discounted_reward(traj, winner(board), gamma=0.99)
+
     return traj, winner(board)
+
+def propagate_discounted_reward(traj, outcome, gamma=0.99):
+    """
+    Propagate discounted rewards for each player separately.
+    outcome: winner(board) at end of game (1 for X, -1 for O, 0 for draw)
+    """
+    discounted_X = 1.0 if outcome == 1 else (-1.0 if outcome == -1 else 0.5)
+    discounted_O = 1.0 if outcome == -1 else (-1.0 if outcome == 1 else 0.5)
+    for i in reversed(range(len(traj))):
+        # skip transitions with non-zero reward
+        if traj[i][2] != 0.0:
+            continue
+        s, a, _, s2, done, legal_next = traj[i]
+        # Determine which player made this move: X if sum(s) == 0, O if sum(s) != 0
+        # Alternatively, you can track turn in episode_self_play and store it in traj
+        player = 1 if np.sum(s) == 0 else -1
+        if player == 1:
+            reward = discounted_X
+            discounted_X *= gamma
+        else:
+            reward = discounted_O
+            discounted_O *= gamma
+        traj[i] = (s, a, reward, s2, done, legal_next)
+    return traj
 
 # ---------- Simple evaluation vs random ----------
 def random_move(board):
@@ -217,6 +238,16 @@ def random_move(board):
     return random.choice(lm) if lm else None
 
 def play_vs_random(agent, n=200):
+    # Save current epsilon parameters
+    old_eps_start = agent.eps_start
+    old_eps_end = agent.eps_end
+    old_eps_decay_steps = agent.eps_decay_steps
+
+    # Set epsilon to 0 for pure exploitation
+    agent.eps_start = 0.0
+    agent.eps_end = 0.0
+    agent.eps_decay_steps = 1
+
     wins=draws=losses=0
     for _ in range(n):
         board = np.zeros(9, dtype=np.int8)
@@ -233,6 +264,12 @@ def play_vs_random(agent, n=200):
         if w == 1: wins += 1
         elif w == 0: draws += 1
         else: losses += 1
+
+    # Restore epsilon parameters
+    agent.eps_start = old_eps_start
+    agent.eps_end = old_eps_end
+    agent.eps_decay_steps = old_eps_decay_steps
+
     return wins, draws, losses
 
 # ---------- Train ----------
@@ -255,9 +292,6 @@ def train(episodes=50_000):
         for (s,a,r,s2,done,legal_next) in traj:
             agent.push(s, a, r, s2, done, legal_next)
 
-        # # Train on a full batch from replay
-        # agent.train_batch(agent.replay)
-
         # Evaluate every 1000 episodes
         if ep % 1000 == 0:
             w, d, l = play_vs_random(agent, n=1000)
@@ -268,13 +302,14 @@ def train(episodes=50_000):
 # ---------- Training data collection ----------
 # Example: [(state, action, turn), ...]
 # moves = [
-#     ([0,0,0,0,0,0,0,0,0], 0, 1),      # X plays 0
+#     ([0,0,0,0,0,0,0,0,0], 0, 1),   # X plays 0
 #     ([1,0,0,0,0,0,0,0,0], 4, -1),  # O plays 4
 #     ([1,0,0,0,-1,0,0,0,0], 8, 1),  # X plays 8
 #     # ... and so on
 # ]
-def add_game_to_replay(agent, moves):
-    for idx, (prev_board, action, turn_mark) in enumerate(moves):
+def add_game_to_replay(agent, moves, gamma=0.99):
+    traj = []
+    for _, (prev_board, action, turn_mark) in enumerate(moves):
         s_canon = canonical(np.array(prev_board, dtype=np.int8), turn_mark)
         # Apply the action to get the next board
         board_after = play(np.array(prev_board, dtype=np.int8), action, turn_mark)
@@ -282,12 +317,17 @@ def add_game_to_replay(agent, moves):
         s2_canon = canonical(board_after, -turn_mark)
         if done:
             w = winner(board_after)
-            r = 1.0 if w == turn_mark else (-1.0 if (w != 0) else 0.0)
-            agent.push(np.array(s_canon, dtype=np.float32), action, r, np.array(s2_canon, dtype=np.float32), True, [])
+            r = 1.0 if w == turn_mark else (-1.0 if (w != 0) else 0.5)
+            traj.append((s_canon, action, r, s2_canon, True, []))
             break
         else:
             legal_next = legal_moves(board_after)
-            agent.push(np.array(s_canon, dtype=np.float32), action, 0.0, np.array(s2_canon, dtype=np.float32), False, legal_next)
+            traj.append((s_canon, action, 0.0, s2_canon, False, legal_next))
+    # Propagate discounted rewards for each player
+    outcome = winner(board_after)
+    traj = propagate_discounted_reward(traj, outcome, gamma=gamma)
+    for (s, a, r, s2, done, legal_next) in traj:
+        agent.push(np.array(s, dtype=np.float32), a, r, np.array(s2, dtype=np.float32), done, legal_next)
 
 def save_checkpoint(agent, filename="dqn_checkpoint.pth"):
     checkpoint = {
