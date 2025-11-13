@@ -525,12 +525,29 @@
         </div>
         <p><strong>The Debugging Marathon:</strong> With the LLM as our debugging partner, we systematically tackled each issue:</p>
         <ul>
-            <li><strong>Learning Rate:</strong> Too high = chaotic learning, too low = glacial progress</li>
-            <li><strong>Reward Function Evolution:</strong>
+            <li><strong>Learning Rate:</strong></br>
+                Too high = chaotic learning, too low = glacial progress
+            </li>
+            <li><strong>Reward Function Evolution:</strong></br>
+                Initial version of rewards system led to chaotic learning and instability. Our W/D/L stats were all over the place.
+                <p>
+                    We noticed the model wasn't learning to prioritize winning moves. And usually ignored them prioritizing blocking opponent instead.
+                </p>
+                <p>
+                    After multiple iterations, we added penalties for missed winning moves and increased rewards for draws, leading to more stable learning.
+                    However, it still wasn't enough. Our W/D/L stats for draws were converging to zero, while wins were around 90% and losses around 10%.
+                </p>
+                <p>
+                    We started questioning our entire training approach. We tried changing sampling methods, batch sizes, and even the neural network architecture,
+                    without significant improvement.
+                </p>
+                Here are the reward function versions we experimented with:
                 <ul>
                     <li>V1: Only reward the final outcome (+1 win, -1 loss)</li>
-                    <li>V2: Reward all moves with increasing/decreasing values</li>
-                    <li>V3: Heavily penalize missed winning moves (-2.0)</li>
+                    <li>V2: Reward games with increasing/decreasing values (most recent games weighted more heavily)</li>
+                    <li>V3: Penalize missed winning moves (-1.0)</li>
+                    <li>V4: Reward draws (+0.5)</li>
+                    <li>V5: Reward propagation for all game states (Monte Carlo Method)</li>
                 </ul>
             </li>
             <li><strong>Training Infrastructure:</strong> CPU vs GPU (GPU was surprisingly slow for this small problem)</li>
@@ -538,15 +555,23 @@
         </ul>
         <div class="story-callout story-callout-warning">
             <strong>The Breakthrough Moment:</strong><br>
-            We discovered our training was fundamentally flawed! The model learned from random samples of past games but never guaranteed it would learn from every recent game.
-            <br><br>
-            <strong>The Fix:</strong> Train on the most recent game explicitly, plus random historical samples. This ensured every game contributed to learning at least once.
+            We discovered that our training had multiple fundamental flaws!
+            <ol>
+                <li>The model learned from random samples of past games but never guaranteed it would learn from every recent game.</li>
+                <li>Our replay buffer was missing rewards for all game states leading to a win/loss, so the model couldn't associate early moves with final outcomes.</li>
+            </ol>
+
+            <strong>The Fix:</strong>
+            <ol>
+                <li>Train on the most recent game explicitly, plus random historical samples. This ensured every game contributed to learning at least once.</li>
+                <li>Implement Monte Carlo reward propagation to assign rewards to all game states in a match, not just the final state.</li>
+            </ol>
         </div>
         <h4 class="story-subheading">The Final Model</h4>
         <p>After countless iterations, parameter tuning, and LLM consultations, we achieved:</p>
         <div class="story-callout story-callout-success">
-            <strong>&lt;10% Loss Rate</strong><br>
-            Not as perfect as minimax, but learned organically through self-play. It developed its own playing style - excellent at blocking opponent moves but occasionally missing obvious wins (keeping games interesting!).
+            <strong>0% Loss Rate</strong><br>
+            As perfect as it can get!
         </div>
         <h3 class="story-subheading">Human-AI Collaboration Insights</h3>
         <p>This journey revealed fascinating dynamics about working with LLMs:</p>
@@ -557,8 +582,6 @@
             <li><strong>Iteration Speed:</strong> What used to take days of research now takes hours of conversation</li>
             <li><strong>But Human Insight Remains Critical:</strong> The breakthrough training fix came from manual analysis, not AI suggestion</li>
         </ul>
-        <h3 class="story-subheading">Future Possibilities</h3>
-        <p>We might revisit this model to achieve 0% loss rate, or explore other learning algorithms. But the real victory was the journey - from random moves to self-learning AI, with an LLM as our tireless coding companion.</p>
         <div class="story-callout story-callout-center">
             <strong>Try all three AI modes above and see the evolution for yourself!</strong><br>
             <em>Random → Minimax → DQN - each represents a different chapter in AI development</em>
