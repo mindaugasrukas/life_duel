@@ -290,32 +290,32 @@
                     {
                         type: 'fog',
                         description: 'Fog of War: Hides unexplored areas of the maze',
-                        color: '#a020f0', // purple +
+                        color: '#a020f0', // purple
                         probability: 0.3,
                         // isActive: false // TODO: not used yet
                     },
                     {
                         type: 'markVisited',
                         description: 'Mark Visited: Marks all visited tiles on the map',
-                        color: '#ff9800', // orange +
+                        color: '#ff9800', // orange
                         probability: 0.5,
                     },
                     {
                         type: 'showPath',
                         description: 'Show Path: Reveals the optimal path to the exit',
-                        color: '#00ffea', // cyan +
+                        color: '#00ffea', // cyan
                         probability: 0.1,
                     },
                     {
                         type: 'revealMap',
                         description: 'Reveal Map: Shows the entire maze layout until moved',
-                        color: '#00ff00', // green +
+                        color: '#00ff00', // green
                         probability: 0.1,
                     },
                     {
                         type: 'showFullMap',
                         description: 'Show Full Map: Permanently reveals the entire maze',
-                        color: '#0000ff', // blue +
+                        color: '#0000ff', // blue
                         probability: 0.1,
                     },
                     {
@@ -718,13 +718,8 @@
                             ctx.fillStyle = '#444';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                         } else if (powerUpMarkVisitedActive && tile.visited) {
+                            // Only highlight visited/explored tiles if the Mark Visited power-up is active
                             ctx.fillStyle = '#b7e4c7';
-                            ctx.fillRect(sx, sy, tileSize, tileSize);
-                        } else if (tile.visited && mode === 'full') {
-                            ctx.fillStyle = '#b7e4c7';
-                            ctx.fillRect(sx, sy, tileSize, tileSize);
-                        } else if (tile.explored && mode === 'full') {
-                            ctx.fillStyle = '#8ecae6';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                         } else if (tile.wall === false) {
                             ctx.fillStyle = '#eee';
@@ -738,35 +733,6 @@
                                 ctx.fill();
                             }
                         }
-                        if (this.guideActive && this.guidePath) {
-                            for (let i = 0; i < this.guideStep; i++) {
-                                let gp = this.guidePath[i];
-                                if (mode === 'full') {
-                                    let gx = gp.x - startX, gy = gp.y - startY;
-                                    let size = mapSize;
-                                    if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
-                                        let sx2 = offsetX + gx * tileSize;
-                                        let sy2 = offsetY + gy * tileSize;
-                                        ctx.fillStyle = '#00ffea';
-                                        ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
-                                    }
-                                } else if (mode === 'followLocation') {
-                                    if (gp.x === x && gp.y === y) {
-                                        ctx.fillStyle = '#00ffea';
-                                        ctx.fillRect(sx + tileSize / 4, sy + tileSize / 4, tileSize / 2, tileSize / 2);
-                                    }
-                                } else {
-                                    let gx = gp.x - startX, gy = gp.y - startY;
-                                    let size = VISIBLE_SIZE;
-                                    if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
-                                        let sx2 = offsetX + gx * tileSize;
-                                        let sy2 = offsetY + gy * tileSize;
-                                        ctx.fillStyle = '#00ffea';
-                                        ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
-                                    }
-                                }
-                            }
-                        }
                         if (x === player.x && y === player.y) {
                             ctx.fillStyle = '#00f';
                             ctx.beginPath();
@@ -775,31 +741,65 @@
                         }
                     }
                 }
+                // Draw guide overlay after base grid to avoid per-tile checks
+                if (this.guideActive && this.guidePath && this.guideStep > 0) {
+                    ctx.fillStyle = '#00ffea';
+                    for (let i = 0; i < this.guideStep; i++) {
+                        const gp = this.guidePath[i];
+                        // Skip if outside current render window
+                        if (mode === 'full' || mode === 'followLocation') {
+                            const gx = gp.x - startX;
+                            const gy = gp.y - startY;
+                            if (gx < 0 || gy < 0 || gx >= (endX - startX) || gy >= (endY - startY)) continue;
+                            const sx2 = offsetX + gx * tileSize;
+                            const sy2 = offsetY + gy * tileSize;
+                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                        } else {
+                            const gx = gp.x - startX;
+                            const gy = gp.y - startY;
+                            if (gx < 0 || gy < 0 || gx >= VISIBLE_SIZE || gy >= VISIBLE_SIZE) continue;
+                            const sx2 = offsetX + gx * tileSize;
+                            const sy2 = offsetY + gy * tileSize;
+                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                        }
+                    }
+                }
             }
 
-            // Guide animation hooks (kept for compatibility)
-            setGuide(path) { this.guidePath = path; this.guideStep = 0; this.guideActive = true; this.animateGuide(); }
-            animateGuide() {
+            // Guide animation hooks (time-based, constant speed)
+            setGuide(path) {
+                this.guidePath = path;
+                this.guideStep = 0;
+                this.guideActive = true;
+                this._guideStartTs = performance.now();
+                this._guideLastTs = this._guideStartTs;
+                this._perStepMs = 50; // 20 steps per second constant speed
+                this._runGuideRaf = true;
+                this._guideRaf();
+            }
+            _guideRaf() {
+                if (!this._runGuideRaf) return;
+                const now = performance.now();
+                // Advance steps based on elapsed time for constant speed
+                const elapsed = now - this._guideLastTs;
+                const advance = Math.floor(elapsed / this._perStepMs);
+                if (advance > 0) {
+                    this.guideStep = Math.min((this.guideStep || 0) + advance, this.guidePath ? this.guidePath.length : 0);
+                    this._guideLastTs += advance * this._perStepMs;
+                }
+                // Render current frame
+                this.render();
+                // Stop when finished
                 if (!this.guideActive || !this.guidePath || this.guideStep >= this.guidePath.length) {
                     this.guideActive = false;
                     this.guidePath = null;
+                    this._runGuideRaf = false;
                     this.render();
                     return;
                 }
-                this.render();
-                this.guideStep++;
-                setTimeout(() => this.animateGuide(), 50);
+                requestAnimationFrame(() => this._guideRaf());
             }
         }
-
-        // let guidePath = null;
-        // let guideStep = 0;
-        // let guideActive = false;
-
-        // function activateShowPathPowerUp(px, py) {
-        //     const path = game.findShortestPath(px, py, game.exit.x, game.exit.y);
-        //     if (path) renderer.setGuide(path);
-        // }
 
         // UI Controller for sidebar updates
         class UIController {
@@ -945,8 +945,8 @@
             canvas.height = h;
         }
 
-        const TILE_SIZE = 32;
-        const VISIBLE_SIZE = 9; // 9x9 visible window
+        const TILE_SIZE = 32; // default tile size 32x32
+        const VISIBLE_SIZE = 9; // default visible window 9x9
 
         // -- Game Initialization ---
         const game = new SuperMazeGame();
