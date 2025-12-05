@@ -221,169 +221,720 @@
             <button id="close-endgame">Close</button>
         </div>
     </div>
+    <div id="info-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:1500; justify-content:center; align-items:center;">
+        <div style="background:#333; color:#ffd700; padding:24px; border-radius:12px; max-width:420px; text-align:center; box-shadow:0 0 24px #000;">
+            <h3 id="info-title">Power-Up Activated</h3>
+            <div id="info-content"></div>
+            <button id="close-info" style="margin-top:16px; background:#444; color:#ffd700; border:none; padding:8px 18px; border-radius:6px; cursor:pointer;">Got it</button>
+        </div>
+    </div>
+    <!-- Toast notification for power-ups -->
+    <div id="toast" style="position:fixed; bottom:24px; right:24px; background:rgba(51,51,51,0.95); color:#ffd700; padding:12px 16px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.4); display:none; opacity:0; transition:opacity 0.6s ease; z-index:1600;
+    font-family: Arial, sans-serif;">
+        <span id="toast-text"></span>
+    </div>
     <script>
         /*
             TODO:
-            - place power-ups more evenly throughout the maze
-            - refactor powerUp.isActive flags
-            - refactor the exit as special power-up
+                - place power-ups more evenly throughout the maze
+                - refactor powerUp.isActive flags
+                - refactor the exit as special power-up
         */
 
-        // --- Game Constants ---
-        const TILE_SIZE = 32;
-        const VISIBLE_SIZE = 9; // 9x9 visible window
-        // Map size is now selected directly as a number
-        // --- Game State ---
-        let mapSize = 25; // Default demo size
-        let maze = [];
-        let player = { x: 1, y: 1 };
-        let exit = { x: 0, y: 0 };
-        let score = 0;
-        let steps = 0;
-        let timer = 0;
-        let inventory = [];
-        let gameStarted = false;
-        let revealMap = false;
-        let followPlayer = false;
-        let timerInterval = null;
-        let powerUps = [
-            {
-                type: 'fog',
-                description: 'Fog of War: Hides unexplored areas of the maze',
-                color: '#a020f0',
-                probability: 0.3,
-                // isActive: false // TODO: not used yet
-            },
-            {
-                type: 'markVisited',
-                description: 'Mark Visited: Marks all visited tiles on the map',
-                color: '#ff9800',
-                probability: 0.5,
-            },
-            {
-                type: 'showPath',
-                description: 'Show Path: Reveals the optimal path to the exit',
-                color: '#00ffea',
-                probability: 0.1,
-            },
-            {
-                type: 'revealMap',
-                description: 'Reveal Map: Shows the entire maze layout until moved',
-                color: '#00ff00',
-                probability: 0.1,
-            },
-            {
-                type: 'showFullMap',
-                description: 'Show Full Map: Permanently reveals the entire maze',
-                color: '#0000ff',
-                probability: 0.1,
-            },
-            {
-                type: 'followLocation',
-                description: 'Follow Location: Shows full map, but only viewport is visible, rest is dark',
-                color: '#ff00ff',
-                probability: 0.1,
+        // Event Emitter (for decoupled architecture)
+        class EventEmitter {
+            constructor() { this.events = {}; }
+            on(event, listener) {
+                if (!this.events[event]) this.events[event] = [];
+                this.events[event].push(listener);
+                return () => this.off(event, listener);
             }
-        ]
-        let placedPowerUps = [];
-        let powerUpFogActive = false;
-        let powerUpMarkVisitedActive = false;
-        let showFullMapActive = false;
-        let followLocationActive = false;
-        // --- DOM Elements ---
-        const canvas = document.getElementById('maze-canvas');
-        const ctx = canvas.getContext('2d');
-        const scoreEl = document.getElementById('score');
-        const stepsEl = document.getElementById('steps');
-        const timerEl = document.getElementById('timer');
-        const inventoryEl = document.getElementById('inventory');
-        const helpBtn = document.getElementById('help-btn');
-        const helpModal = document.getElementById('help-modal');
-        const closeHelpBtn = document.getElementById('close-help');
-        const mapSizeSelect = document.getElementById('map-size-select');
-        const startBtn = document.getElementById('start-btn');
+            off(event, listener) {
+                if (!this.events[event]) return;
+                this.events[event] = this.events[event].filter(l => l !== listener);
+            }
+            emit(event, ...args) {
+                if (!this.events[event]) return;
+                for (const l of this.events[event]) { try { l(...args); } catch (e) { console.error(e); } }
+            }
+        }
 
-        // --- Maze Generation (Recursive Backtracker) ---
-        function generateMaze(size) {
-            // Initialize maze with walls
-            maze = Array(size).fill().map(() =>
-                Array(size).fill().map(() => ({ wall: true, visited: false, explored: false }))
-            );
-            let stack = [];
-            let startX = 1, startY = 1;
-            stack.push([startX, startY]);
-            maze[startY][startX] = { wall: false, visited: true, explored: true };
-            while (stack.length > 0) {
-                let [x, y] = stack[stack.length - 1];
-                let dirs = [[0, -2], [0, 2], [-2, 0], [2, 0]];
-                dirs = dirs.sort(() => Math.random() - 0.5);
-                let carved = false;
-                for (let [dx, dy] of dirs) {
-                    let nx = x + dx, ny = y + dy;
-                    if (nx > 0 && ny > 0 && nx < size && ny < size && maze[ny][nx].wall === true) {
-                        maze[y + dy / 2][x + dx / 2].wall = false;
-                        maze[ny][nx].wall = false;
-                        stack.push([nx, ny]);
-                        carved = true;
-                        break;
+        // Core Game class (encapsulated state)
+        class SuperMazeGame extends EventEmitter {
+            constructor() {
+                super();
+
+                // Game State
+                this.mapSize = 25; // Default map size
+                this.maze = []; // Maze grid
+                this.player = { x: 1, y: 1 }; // Player position
+                this.exit = { x: 0, y: 0 }; // Exit position
+                this.score = 0; // Player score
+                this.steps = 0; // Steps taken
+                this.timer = 0; // Time elapsed
+                this.placedPowerUps = []; // Placed power-ups in the maze
+                this.inventory = []; // TBD, not used yet
+                this.timerInterval = null; // Timer interval ID
+                this.visibleTiles = new Set(); // Currently visible tiles
+
+                // Game Flags
+                this.gameStarted = false; // Is game started
+                this.revealMap = false; // Reveal entire map
+                this.followPlayer = false; // Follow player location
+                this.powerUpFogActive = false; // Fog of war active
+                this.powerUpMarkVisitedActive = false; // Mark visited active
+                this.showFullMapActive = false; // Show full map active
+                this.followLocationActive = false; // Follow location active
+
+                this.powerUps = [
+                    {
+                        type: 'fog',
+                        description: 'Fog of War: Hides unexplored areas of the maze',
+                        color: '#a020f0', // purple +
+                        probability: 0.3,
+                        // isActive: false // TODO: not used yet
+                    },
+                    {
+                        type: 'markVisited',
+                        description: 'Mark Visited: Marks all visited tiles on the map',
+                        color: '#ff9800', // orange +
+                        probability: 0.5,
+                    },
+                    {
+                        type: 'showPath',
+                        description: 'Show Path: Reveals the optimal path to the exit',
+                        color: '#00ffea', // cyan +
+                        probability: 0.1,
+                    },
+                    {
+                        type: 'revealMap',
+                        description: 'Reveal Map: Shows the entire maze layout until moved',
+                        color: '#00ff00', // green +
+                        probability: 0.1,
+                    },
+                    {
+                        type: 'showFullMap',
+                        description: 'Show Full Map: Permanently reveals the entire maze',
+                        color: '#0000ff', // blue +
+                        probability: 0.1,
+                    },
+                    {
+                        type: 'followLocation',
+                        description: 'Follow Location: Shows full map, but only viewport is visible, rest is dark',
+                        color: '#ff00ff', // magenta
+                        probability: 0.1,
+                    }
+                ];
+            }
+
+            startGame(size) {
+                this.mapSize = typeof size === 'number' ? size : this.mapSize;
+                // Reset basic state
+                this.score = 0;
+                this.steps = 0;
+                this.timer = 0;
+                this.inventory = [];
+                this.visibleTiles = new Set();
+                // Start with hidden map; visibility will be computed around the player
+                this.revealMap = false;
+                this.followPlayer = true;
+                this.gameStarted = true;
+                // Reset view-related flags
+                this.showFullMapActive = false;
+                this.followLocationActive = false;
+                this.powerUpFogActive = false;
+                this.powerUpMarkVisitedActive = false;
+                // Generate and choose start
+                let tries = 0;
+                do {
+                    this.generateMaze(this.mapSize);
+                    let found = false;
+                    for (let y = 1; y < Math.min(10, this.mapSize) && !found; y++) {
+                        for (let x = 1; x < Math.min(10, this.mapSize) && !found; x++) {
+                            if (this.maze[y][x].wall === false) {
+                                this.player = { x, y };
+                                found = true;
+                            }
+                        }
+                    }
+                    if (!found) this.player = { x: 1, y: 1 };
+                    this.exit = { x: this.mapSize - 2, y: this.mapSize - 2 };
+                    tries++;
+                } while (!this.isMazeFullyReachable() && tries < 20);
+                // Mark starting cell
+                this.maze[this.player.y][this.player.x].visited = true;
+                if (!this.maze[this.player.y][this.player.x].explored) {
+                    this.maze[this.player.y][this.player.x].explored = true;
+                    this.score = 1;
+                }
+                // Power-ups and visibility
+                this.placePowerUps();
+                this.updateVisibility();
+                // Timer
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => {
+                    this.timer++;
+                    this.emit('timerUpdated', this.timer);
+                }, 1000);
+                // Notify listeners
+                this.emit('gameStarted', this.getState());
+            }
+
+            movePlayer(dx, dy) {
+                if (!this.gameStarted) return;
+                // If Reveal Map was previously activated, turn it off on the next move
+                if (this.revealMap) {
+                    this.revealMap = false;
+                }
+                let nx = this.player.x + dx, ny = this.player.y + dy;
+                if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && this.maze[ny][nx].wall === false) {
+                    this.player.x = nx;
+                    this.player.y = ny;
+                    this.steps++;
+                    this.maze[ny][nx].visited = true;
+                    if (!this.maze[ny][nx].explored) {
+                        this.maze[ny][nx].explored = true;
+                        this.score++;
+                    }
+                    // Power-ups
+                    for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
+                        const p = this.placedPowerUps[i];
+                        if (p.x === nx && p.y === ny) {
+                            if (p.powerUp.type === 'fog') {
+                                this.powerUpFogActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'markVisited') {
+                                this.powerUpMarkVisitedActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'showPath') {
+                                this.emit('showPathActivated', { x: nx, y: ny });
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'revealMap') {
+                                this.revealMap = true;
+                                this.placedPowerUps.splice(i, 1);
+                                this.emit('revealMapActivated');
+                                this.emit('stateUpdated', this.getState());
+                                return;
+                            } else if (p.powerUp.type === 'showFullMap') {
+                                this.showFullMapActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'followLocation') {
+                                this.followLocationActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            }
+                            this.placedPowerUps.splice(i, 1);
+                        }
+                    }
+                    this.updateVisibility();
+                    this.emit('stateUpdated', this.getState());
+                    if (ny === this.exit.y && nx === this.exit.x) {
+                        this.endGame(true);
                     }
                 }
-                if (!carved) {
-                    stack.pop();
+            }
+
+            endGame(won) {
+                this.gameStarted = false;
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                // Reveal the entire maze and reset special views
+                this.revealMap = true;
+                this.showFullMapActive = false;
+                this.followLocationActive = false;
+                // Notify listeners; UIController/Renderer will handle modal/rendering
+                this.emit('gameEnded', { won, score: this.score, timer: this.timer });
+            }
+
+            updateVisibility() {
+                const radius = 4;
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        let nx = this.player.x + dx, ny = this.player.y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize) {
+                            this.visibleTiles.add(`${nx},${ny}`);
+                        }
+                    }
+                }
+                this.emit('visibilityUpdated', this.visibleTiles);
+            }
+
+            getState() {
+                return {
+                    mapSize: this.mapSize,
+                    maze: this.maze,
+                    player: this.player,
+                    exit: this.exit,
+                    score: this.score,
+                    steps: this.steps,
+                    timer: this.timer,
+                    placedPowerUps: this.placedPowerUps,
+                    inventory: this.inventory,
+                    gameStarted: this.gameStarted,
+                    revealMap: this.revealMap,
+                    followPlayer: this.followPlayer,
+                    powerUpFogActive: this.powerUpFogActive,
+                    powerUpMarkVisitedActive: this.powerUpMarkVisitedActive,
+                    showFullMapActive: this.showFullMapActive,
+                    followLocationActive: this.followLocationActive,
+                    visibleTiles: this.visibleTiles
+                };
+            }
+
+            // Maze Generation (Recursive Backtracker)
+            generateMaze(size) {
+                // Initialize maze with walls
+                this.maze = Array(size).fill().map(() =>
+                    Array(size).fill().map(() => ({ wall: true, visited: false, explored: false }))
+                );
+                let stack = [];
+                let startX = 1, startY = 1;
+                stack.push([startX, startY]);
+                this.maze[startY][startX] = { wall: false, visited: true, explored: true };
+                while (stack.length > 0) {
+                    let [x, y] = stack[stack.length - 1];
+                    let dirs = [[0, -2], [0, 2], [-2, 0], [2, 0]];
+                    dirs = dirs.sort(() => Math.random() - 0.5);
+                    let carved = false;
+                    for (let [dx, dy] of dirs) {
+                        let nx = x + dx, ny = y + dy;
+                        if (nx > 0 && ny > 0 && nx < size && ny < size && this.maze[ny][nx].wall === true) {
+                            this.maze[y + dy / 2][x + dx / 2].wall = false;
+                            this.maze[ny][nx].wall = false;
+                            stack.push([nx, ny]);
+                            carved = true;
+                            break;
+                        }
+                    }
+                    if (!carved) {
+                        stack.pop();
+                    }
+                }
+                // Place exit
+                this.exit = { x: size - 2, y: size - 2 };
+                this.emit('mazeGenerated', this.maze);
+            }
+
+            // Place Power-Ups in Dead-Ends of the Maze
+            placePowerUps() {
+                this.placedPowerUps = [];
+                let deadEnds = this.findDeadEnds();
+                // If not enough dead-ends, regenerate maze
+                let tries = 0;
+                while (deadEnds.length < this.powerUps.length && tries < 10) {
+                    this.generateMaze(this.mapSize);
+                    deadEnds = this.findDeadEnds();
+                    tries++;
+                }
+                // Calculate number of power-ups based on maze size
+                let ratio = 1/60; // 1 power-up per 60 cells
+                let minPowerUps = this.powerUps.length;
+                let maxPowerUps = Math.max(minPowerUps, Math.floor(this.mapSize * this.mapSize / 8));
+                let count = Math.max(minPowerUps, Math.min(deadEnds.length, Math.round(this.mapSize * this.mapSize * ratio)));
+                count = Math.min(count, maxPowerUps);
+                // Ensure every power-up is included at least once
+                let chosen = [];
+                // Place one of each power-up type
+                for (let i = 0; i < this.powerUps.length && deadEnds.length > 0; i++) {
+                    let idx = this.randInt(0, deadEnds.length - 1);
+                    let pos = deadEnds.splice(idx, 1)[0];
+                    chosen.push({ powerUp: this.powerUps[i], x: pos.x, y: pos.y });
+                }
+                // Fill the rest randomly
+                while (chosen.length < count && deadEnds.length > 0) {
+                    let idx = this.randInt(0, deadEnds.length - 1);
+                    let pos = deadEnds.splice(idx, 1)[0];
+                    const randomPowerUp = this.getRandomPowerUp();
+                    chosen.push({ powerUp: randomPowerUp, x: pos.x, y: pos.y });
+                }
+                this.placedPowerUps = chosen;
+                this.emit('powerUpsPlaced', this.placedPowerUps);
+            }
+
+            // Get a random power-up by wieghted probability
+            getRandomPowerUp() {
+                let totalProb = this.powerUps.reduce((sum, p) => sum + p.probability, 0);
+                let rand = Math.random() * totalProb;
+                for (const p of this.powerUps) {
+                    if (rand < p.probability) {
+                        return p;
+                    }
+                    rand -= p.probability;
+                }
+                return null;
+            }
+
+            // --- Utility Functions ---
+            randInt(a, b) {
+                return Math.floor(Math.random() * (b - a + 1)) + a;
+            }
+
+            findDeadEnds() {
+                let deadEnds = [];
+                for (let y = 1; y < this.mapSize - 1; y++) {
+                    for (let x = 1; x < this.mapSize - 1; x++) {
+                        if (this.maze[y][x].wall === false && !(x === this.player.x && y === this.player.y) && !(x === this.exit.x && y === this.exit.y)) {
+                            let open = 0;
+                            if (this.maze[y - 1][x].wall === false) open++;
+                            if (this.maze[y + 1][x].wall === false) open++;
+                            if (this.maze[y][x - 1].wall === false) open++;
+                            if (this.maze[y][x + 1].wall === false) open++;
+                            if (open === 1) deadEnds.push({ x, y });
+                        }
+                    }
+                }
+                return deadEnds;
+            }
+
+            findShortestPath(sx, sy, ex, ey) {
+                let queue = [{ x: sx, y: sy, path: [] }];
+                let visited = Array(this.mapSize).fill().map(() => Array(this.mapSize).fill(false));
+                visited[sy][sx] = true;
+                while (queue.length > 0) {
+                    let { x, y, path } = queue.shift();
+                    if (x === ex && y === ey) return [...path, { x, y }];
+                    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+                        let nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && !visited[ny][nx] && this.maze[ny][nx].wall === false) {
+                            visited[ny][nx] = true;
+                            queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
+                        }
+                    }
+                }
+                return null;
+            }
+
+            isMazeFullyReachable() {
+                // BFS from player, do not go through exit
+                let visited = Array(this.mapSize).fill().map(() => Array(this.mapSize).fill(false));
+                let queue = [];
+                queue.push({ x: this.player.x, y: this.player.y });
+                visited[this.player.y][this.player.x] = true;
+                while (queue.length > 0) {
+                    let { x, y } = queue.shift();
+                    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+                        let nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && !visited[ny][nx]) {
+                            if (this.maze[ny][nx].wall === false && !(nx === this.exit.x && ny === this.exit.y)) {
+                                visited[ny][nx] = true;
+                                queue.push({ x: nx, y: ny });
+                            }
+                        }
+                    }
+                }
+                // Check all non-wall, non-exit cells are visited
+                for (let y = 0; y < this.mapSize; y++) {
+                    for (let x = 0; x < this.mapSize; x++) {
+                        if (this.maze[y][x].wall === false && !(x === this.exit.x && y === this.exit.y)) {
+                            if (!visited[y][x]) return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
+
+        class Renderer {
+            constructor(gameRef, ctxRef, canvasRef) {
+                this.game = gameRef;
+                this.ctx = ctxRef;
+                this.canvas = canvasRef;
+                this.guidePath = null;
+                this.guideStep = 0;
+                this.guideActive = false;
+                // subscribe to events
+                this.game.on('stateUpdated', () => this.render());
+                this.game.on('gameStarted', () => this.render());
+                this.game.on('gameEnded', () => this.renderFull());
+                this.game.on('visibilityUpdated', () => this.render());
+                this.game.on('powerUpsPlaced', () => this.render());
+                // when showPath power-up is activated, compute and animate guide
+                this.game.on('showPathActivated', ({ x, y }) => {
+                    const path = this.game.findShortestPath(x, y, this.game.exit.x, this.game.exit.y);
+                    if (path && path.length) {
+                        this.setGuide(path);
+                    }
+                });
+            }
+
+            render() {
+                const state = this.game.getState();
+                if (state.revealMap) return this.renderMaze('full');
+                if (state.showFullMapActive) return this.renderMaze('full');
+                if (state.followLocationActive) return this.renderMaze('followLocation');
+                return this.renderMaze('normal');
+            }
+
+            renderFull() { this.renderMaze('full'); }
+
+            renderMaze(mode = 'normal') {
+                const { mapSize, maze, player, exit, placedPowerUps, powerUpFogActive, powerUpMarkVisitedActive, revealMap, visibleTiles } = this.game.getState();
+                const ctx = this.ctx, canvas = this.canvas;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                let tileSize, offsetX, offsetY, startX, startY, endX, endY;
+                let px = player.x, py = player.y;
+                let half = Math.floor(VISIBLE_SIZE / 2);
+                let vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
+                let vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
+                if (mode === 'full' || mode === 'followLocation') {
+                    tileSize = Math.min((canvas.width - 10) / mapSize, (canvas.height - 10) / mapSize);
+                    offsetX = (canvas.width - tileSize * mapSize) / 2;
+                    offsetY = (canvas.height - tileSize * mapSize) / 2;
+                    startX = 0; startY = 0; endX = mapSize; endY = mapSize;
+                } else {
+                    tileSize = TILE_SIZE;
+                    vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
+                    vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
+                    offsetX = (canvas.width - VISIBLE_SIZE * tileSize) / 2;
+                    offsetY = (canvas.height - VISIBLE_SIZE * tileSize) / 2;
+                    startX = vx; startY = vy; endX = vx + VISIBLE_SIZE; endY = vy + VISIBLE_SIZE;
+                }
+                for (let y = startY; y < endY; y++) {
+                    for (let x = startX; x < endX; x++) {
+                        let tile = maze[y]?.[x] ?? { wall: true };
+                        let sx = offsetX + (x - startX) * tileSize;
+                        let sy = offsetY + (y - startY) * tileSize;
+                        let inViewport = true;
+                        if (mode === 'followLocation') {
+                            inViewport = x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
+                            if (!inViewport) {
+                                ctx.fillStyle = '#111';
+                                ctx.fillRect(sx, sy, tileSize, tileSize);
+                                continue;
+                            }
+                        }
+                        if (mode === 'normal' && powerUpFogActive && !tile.explored) {
+                            ctx.fillStyle = '#111';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                            continue;
+                        }
+                        if (mode === 'normal' && !powerUpFogActive && !revealMap && !visibleTiles.has(`${x},${y}`)) {
+                            ctx.fillStyle = '#111';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                            continue;
+                        }
+                        if (exit && x === exit.x && y === exit.y) {
+                            ctx.fillStyle = '#ffd700';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        } else if (tile.wall === true) {
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        } else if (powerUpMarkVisitedActive && tile.visited) {
+                            ctx.fillStyle = '#b7e4c7';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        } else if (tile.visited && mode === 'full') {
+                            ctx.fillStyle = '#b7e4c7';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        } else if (tile.explored && mode === 'full') {
+                            ctx.fillStyle = '#8ecae6';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        } else if (tile.wall === false) {
+                            ctx.fillStyle = '#eee';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                        }
+                        for (const p of placedPowerUps) {
+                            if (p.x === x && p.y === y) {
+                                ctx.fillStyle = p.powerUp.color;
+                                ctx.beginPath();
+                                ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize / 3, 0, 2 * Math.PI);
+                                ctx.fill();
+                            }
+                        }
+                        if (this.guideActive && this.guidePath) {
+                            for (let i = 0; i < this.guideStep; i++) {
+                                let gp = this.guidePath[i];
+                                if (mode === 'full') {
+                                    let gx = gp.x - startX, gy = gp.y - startY;
+                                    let size = mapSize;
+                                    if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
+                                        let sx2 = offsetX + gx * tileSize;
+                                        let sy2 = offsetY + gy * tileSize;
+                                        ctx.fillStyle = '#00ffea';
+                                        ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                                    }
+                                } else if (mode === 'followLocation') {
+                                    if (gp.x === x && gp.y === y) {
+                                        ctx.fillStyle = '#00ffea';
+                                        ctx.fillRect(sx + tileSize / 4, sy + tileSize / 4, tileSize / 2, tileSize / 2);
+                                    }
+                                } else {
+                                    let gx = gp.x - startX, gy = gp.y - startY;
+                                    let size = VISIBLE_SIZE;
+                                    if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
+                                        let sx2 = offsetX + gx * tileSize;
+                                        let sy2 = offsetY + gy * tileSize;
+                                        ctx.fillStyle = '#00ffea';
+                                        ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                                    }
+                                }
+                            }
+                        }
+                        if (x === player.x && y === player.y) {
+                            ctx.fillStyle = '#00f';
+                            ctx.beginPath();
+                            ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize / 2.2, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                    }
                 }
             }
-            // Place exit
-            exit = { x: size - 2, y: size - 2 };
-        }
 
-        function placePowerUps() {
-            placedPowerUps = [];
-            let deadEnds = findDeadEnds();
-            // If not enough dead-ends, regenerate maze
-            let tries = 0;
-            while (deadEnds.length < powerUps.length && tries < 10) {
-                generateMaze(mapSize);
-                deadEnds = findDeadEnds();
-                tries++;
-            }
-            // Calculate number of power-ups based on maze size
-            let ratio = 1/60; // 1 power-up per 60 cells
-            let minPowerUps = powerUps.length;
-            let maxPowerUps = Math.max(minPowerUps, Math.floor(mapSize * mapSize / 8));
-            let count = Math.max(minPowerUps, Math.min(deadEnds.length, Math.round(mapSize * mapSize * ratio)));
-            count = Math.min(count, maxPowerUps);
-            // Ensure every power-up is included at least once
-            let chosen = [];
-            // Place one of each power-up type
-            for (let i = 0; i < powerUps.length && deadEnds.length > 0; i++) {
-                let idx = randInt(0, deadEnds.length - 1);
-                let pos = deadEnds.splice(idx, 1)[0];
-                chosen.push({ powerUp: powerUps[i], x: pos.x, y: pos.y });
-            }
-            // Fill the rest randomly
-            while (chosen.length < count && deadEnds.length > 0) {
-                let idx = randInt(0, deadEnds.length - 1);
-                let pos = deadEnds.splice(idx, 1)[0];
-                const randomPowerUp = getRandomPowerUp();
-                chosen.push({ powerUp: randomPowerUp, x: pos.x, y: pos.y });
-            }
-            placedPowerUps = chosen;
-        }
-
-        // Get a random power-up by wieghted probability
-        function getRandomPowerUp() {
-            let totalProb = powerUps.reduce((sum, p) => sum + p.probability, 0);
-            let rand = Math.random() * totalProb;
-            for (const p of powerUps) {
-                if (rand < p.probability) {
-                    return p;
+            // Guide animation hooks (kept for compatibility)
+            setGuide(path) { this.guidePath = path; this.guideStep = 0; this.guideActive = true; this.animateGuide(); }
+            animateGuide() {
+                if (!this.guideActive || !this.guidePath || this.guideStep >= this.guidePath.length) {
+                    this.guideActive = false;
+                    this.guidePath = null;
+                    this.render();
+                    return;
                 }
-                rand -= p.probability;
+                this.render();
+                this.guideStep++;
+                setTimeout(() => this.animateGuide(), 50);
             }
-            return null;
         }
 
-        // --- Rendering ---
+        // let guidePath = null;
+        // let guideStep = 0;
+        // let guideActive = false;
+
+        // function activateShowPathPowerUp(px, py) {
+        //     const path = game.findShortestPath(px, py, game.exit.x, game.exit.y);
+        //     if (path) renderer.setGuide(path);
+        // }
+
+        // UI Controller for sidebar updates
+        class UIController {
+            constructor(gameRef) {
+                this.game = gameRef;
+                // DOM Elements
+                this.scoreEl = document.getElementById('score');
+                this.stepsEl = document.getElementById('steps');
+                this.timerEl = document.getElementById('timer');
+                this.inventoryEl = document.getElementById('inventory');
+                this.helpBtn = document.getElementById('help-btn');
+                this.helpModal = document.getElementById('help-modal');
+                this.closeHelpBtn = document.getElementById('close-help');
+                this.mapSizeSelect = document.getElementById('map-size-select');
+                this.startBtn = document.getElementById('start-btn');
+                this.endgameModal = document.getElementById('endgame-modal');
+                this.endgameTitle = document.getElementById('endgame-title');
+                this.endgameDetails = document.getElementById('endgame-details');
+                this.closeEndgameBtn = document.getElementById('close-endgame');
+                // Info modal for power-ups
+                this.infoModal = document.getElementById('info-modal');
+                this.infoTitle = document.getElementById('info-title');
+                this.infoContent = document.getElementById('info-content');
+                this.closeInfoBtn = document.getElementById('close-info');
+                // Toast elements
+                this.toast = document.getElementById('toast');
+                this.toastText = document.getElementById('toast-text');
+                this.onGameStarted = this.onGameStarted.bind(this);
+                this.onStateUpdated = this.onStateUpdated.bind(this);
+                this.onTimerUpdated = this.onTimerUpdated.bind(this);
+                this.onGameEnded = this.onGameEnded.bind(this);
+                this.register();
+                this.wireControls();
+            }
+            register() {
+                this.game.on('gameStarted', this.onGameStarted);
+                this.game.on('stateUpdated', this.onStateUpdated);
+                this.game.on('timerUpdated', this.onTimerUpdated);
+                this.game.on('gameEnded', this.onGameEnded);
+                this.game.on('revealMapActivated', () => this.onRevealMapActivated());
+                this.game.on('powerUpCollected', (powerup) => this.onPowerUpCollected(powerup));
+            }
+            wireControls() {
+                this.startBtn.addEventListener('click', () => {
+                    const size = parseInt(this.mapSizeSelect.value, 10);
+                    this.game.startGame(size);
+                });
+                this.helpBtn.addEventListener('click', () => {
+                    this.helpModal.style.display = 'flex';
+                });
+                this.closeHelpBtn.addEventListener('click', () => {
+                    this.helpModal.style.display = 'none';
+                });
+                this.closeEndgameBtn.addEventListener('click', () => {
+                    this.endgameModal.style.display = 'none';
+                });
+                this.closeInfoBtn.addEventListener('click', () => {
+                    this.infoModal.style.display = 'none';
+                });
+            }
+            onGameStarted() {
+                const s = this.game.getState();
+                this.scoreEl.textContent = s.score;
+                this.stepsEl.textContent = s.steps;
+                this.timerEl.textContent = s.timer;
+                this.inventoryEl.textContent = 'None';
+                renderer.render();
+            }
+            onStateUpdated() {
+                const s = this.game.getState();
+                this.scoreEl.textContent = s.score;
+                this.stepsEl.textContent = s.steps;
+                renderer.render();
+            }
+            onTimerUpdated(t) { this.timerEl.textContent = t; }
+            onGameEnded(payload) {
+                // Update rendering to full view
+                renderer.renderFull();
+                // Show endgame modal with details
+                const { won, score, timer } = payload || {};
+                this.endgameTitle.textContent = won ? 'You Escaped the Maze!' : 'Game Over';
+                this.endgameDetails.innerHTML = won ? `<p>Score: <b>${score}</b></p><p>Time: <b>${timer}s</b></p>` : '';
+                this.endgameModal.style.display = 'flex';
+            }
+            onRevealMapActivated() {
+                // Show info dialog explaining temporary reveal behavior
+                this.infoTitle.textContent = 'Reveal Map Activated';
+                this.infoContent.innerHTML = '<p>The entire maze is visible now.</p><p>After your next move, visibility will return to the previous state.</p>';
+                this.infoModal.style.display = 'flex';
+            }
+            onPowerUpCollected(powerup) {
+                const msg = powerup.description || 'Power-up activated!';
+                this.showToast(msg);
+            }
+            showToast(text) {
+                if (!this.toast || !this.toastText) return;
+                this.toastText.textContent = text;
+                this.toast.style.display = 'block';
+                // force reflow for transition
+                void this.toast.offsetWidth;
+                this.toast.style.opacity = '1';
+                // fade out after 2.5s
+                clearTimeout(this.toastTimer);
+                this.toastTimer = setTimeout(() => {
+                    this.toast.style.opacity = '0';
+                    setTimeout(() => {
+                        this.toast.style.display = 'none';
+                    }, 600);
+                }, 2500);
+            }
+            startInitialGame() {
+                const size = parseInt(this.mapSizeSelect.value, 10);
+                this.game.startGame(size);
+            }
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            renderer.render();
+        });
+
+        document.addEventListener('keydown', e => {
+            if (!game.gameStarted) return;
+            if (e.key === 'ArrowUp' || e.key === 'w') game.movePlayer(0, -1);
+            if (e.key === 'ArrowDown' || e.key === 's') game.movePlayer(0, 1);
+            if (e.key === 'ArrowLeft' || e.key === 'a') game.movePlayer(-1, 0);
+            if (e.key === 'ArrowRight' || e.key === 'd') game.movePlayer(1, 0);
+        });
+
+        // --- Canvas Elements ---
+        const canvas = document.getElementById('maze-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // -- Helpers ---
         function resizeCanvas() {
             // Set both CSS and element attributes for canvas size
             const w = window.innerWidth - 320;
@@ -394,401 +945,17 @@
             canvas.height = h;
         }
 
-        function renderMaze({ mode = 'normal' } = {}) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            let tileSize, offsetX, offsetY, startX, startY, endX, endY;
-            let px = player.x, py = player.y;
-            let half = Math.floor(VISIBLE_SIZE / 2);
-            let vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
-            let vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
-            if (mode === 'full' || mode === 'followLocation') {
-                tileSize = Math.min((canvas.width - 10) / mapSize, (canvas.height - 10) / mapSize);
-                offsetX = (canvas.width - tileSize * mapSize) / 2;
-                offsetY = (canvas.height - tileSize * mapSize) / 2;
-                startX = 0; startY = 0; endX = mapSize; endY = mapSize;
-            } else {
-                tileSize = TILE_SIZE;
-                vx = px - half;
-                vy = py - half;
-                if (followPlayer || revealMap || powerUpFogActive) {
-                    vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
-                    vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
-                } else {
-                    vx = Math.floor((mapSize - VISIBLE_SIZE) / 2);
-                    vy = Math.floor((mapSize - VISIBLE_SIZE) / 2);
-                }
-                offsetX = (canvas.width - VISIBLE_SIZE * tileSize) / 2;
-                offsetY = (canvas.height - VISIBLE_SIZE * tileSize) / 2;
-                startX = vx; startY = vy; endX = vx + VISIBLE_SIZE; endY = vy + VISIBLE_SIZE;
-            }
-            for (let y = startY; y < endY; y++) {
-                for (let x = startX; x < endX; x++) {
-                    let tile = maze[y]?.[x] ?? { wall: true };
-                    let sx = offsetX + (x - startX) * tileSize;
-                    let sy = offsetY + (y - startY) * tileSize;
-                    let inViewport = true;
-                    if (mode === 'followLocation') {
-                        inViewport = x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
-                        if (!inViewport) {
-                            ctx.fillStyle = '#111';
-                            ctx.fillRect(sx, sy, tileSize, tileSize);
-                            continue;
-                        }
-                    }
-                    // Fog of war logic (only for viewport)
-                    if (mode === 'normal' && powerUpFogActive && !tile.explored) {
-                        ctx.fillStyle = '#111';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                        continue;
-                    }
-                    if (mode === 'normal' && !powerUpFogActive && !revealMap && !isTileVisible(x, y)) {
-                        ctx.fillStyle = '#111';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                        continue;
-                    }
-                    if (exit && x === exit.x && y === exit.y) {
-                        ctx.fillStyle = '#ffd700';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.wall === true) {
-                        ctx.fillStyle = '#444';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (powerUpMarkVisitedActive && tile.visited) {
-                        ctx.fillStyle = '#b7e4c7';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.visited && mode === 'full') {
-                        ctx.fillStyle = '#b7e4c7';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.explored && mode === 'full') {
-                        ctx.fillStyle = '#8ecae6';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    } else if (tile.wall === false) {
-                        ctx.fillStyle = '#eee';
-                        ctx.fillRect(sx, sy, tileSize, tileSize);
-                    }
-                    // Draw power-ups
-                    for (const p of placedPowerUps) {
-                        if (p.x === x && p.y === y) {
-                            ctx.fillStyle = p.powerUp.color;
-                            ctx.beginPath();
-                            ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize / 3, 0, 2 * Math.PI);
-                            ctx.fill();
-                        }
-                    }
-                    // Draw guide path if active
-                    if (guideActive && guidePath) {
-                        for (let i = 0; i < guideStep; i++) {
-                            let gp = guidePath[i];
-                            if (mode === 'full') {
-                                let gx = gp.x - startX, gy = gp.y - startY;
-                                let size = mapSize;
-                                if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
-                                    let sx2 = offsetX + gx * tileSize;
-                                    let sy2 = offsetY + gy * tileSize;
-                                    ctx.fillStyle = '#00ffea';
-                                    ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
-                                }
-                            } else if (mode === 'followLocation') {
-                                if (gp.x === x && gp.y === y) {
-                                    ctx.fillStyle = '#00ffea';
-                                    ctx.fillRect(sx + tileSize / 4, sy + tileSize / 4, tileSize / 2, tileSize / 2);
-                                }
-                            } else {
-                                let gx = gp.x - startX, gy = gp.y - startY;
-                                let size = VISIBLE_SIZE;
-                                if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
-                                    let sx2 = offsetX + gx * tileSize;
-                                    let sy2 = offsetY + gy * tileSize;
-                                    ctx.fillStyle = '#00ffea';
-                                    ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
-                                }
-                            }
-                        }
-                    }
-                    // Player
-                    if (x === player.x && y === player.y) {
-                        ctx.fillStyle = '#00f';
-                        ctx.beginPath();
-                        ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize / 2.2, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                }
-            }
-        }
+        const TILE_SIZE = 32;
+        const VISIBLE_SIZE = 9; // 9x9 visible window
 
-        function render() {
-            if (showFullMapActive) {
-                renderMaze({ mode: 'full' });
-            } else if (followLocationActive) {
-                renderMaze({ mode: 'followLocation' });
-            } else {
-                renderMaze({ mode: 'normal' });
-            }
-        }
+        // -- Game Initialization ---
+        const game = new SuperMazeGame();
+        const renderer = new Renderer(game, ctx, canvas);
+        const ui = new UIController(game);
 
-        function renderFullMaze() {
-            renderMaze({ mode: 'full' });
-        }
-
-        // --- Fog of War ---
-        let visibleTiles = new Set();
-
-        function isTileVisible(x, y) {
-            return visibleTiles.has(`${x},${y}`);
-        }
-
-        function updateVisibility() {
-            let radius = 4;
-            for (let dy = -radius; dy <= radius; dy++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                    let nx = player.x + dx, ny = player.y + dy;
-                    if (nx >= 0 && ny >= 0 && nx < mapSize && ny < mapSize) {
-                        visibleTiles.add(`${nx},${ny}`);
-                        // Only mark as explored in movePlayer
-                    }
-                }
-            }
-        }
-
-        // --- Game Logic ---
-        function startGame() {
-            mapSize = parseInt(mapSizeSelect.value);
-            // Show loading indicator for large mazes
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#ffd700';
-            ctx.font = '24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Generating maze...', canvas.width / 2, canvas.height / 2);
-            setTimeout(() => {
-                let tries = 0;
-                do {
-                    generateMaze(mapSize);
-                    // Find a valid starting position (first open path near top-left)
-                    let found = false;
-                    for (let y = 1; y < Math.min(10, mapSize) && !found; y++) {
-                        for (let x = 1; x < Math.min(10, mapSize) && !found; x++) {
-                            if (maze[y][x].wall === false) {
-                                player = { x, y };
-                                found = true;
-                            }
-                        }
-                    }
-                    if (!found) player = { x: 1, y: 1 };
-                    exit = { x: mapSize - 2, y: mapSize - 2 };
-                    tries++;
-                } while (!isMazeFullyReachable() && tries < 20);
-                score = 0;
-                steps = 0;
-                timer = 0;
-                inventory = [];
-                visibleTiles = new Set();
-                // Always show full maze and follow player
-                revealMap = true;
-                followPlayer = true;
-                gameStarted = true;
-                // Mark starting cell as visited and explored
-                maze[player.y][player.x].visited = true;
-                if (!maze[player.y][player.x].explored) {
-                    maze[player.y][player.x].explored = true;
-                    score = 1;
-                    scoreEl.textContent = score;
-                }
-                placePowerUps();
-                updateVisibility();
-                render();
-                scoreEl.textContent = score;
-                stepsEl.textContent = steps;
-                timerEl.textContent = timer;
-                inventoryEl.textContent = 'None';
-                if (timerInterval) clearInterval(timerInterval);
-                timerInterval = setInterval(() => {
-                    timer++;
-                    timerEl.textContent = timer;
-                }, 1000);
-                powerUpFogActive = false;
-                powerUpMarkVisitedActive = false;
-            }, 50);
-        }
-
-        function movePlayer(dx, dy) {
-            if (!gameStarted) return;
-            let nx = player.x + dx, ny = player.y + dy;
-            if (nx >= 0 && ny >= 0 && nx < mapSize && ny < mapSize && maze[ny][nx].wall === false) {
-                player.x = nx;
-                player.y = ny;
-                steps++;
-                stepsEl.textContent = steps;
-                maze[ny][nx].visited = true;
-                if (!maze[ny][nx].explored) {
-                    maze[ny][nx].explored = true;
-                    score++;
-                    scoreEl.textContent = score;
-                }
-                // Check for power-up
-                for (let i = placedPowerUps.length - 1; i >= 0; i--) {
-                    const p = placedPowerUps[i];
-                    if (p.x === nx && p.y === ny) {
-                        p.powerUp.isActive = true;
-                        if (p.powerUp.type === 'fog') {
-                            powerUpFogActive = true;
-                        } else if (p.powerUp.type === 'markVisited') {
-                            powerUpMarkVisitedActive = true;
-                        } else if (p.powerUp.type === 'showPath') {
-                            activateShowPathPowerUp(nx, ny);
-                        } else if (p.powerUp.type === 'revealMap') {
-                            revealMap = true;
-                            renderFullMaze();
-                            placedPowerUps.splice(i, 1);
-                            return;
-                        } else if (p.powerUp.type === 'showFullMap') {
-                            showFullMapActive = true;
-                        } else if (p.powerUp.type === 'followLocation') {
-                            followLocationActive = true;
-                        }
-                        placedPowerUps.splice(i, 1);
-                    }
-                }
-                updateVisibility();
-                render();
-                if (ny === exit.y && nx === exit.x) {
-                    endGame(true);
-                }
-            }
-        }
-
-        function endGame(won) {
-            gameStarted = false;
-            if (timerInterval) clearInterval(timerInterval);
-            // Show custom modal instead of alert
-            const modal = document.getElementById('endgame-modal');
-            const title = document.getElementById('endgame-title');
-            const details = document.getElementById('endgame-details');
-            title.textContent = won ? 'You Escaped the Maze!' : 'Game Over';
-            details.innerHTML = won ? `<p>Score: <b>${score}</b></p><p>Time: <b>${timer}s</b></p>` : '';
-            modal.style.display = 'flex';
-            // Reveal the entire maze and show the full map with track
-            revealMap = true;
-            showFullMapActive = false;
-            followLocationActive = false;
-            renderFullMaze();
-        }
-        document.getElementById('close-endgame').onclick = function () {
-            document.getElementById('endgame-modal').style.display = 'none';
-        };
-
-        let guidePath = null;
-        let guideStep = 0;
-        let guideActive = false;
-
-        function activateShowPathPowerUp(px, py) {
-            guidePath = findShortestPath(px, py, exit.x, exit.y);
-            guideStep = 0;
-            guideActive = true;
-            animateGuide();
-        }
-
-        function animateGuide() {
-            if (!guideActive || !guidePath || guideStep >= guidePath.length) {
-                guideActive = false;
-                guidePath = null;
-                render();
-                return;
-            }
-            render();
-            guideStep++;
-            setTimeout(animateGuide, 50); // Faster movement (was 120)
-        }
-
-        // --- Utility Functions ---
-        function randInt(a, b) {
-            return Math.floor(Math.random() * (b - a + 1)) + a;
-        }
-
-        function findDeadEnds() {
-            let deadEnds = [];
-            for (let y = 1; y < mapSize - 1; y++) {
-                for (let x = 1; x < mapSize - 1; x++) {
-                    if (maze[y][x].wall === false && !(x === player.x && y === player.y) && !(x === exit.x && y === exit.y)) {
-                        let open = 0;
-                        if (maze[y - 1][x].wall === false) open++;
-                        if (maze[y + 1][x].wall === false) open++;
-                        if (maze[y][x - 1].wall === false) open++;
-                        if (maze[y][x + 1].wall === false) open++;
-                        if (open === 1) deadEnds.push({ x, y });
-                    }
-                }
-            }
-            return deadEnds;
-        }
-
-        function findShortestPath(sx, sy, ex, ey) {
-            let queue = [{ x: sx, y: sy, path: [] }];
-            let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
-            visited[sy][sx] = true;
-            while (queue.length > 0) {
-                let { x, y, path } = queue.shift();
-                if (x === ex && y === ey) return [...path, { x, y }];
-                for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-                    let nx = x + dx, ny = y + dy;
-                    if (nx >= 0 && ny >= 0 && nx < mapSize && ny < mapSize && !visited[ny][nx] && maze[ny][nx].wall === false) {
-                        visited[ny][nx] = true;
-                        queue.push({ x: nx, y: ny, path: [...path, { x, y }] });
-                    }
-                }
-            }
-            return null;
-        }
-
-        function isMazeFullyReachable() {
-            // BFS from player, do not go through exit
-            let visited = Array(mapSize).fill().map(() => Array(mapSize).fill(false));
-            let queue = [];
-            queue.push({ x: player.x, y: player.y });
-            visited[player.y][player.x] = true;
-            while (queue.length > 0) {
-                let { x, y } = queue.shift();
-                for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-                    let nx = x + dx, ny = y + dy;
-                    if (nx >= 0 && ny >= 0 && nx < mapSize && ny < mapSize && !visited[ny][nx]) {
-                        if (maze[ny][nx].wall === false && !(nx === exit.x && ny === exit.y)) {
-                            visited[ny][nx] = true;
-                            queue.push({ x: nx, y: ny });
-                        }
-                    }
-                }
-            }
-            // Check all non-wall, non-exit cells are visited
-            for (let y = 0; y < mapSize; y++) {
-                for (let x = 0; x < mapSize; x++) {
-                    if (maze[y][x].wall === false && !(x === exit.x && y === exit.y)) {
-                        if (!visited[y][x]) return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        // --- Event Listeners ---
-        window.addEventListener('resize', () => {
-            resizeCanvas();
-            render();
-        });
-        document.addEventListener('keydown', e => {
-            if (!gameStarted) return;
-            if (e.key === 'ArrowUp' || e.key === 'w') movePlayer(0, -1);
-            if (e.key === 'ArrowDown' || e.key === 's') movePlayer(0, 1);
-            if (e.key === 'ArrowLeft' || e.key === 'a') movePlayer(-1, 0);
-            if (e.key === 'ArrowRight' || e.key === 'd') movePlayer(1, 0);
-        });
-        startBtn.addEventListener('click', startGame);
-        helpBtn.addEventListener('click', () => {
-            helpModal.style.display = 'flex';
-        });
-        closeHelpBtn.addEventListener('click', () => {
-            helpModal.style.display = 'none';
-        });
         window.addEventListener('DOMContentLoaded', () => {
             resizeCanvas();
-            startGame();
+            ui.startInitialGame();
         });
     </script>
 </body>
