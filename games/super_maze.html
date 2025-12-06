@@ -938,10 +938,19 @@
                     for (let i = 0; i < this.guideStep; i++) {
                         const gp = this.guidePath[i];
                         // Skip if outside current render window
-                        if (mode === 'full' || mode === 'followLocation') {
+                        if (mode === 'full') {
                             const gx = gp.x - startX;
                             const gy = gp.y - startY;
                             if (gx < 0 || gy < 0 || gx >= (endX - startX) || gy >= (endY - startY)) continue;
+                            const sx2 = offsetX + gx * tileSize;
+                            const sy2 = offsetY + gy * tileSize;
+                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
+                        } else if (mode === 'followLocation') {
+                            // In followLocation, only draw path tiles that are inside the 9x9 viewport around the player
+                            const isVisible = gp.x >= vx && gp.x < vx + VISIBLE_SIZE && gp.y >= vy && gp.y < vy + VISIBLE_SIZE;
+                            if (!isVisible) continue;
+                            const gx = gp.x - startX;
+                            const gy = gp.y - startY;
                             const sx2 = offsetX + gx * tileSize;
                             const sy2 = offsetY + gy * tileSize;
                             ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
@@ -949,6 +958,10 @@
                             const gx = gp.x - startX;
                             const gy = gp.y - startY;
                             if (gx < 0 || gy < 0 || gx >= VISIBLE_SIZE || gy >= VISIBLE_SIZE) continue;
+                            // Respect darkness rules in normal mode
+                            const tile = maze[gp.y]?.[gp.x];
+                            const isDark = (powerUpFogActive && (!tile || tile.explored !== true)) || (!powerUpFogActive && !revealMap && !visibleTiles.has(`${gp.x},${gp.y}`));
+                            if (isDark) continue;
                             const sx2 = offsetX + gx * tileSize;
                             const sy2 = offsetY + gy * tileSize;
                             ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
