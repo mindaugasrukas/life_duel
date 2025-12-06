@@ -388,51 +388,8 @@
                 if (this.revealMap) {
                     this.revealMap = false;
                 }
-                let nx = this.player.x + dx, ny = this.player.y + dy;
-                if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && this.maze[ny][nx].wall === false) {
-                    this.player.x = nx;
-                    this.player.y = ny;
-                    this.steps++;
-                    this.maze[ny][nx].visited = true;
-                    if (!this.maze[ny][nx].explored) {
-                        this.maze[ny][nx].explored = true;
-                        this.score++;
-                    }
-                    // Power-ups
-                    for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
-                        const p = this.placedPowerUps[i];
-                        if (p.x === nx && p.y === ny) {
-                            if (p.powerUp.type === 'fog') {
-                                this.powerUpFogActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'markVisited') {
-                                this.powerUpMarkVisitedActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'showPath') {
-                                this.emit('showPathActivated', { x: nx, y: ny });
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'revealMap') {
-                                this.revealMap = true;
-                                this.placedPowerUps.splice(i, 1);
-                                this.emit('revealMapActivated');
-                                this.emit('stateUpdated', this.getState());
-                                return;
-                            } else if (p.powerUp.type === 'showFullMap') {
-                                this.showFullMapActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'followLocation') {
-                                this.followLocationActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            }
-                            this.placedPowerUps.splice(i, 1);
-                        }
-                    }
-                    this.updateVisibility();
-                    this.emit('stateUpdated', this.getState());
-                    if (ny === this.exit.y && nx === this.exit.x) {
-                        this.endGame(true);
-                    }
-                }
+                const nx = this.player.x + dx, ny = this.player.y + dy;
+                this._handleEnterTile(nx, ny, { stopOnReveal: true });
             }
 
             // Slide movement: animate step-by-step until hitting a wall or boundary
@@ -447,69 +404,88 @@
                 const doStep = () => {
                     const nx = this.player.x + dx;
                     const ny = this.player.y + dy;
-                    if (nx < 0 || ny < 0 || nx >= this.mapSize || ny >= this.mapSize || this.maze[ny][nx].wall === true) {
+                    if (!this._canEnter(nx, ny)) {
                         // stop sliding
                         this.isSliding = false;
                         this.updateVisibility();
                         this.emit('stateUpdated', this.getState());
                         return;
                     }
-                    // Move one step
-                    this.player.x = nx;
-                    this.player.y = ny;
-                    this.steps++;
-                    const tile = this.maze[ny][nx];
-                    tile.visited = true;
-                    if (!tile.explored) {
-                        tile.explored = true;
-                        this.score++;
+                    const result = this._handleEnterTile(nx, ny, { stopOnReveal: true });
+                    if (result === 'revealed') {
+                        // Stop slide to let player inspect; resume after next input
+                        this.isSliding = false;
+                        this.updateVisibility();
+                        return;
                     }
-                    // Collect power-ups on the way
-                    for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
-                        const p = this.placedPowerUps[i];
-                        if (p.x === nx && p.y === ny) {
-                            if (p.powerUp.type === 'fog') {
-                                this.powerUpFogActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'markVisited') {
-                                this.powerUpMarkVisitedActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'showPath') {
-                                this.emit('showPathActivated', { x: nx, y: ny });
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'revealMap') {
-                                this.revealMap = true;
-                                this.placedPowerUps.splice(i, 1);
-                                this.emit('revealMapActivated');
-                                this.emit('stateUpdated', this.getState());
-                                // Stop slide to let player inspect; resume after next input
-                                this.isSliding = false;
-                                this.updateVisibility();
-                                return;
-                            } else if (p.powerUp.type === 'showFullMap') {
-                                this.showFullMapActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            } else if (p.powerUp.type === 'followLocation') {
-                                this.followLocationActive = true;
-                                this.emit('powerUpCollected', p.powerUp);
-                            }
-                            this.placedPowerUps.splice(i, 1);
-                        }
-                    }
-                    // Exit reached
-                    if (ny === this.exit.y && nx === this.exit.x) {
+                    if (result === 'exit') {
                         this.isSliding = false;
                         this.updateVisibility();
                         this.emit('stateUpdated', this.getState());
-                        this.endGame(true);
                         return;
                     }
-                    // intermediate repaint
-                    this.updateVisibility();
-                    this.emit('stateUpdated', this.getState());
                     setTimeout(doStep, stepMs);
                 };
                 setTimeout(doStep, stepMs);
+            }
+
+            // helpers for movement
+            _canEnter(nx, ny) {
+                return nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && this.maze[ny][nx].wall === false;
+            }
+
+            _handleEnterTile(nx, ny, { stopOnReveal } = { stopOnReveal: false }) {
+                if (!this._canEnter(nx, ny)) return 'blocked';
+                // Move
+                this.player.x = nx;
+                this.player.y = ny;
+                this.steps++;
+                const tile = this.maze[ny][nx];
+                tile.visited = true;
+                if (!tile.explored) {
+                    tile.explored = true;
+                    this.score++;
+                }
+                // Power-ups
+                for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
+                    const p = this.placedPowerUps[i];
+                    if (p.x === nx && p.y === ny) {
+                        if (p.powerUp.type === 'fog') {
+                            this.powerUpFogActive = true;
+                            this.emit('powerUpCollected', p.powerUp);
+                        } else if (p.powerUp.type === 'markVisited') {
+                            this.powerUpMarkVisitedActive = true;
+                            this.emit('powerUpCollected', p.powerUp);
+                        } else if (p.powerUp.type === 'showPath') {
+                            this.emit('showPathActivated', { x: nx, y: ny });
+                            this.emit('powerUpCollected', p.powerUp);
+                        } else if (p.powerUp.type === 'revealMap') {
+                            this.revealMap = true;
+                            this.placedPowerUps.splice(i, 1);
+                            this.emit('revealMapActivated');
+                            this.emit('stateUpdated', this.getState());
+                            if (stopOnReveal) return 'revealed';
+                        } else if (p.powerUp.type === 'showFullMap') {
+                            this.showFullMapActive = true;
+                            this.emit('powerUpCollected', p.powerUp);
+                        } else if (p.powerUp.type === 'followLocation') {
+                            this.followLocationActive = true;
+                            this.emit('powerUpCollected', p.powerUp);
+                        }
+                        this.placedPowerUps.splice(i, 1);
+                    }
+                }
+                // Exit
+                if (ny === this.exit.y && nx === this.exit.x) {
+                    this.updateVisibility();
+                    this.emit('stateUpdated', this.getState());
+                    this.endGame(true);
+                    return 'exit';
+                }
+                // Visibility + state
+                this.updateVisibility();
+                this.emit('stateUpdated', this.getState());
+                return 'moved';
             }
 
             endGame(won) {
