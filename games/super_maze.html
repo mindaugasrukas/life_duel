@@ -285,6 +285,8 @@
                 this.powerUpMarkVisitedActive = false; // Mark visited active
                 this.showFullMapActive = false; // Show full map active
                 this.followLocationActive = false; // Follow location active
+                // Movement animation flags
+                this.isSliding = false;
 
                 this.powerUps = [
                     {
@@ -431,6 +433,83 @@
                         this.endGame(true);
                     }
                 }
+            }
+
+            // Slide movement: animate step-by-step until hitting a wall or boundary
+            slideMove(dx, dy) {
+                if (!this.gameStarted || this.isSliding) return;
+                // Turn off temporary reveal on first slide move
+                if (this.revealMap) this.revealMap = false;
+                // Only allow cardinal directions
+                if (!((dx === 0 && (dy === 1 || dy === -1)) || (dy === 0 && (dx === 1 || dx === -1)))) return;
+                this.isSliding = true;
+                const stepMs = 60; // animation speed: ~16 tiles/sec
+                const doStep = () => {
+                    const nx = this.player.x + dx;
+                    const ny = this.player.y + dy;
+                    if (nx < 0 || ny < 0 || nx >= this.mapSize || ny >= this.mapSize || this.maze[ny][nx].wall === true) {
+                        // stop sliding
+                        this.isSliding = false;
+                        this.updateVisibility();
+                        this.emit('stateUpdated', this.getState());
+                        return;
+                    }
+                    // Move one step
+                    this.player.x = nx;
+                    this.player.y = ny;
+                    this.steps++;
+                    const tile = this.maze[ny][nx];
+                    tile.visited = true;
+                    if (!tile.explored) {
+                        tile.explored = true;
+                        this.score++;
+                    }
+                    // Collect power-ups on the way
+                    for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
+                        const p = this.placedPowerUps[i];
+                        if (p.x === nx && p.y === ny) {
+                            if (p.powerUp.type === 'fog') {
+                                this.powerUpFogActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'markVisited') {
+                                this.powerUpMarkVisitedActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'showPath') {
+                                this.emit('showPathActivated', { x: nx, y: ny });
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'revealMap') {
+                                this.revealMap = true;
+                                this.placedPowerUps.splice(i, 1);
+                                this.emit('revealMapActivated');
+                                this.emit('stateUpdated', this.getState());
+                                // Stop slide to let player inspect; resume after next input
+                                this.isSliding = false;
+                                this.updateVisibility();
+                                return;
+                            } else if (p.powerUp.type === 'showFullMap') {
+                                this.showFullMapActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            } else if (p.powerUp.type === 'followLocation') {
+                                this.followLocationActive = true;
+                                this.emit('powerUpCollected', p.powerUp);
+                            }
+                            this.placedPowerUps.splice(i, 1);
+                        }
+                    }
+                    // Exit reached
+                    if (ny === this.exit.y && nx === this.exit.x) {
+                        this.isSliding = false;
+                        this.updateVisibility();
+                        this.emit('stateUpdated', this.getState());
+                        this.endGame(true);
+                        return;
+                    }
+                    // intermediate repaint
+                    this.updateVisibility();
+                    this.emit('stateUpdated', this.getState());
+                    setTimeout(doStep, stepMs);
+                };
+                setTimeout(doStep, stepMs);
             }
 
             endGame(won) {
@@ -924,10 +1003,12 @@
 
         document.addEventListener('keydown', e => {
             if (!game.gameStarted) return;
-            if (e.key === 'ArrowUp' || e.key === 'w') game.movePlayer(0, -1);
-            if (e.key === 'ArrowDown' || e.key === 's') game.movePlayer(0, 1);
-            if (e.key === 'ArrowLeft' || e.key === 'a') game.movePlayer(-1, 0);
-            if (e.key === 'ArrowRight' || e.key === 'd') game.movePlayer(1, 0);
+            if (game.isSliding) return; // ignore input during sliding animation
+            const slide = e.shiftKey === true;
+            if (e.key === 'ArrowUp' || e.key === 'w') slide ? game.slideMove(0, -1) : game.movePlayer(0, -1);
+            if (e.key === 'ArrowDown' || e.key === 's') slide ? game.slideMove(0, 1) : game.movePlayer(0, 1);
+            if (e.key === 'ArrowLeft' || e.key === 'a') slide ? game.slideMove(-1, 0) : game.movePlayer(-1, 0);
+            if (e.key === 'ArrowRight' || e.key === 'd') slide ? game.slideMove(1, 0) : game.movePlayer(1, 0);
         });
 
         // --- Canvas Elements ---
