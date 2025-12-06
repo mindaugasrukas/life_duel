@@ -291,7 +291,7 @@
                 this.powerUps = [
                     {
                         type: 'fog',
-                        description: 'Fog of War: Hides unexplored areas of the maze',
+                        description: 'Fog of War: Hides unvisited areas of the maze',
                         color: '#a020f0', // purple
                         probability: 0.3,
                         // isActive: false // TODO: not used yet
@@ -789,7 +789,7 @@
                                 continue;
                             }
                         }
-                        if (mode === 'normal' && powerUpFogActive && !tile.explored) {
+                        if (mode === 'normal' && powerUpFogActive && !tile.visited) {
                             ctx.fillStyle = '#111';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                             continue;
