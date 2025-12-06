@@ -865,6 +865,8 @@
                 let half = Math.floor(VISIBLE_SIZE / 2);
                 let vx = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, px - half));
                 let vy = Math.max(0, Math.min(mapSize - VISIBLE_SIZE, py - half));
+
+                // Determine rendering window based on mode
                 if (mode === 'full' || mode === 'followLocation') {
                     tileSize = Math.min((canvas.width - 10) / mapSize, (canvas.height - 10) / mapSize);
                     offsetX = (canvas.width - tileSize * mapSize) / 2;
@@ -878,12 +880,16 @@
                     offsetY = (canvas.height - VISIBLE_SIZE * tileSize) / 2;
                     startX = vx; startY = vy; endX = vx + VISIBLE_SIZE; endY = vy + VISIBLE_SIZE;
                 }
+
+                // Draw maze tiles
                 for (let y = startY; y < endY; y++) {
                     for (let x = startX; x < endX; x++) {
                         let tile = maze[y]?.[x] ?? { wall: true };
                         let sx = offsetX + (x - startX) * tileSize;
                         let sy = offsetY + (y - startY) * tileSize;
                         let inViewport = true;
+
+                        // In followLocation mode, only draw tiles inside the 9x9 viewport around the player
                         if (mode === 'followLocation') {
                             inViewport = x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
                             if (!inViewport) {
@@ -892,16 +898,22 @@
                                 continue;
                             }
                         }
+
+                        // In normal mode with Fog power-up, hide unvisited tiles
                         if (mode === 'normal' && powerUpFogActive && !tile.visited) {
                             ctx.fillStyle = '#111';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                             continue;
                         }
+
+                        // In normal mode, hide unvisited tiles
                         if (mode === 'normal' && !powerUpFogActive && !revealMap && !visibleTiles.has(`${x},${y}`)) {
                             ctx.fillStyle = '#111';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                             continue;
                         }
+
+                        // Draw tile
                         if (exit && x === exit.x && y === exit.y) {
                             ctx.fillStyle = '#ffd700';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
@@ -916,6 +928,8 @@
                             ctx.fillStyle = '#eee';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                         }
+
+                        // Draw power-ups
                         for (const p of placedPowerUps) {
                             if (p.x === x && p.y === y) {
                                 ctx.fillStyle = p.powerUp.color;
@@ -924,6 +938,8 @@
                                 ctx.fill();
                             }
                         }
+
+                        // Draw player
                         if (x === player.x && y === player.y) {
                             ctx.fillStyle = '#00f';
                             ctx.beginPath();
@@ -932,40 +948,33 @@
                         }
                     }
                 }
+
                 // Draw guide overlay after base grid to avoid per-tile checks
                 if (this.guideActive && this.guidePath && this.guideStep > 0) {
                     ctx.fillStyle = '#00ffea';
                     for (let i = 0; i < this.guideStep; i++) {
                         const gp = this.guidePath[i];
+                        const gx = gp.x - startX;
+                        const gy = gp.y - startY;
                         // Skip if outside current render window
                         if (mode === 'full') {
-                            const gx = gp.x - startX;
-                            const gy = gp.y - startY;
+                            // In full mode, only draw path tiles that are inside the maze bounds
                             if (gx < 0 || gy < 0 || gx >= (endX - startX) || gy >= (endY - startY)) continue;
-                            const sx2 = offsetX + gx * tileSize;
-                            const sy2 = offsetY + gy * tileSize;
-                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
                         } else if (mode === 'followLocation') {
                             // In followLocation, only draw path tiles that are inside the 9x9 viewport around the player
                             const isVisible = gp.x >= vx && gp.x < vx + VISIBLE_SIZE && gp.y >= vy && gp.y < vy + VISIBLE_SIZE;
                             if (!isVisible) continue;
-                            const gx = gp.x - startX;
-                            const gy = gp.y - startY;
-                            const sx2 = offsetX + gx * tileSize;
-                            const sy2 = offsetY + gy * tileSize;
-                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
                         } else {
-                            const gx = gp.x - startX;
-                            const gy = gp.y - startY;
+                            // In normal mode, only draw path tiles that are inside the 5x5 viewport around the player
                             if (gx < 0 || gy < 0 || gx >= VISIBLE_SIZE || gy >= VISIBLE_SIZE) continue;
                             // Respect darkness rules in normal mode
                             const tile = maze[gp.y]?.[gp.x];
                             const isDark = (powerUpFogActive && (!tile || tile.explored !== true)) || (!powerUpFogActive && !revealMap && !visibleTiles.has(`${gp.x},${gp.y}`));
                             if (isDark) continue;
-                            const sx2 = offsetX + gx * tileSize;
-                            const sy2 = offsetY + gy * tileSize;
-                            ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
                         }
+                        const sx2 = offsetX + gx * tileSize;
+                        const sy2 = offsetY + gy * tileSize;
+                        ctx.fillRect(sx2 + tileSize / 4, sy2 + tileSize / 4, tileSize / 2, tileSize / 2);
                     }
                 }
             }
