@@ -857,7 +857,7 @@
             renderFull() { this.renderMaze('full'); }
 
             renderMaze(mode = 'normal') {
-                const { mapSize, maze, player, exit, placedPowerUps, powerUpFogActive, powerUpMarkVisitedActive, revealMap, visibleTiles } = this.game.getState();
+                const { mapSize, maze, player, exit, placedPowerUps, powerUpFogActive, powerUpMarkVisitedActive, revealMap, visibleTiles, gameStarted } = this.game.getState();
                 const ctx = this.ctx, canvas = this.canvas;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 let tileSize, offsetX, offsetY, startX, startY, endX, endY;
@@ -925,8 +925,14 @@
                             ctx.fillStyle = '#b7e4c7';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
                         } else if (tile.wall === false) {
+                            // Base path tile
                             ctx.fillStyle = '#eee';
                             ctx.fillRect(sx, sy, tileSize, tileSize);
+                            // When the game has ended and full map is shown, always show traveled path (visited)
+                            if (!gameStarted && mode === 'full' && tile.visited) {
+                                ctx.fillStyle = '#66c2ff'; // highlight traveled tiles
+                                ctx.fillRect(sx + tileSize * 0.15, sy + tileSize * 0.15, tileSize * 0.7, tileSize * 0.7);
+                            }
                         }
 
                         // Draw power-ups
