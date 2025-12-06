@@ -598,7 +598,110 @@
                 }
                 // Place exit
                 this.exit = { x: size - 2, y: size - 2 };
+                // Add loops and multiple paths by removing additional walls between adjacent corridors
+                this.addLoops(size);
                 this.emit('mazeGenerated', this.maze);
+            }
+
+            // Post-process the perfect maze to introduce cycles and alternative routes
+            addLoops(size) {
+                // Target: remove a fraction of walls that separate two open cells to create cycles.
+                // Keep boundaries intact and avoid overwhelming the maze.
+                const loopRatio = 0.01; // ~1% of candidate walls, slightly lower to reduce openness
+                const candidates = [];
+                for (let y = 1; y < size - 1; y++) {
+                    for (let x = 1; x < size - 1; x++) {
+                        // Consider vertical walls between two open cells
+                        if (this.maze[y][x].wall === true) {
+                            const up = this.maze[y - 1]?.[x];
+                            const down = this.maze[y + 1]?.[x];
+                            if (up && down && up.wall === false && down.wall === false) {
+                                candidates.push({ x, y });
+                                continue;
+                            }
+                            const left = this.maze[y]?.[x - 1];
+                            const right = this.maze[y]?.[x + 1];
+                            if (left && right && left.wall === false && right.wall === false) {
+                                candidates.push({ x, y });
+                            }
+                        }
+                    }
+                }
+                // Shuffle and remove a subset
+                candidates.sort(() => Math.random() - 0.5);
+                const removeCount = Math.floor(candidates.length * loopRatio);
+                const removed = [];
+                let removedSoFar = 0;
+                for (let i = 0; i < candidates.length && removedSoFar < removeCount; i++) {
+                    const { x, y } = candidates[i];
+                    // Avoid opening the extreme border to preserve outer wall
+                    if (x <= 0 || y <= 0 || x >= size - 1 || y >= size - 1) continue;
+                    // Avoid clustering: keep at least 2 tiles apart from previously removed walls
+                    const tooClose = removed.some(r => Math.abs(r.x - x) <= 2 && Math.abs(r.y - y) <= 2);
+                    if (tooClose) continue;
+                    // Prevent creating 2x2 open areas
+                    if (this.createsOpenSquare(x, y)) continue;
+                    // Ensure the cycle formed is not trivially small inside a 9x9 view
+                    // Find the two open neighbors separated by this wall
+                    const neighbors = [];
+                    if (this.maze[y-1]?.[x]?.wall === false) neighbors.push({x, y: y-1});
+                    if (this.maze[y+1]?.[x]?.wall === false) neighbors.push({x, y: y+1});
+                    if (this.maze[y]?.[x-1]?.wall === false) neighbors.push({x: x-1, y});
+                    if (this.maze[y]?.[x+1]?.wall === false) neighbors.push({x: x+1, y});
+                    if (neighbors.length === 2) {
+                        const a = neighbors[0], b = neighbors[1];
+                        const cycleLen = this.pathLength(a.x, a.y, b.x, b.y);
+                        // If the path around is very short, skip to avoid simple cycles
+                        if (cycleLen !== null && cycleLen <= VISIBLE_SIZE * 2) continue;
+                    }
+                    // All checks passed; remove wall
+                    this.maze[y][x].wall = false;
+                    removed.push({ x, y });
+                    console.log(`Removed wall at (${x},${y}) to create loop`);
+                    removedSoFar++;
+                }
+            }
+
+            // Check if removing a wall at (x,y) would create any 2x2 open block
+            createsOpenSquare(x, y) {
+                // Temporarily consider (x,y) open and check 2x2 patterns around
+                const openAt = (cx, cy) => {
+                    if (cx === x && cy === y) return true;
+                    const t = this.maze[cy]?.[cx];
+                    return t && t.wall === false;
+                };
+                for (let dy = -1; dy <= 0; dy++) {
+                    for (let dx = -1; dx <= 0; dx++) {
+                        const x0 = x + dx, y0 = y + dy;
+                        if (openAt(x0, y0) && openAt(x0+1, y0) && openAt(x0, y0+1) && openAt(x0+1, y0+1)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            // Compute shortest path length between two open cells without removing the wall
+            pathLength(sx, sy, ex, ey) {
+                if (sx === ex && sy === ey) return 0;
+                const visited = Array(this.mapSize).fill().map(() => Array(this.mapSize).fill(false));
+                const q = [{x: sx, y: sy, d: 0}];
+                visited[sy][sx] = true;
+                while (q.length) {
+                    const {x, y, d} = q.shift();
+                    if (x === ex && y === ey) return d;
+                    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize && !visited[ny][nx]) {
+                            const t = this.maze[ny][nx];
+                            if (t && t.wall === false) {
+                                visited[ny][nx] = true;
+                                q.push({x: nx, y: ny, d: d+1});
+                            }
+                        }
+                    }
+                }
+                return null;
             }
 
             // Place Power-Ups in Dead-Ends of the Maze
