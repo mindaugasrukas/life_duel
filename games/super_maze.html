@@ -506,13 +506,6 @@
                         let nx = this.player.x + dx, ny = this.player.y + dy;
                         if (nx >= 0 && ny >= 0 && nx < this.mapSize && ny < this.mapSize) {
                             this.visibleTiles.add(`${nx},${ny}`);
-                            // Distinguish explored vs visited: mark any visible non-wall tiles as explored
-                            const tile = this.maze[ny][nx];
-                            if (tile && tile.wall === false && !tile.explored) {
-                                tile.explored = true;
-                                // Optional: score for exploration only when first seen, not required
-                                // this.score++;
-                            }
                         }
                     }
                 }
