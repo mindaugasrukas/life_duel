@@ -1154,12 +1154,15 @@
         // -- Helpers ---
         function resizeCanvas() {
             // Set both CSS and element attributes for canvas size
-            const w = window.innerWidth - 320;
-            const h = window.innerHeight;
-            canvas.style.width = w + 'px';
-            canvas.style.height = h + 'px';
-            canvas.width = w;
-            canvas.height = h;
+            const sidebarWidth = 320;
+            const minTiles = VISIBLE_SIZE; // ensure at least the 9x9 viewport fits
+            const minCanvasEdge = minTiles * TILE_SIZE + 10; // +10 for padding/margins
+            const targetW = Math.max(window.innerWidth - sidebarWidth, minCanvasEdge);
+            const targetH = Math.max(window.innerHeight, minCanvasEdge);
+            canvas.style.width = targetW + 'px';
+            canvas.style.height = targetH + 'px';
+            canvas.width = targetW;
+            canvas.height = targetH;
         }
 
         const TILE_SIZE = 32; // default tile size 32x32
