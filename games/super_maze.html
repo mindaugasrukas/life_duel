@@ -872,18 +872,11 @@
                         const tile = maze[y]?.[x] ?? { wall: true };
                         const sx = offsetX + (x - startX) * tileSize;
                         const sy = offsetY + (y - startY) * tileSize;
-                        const inViewport = this.isInViewport(x, y, mode, vx, vy);
 
-                        // In followLocation mode, draw tiles only inside viewport
-                        if (mode === 'followLocation' && !inViewport) {
-                            this.ctx.fillStyle = '#111';
-                            this.ctx.fillRect(sx, sy, tileSize, tileSize);
-                            continue;
-                        }
-
-                        // In normal mode, determine if tile is dark due to fog/visibility
-                        if (this.isTileDark(x, y, mode, { powerUpFogActive, revealMap, visibleTiles, maze })) {
-                            this.ctx.fillStyle = '#111';
+                        // Draw only if visible
+                        const isVisible = this.isTileVisible(x, y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy, startX, startY, endX, endY);
+                        if (!isVisible) {
+                            this.ctx.fillStyle = this.FOG_COLOR;
                             this.ctx.fillRect(sx, sy, tileSize, tileSize);
                             continue;
                         }
@@ -926,31 +919,26 @@
                     for (let i = 0; i < this.guideStep; i++) {
                         const gp = this.guidePath[i];
                         if (!this.shouldDrawGuideAt(gp, mode, vx, vy, startX, startY, endX, endY)) continue;
-                        if (mode === 'normal' && this.isTileDark(gp.x, gp.y, mode, { powerUpFogActive, revealMap, visibleTiles, maze })) continue;
+                        // Draw guide only if tile is visible by the same visibility rules
+                        const isVisibleGuide = this.isTileVisible(gp.x, gp.y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy, startX, startY, endX, endY);
+                        if (!isVisibleGuide) continue;
                         this.drawGuideRect(this.ctx, offsetX, offsetY, tileSize, gp, startX, startY);
                     }
                 }
             }
 
             // Rendering helpers
-            isInViewport(x, y, mode, vx, vy) {
-                if (mode !== 'followLocation') return true;
-                return x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
-            };
-
-            isTileDark(x, y, mode, state){
+            isTileVisible(x, y, mode, state, vx, vy, startX, startY, endX, endY){
                 const { powerUpFogActive, revealMap, visibleTiles, maze } = state;
-                const tile = maze[y]?.[x];
+                if (mode === 'full') return true;
                 if (mode === 'followLocation') {
-                    // followLocation draws only inside viewport; darkness outside is already handled.
-                    // Inside viewport, treat tiles as visible; darkness gated by viewport, not fog.
-                    return false;
+                    return x >= vx && x < vx + VISIBLE_SIZE && y >= vy && y < vy + VISIBLE_SIZE;
                 }
-                if (mode === 'normal') {
-                    if (powerUpFogActive && (!tile || tile.visited !== true)) return true;
-                    if (!powerUpFogActive && !revealMap && !visibleTiles.has(`${x},${y}`)) return true;
+                if (revealMap) return true;
+                if (powerUpFogActive) {
+                    return maze[y]?.[x]?.visited === true;
                 }
-                return false;
+                return visibleTiles.has(`${x},${y}`);
             };
 
             drawBaseTile(ctx, sx, sy, tileSize, tile, exit, isVisitedHighlight, gameStarted, mode) {
