@@ -874,7 +874,7 @@
                         const sy = offsetY + (y - startY) * tileSize;
 
                         // Draw only if visible
-                        const isVisible = this.isTileVisible(x, y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy, startX, startY, endX, endY);
+                        const isVisible = this.isTileVisible(x, y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy);
                         if (!isVisible) {
                             this.ctx.fillStyle = this.FOG_COLOR;
                             this.ctx.fillRect(sx, sy, tileSize, tileSize);
@@ -920,7 +920,7 @@
                         const gp = this.guidePath[i];
                         if (!this.shouldDrawGuideAt(gp, mode, vx, vy, startX, startY, endX, endY)) continue;
                         // Draw guide only if tile is visible by the same visibility rules
-                        const isVisibleGuide = this.isTileVisible(gp.x, gp.y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy, startX, startY, endX, endY);
+                        const isVisibleGuide = this.isTileVisible(gp.x, gp.y, mode, { powerUpFogActive, revealMap, visibleTiles, maze }, vx, vy);
                         if (!isVisibleGuide) continue;
                         this.drawGuideRect(this.ctx, offsetX, offsetY, tileSize, gp, startX, startY);
                     }
@@ -928,7 +928,7 @@
             }
 
             // Rendering helpers
-            isTileVisible(x, y, mode, state, vx, vy, startX, startY, endX, endY){
+            isTileVisible(x, y, mode, state, vx, vy){
                 const { powerUpFogActive, revealMap, visibleTiles, maze } = state;
                 if (mode === 'full') return true;
                 if (mode === 'followLocation') {
