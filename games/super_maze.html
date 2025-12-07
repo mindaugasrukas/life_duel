@@ -446,7 +446,7 @@
                     tile.explored = true;
                     this.score++;
                 }
-                // Power-ups
+                // Power-ups - TODO: refactor
                 for (let i = this.placedPowerUps.length - 1; i >= 0; i--) {
                     const p = this.placedPowerUps[i];
                     if (p.x === nx && p.y === ny) {
@@ -716,7 +716,7 @@
                 this.emit('powerUpsPlaced', this.placedPowerUps);
             }
 
-            // Get a random power-up by wieghted probability
+            // Get a random power-up by weighted probability
             getRandomPowerUp() {
                 let totalProb = this.powerUps.reduce((sum, p) => sum + p.probability, 0);
                 let rand = Math.random() * totalProb;
@@ -820,6 +820,15 @@
                         this.setGuide(path);
                     }
                 });
+                // Color constants
+                this.WALL_COLOR = '#444';
+                this.PATH_COLOR = '#eee';
+                this.EXIT_COLOR = '#ffd700';
+                this.END_GAME_PATH_COLOR = '#66c2ff';
+                this.VISITED_COLOR = '#b7e4c7';
+                this.FOG_COLOR = "#111";
+                this.PLAYER_COLOR = '#00f';
+                this.FOLLOW_PATH_COLOR = '#00ffea';
             }
 
             render() {
@@ -883,9 +892,11 @@
                         const isExit = exit && x === exit.x && y === exit.y;
                         const markVisited = powerUpMarkVisitedActive && tile.visited && tile.wall === false && mode !== 'full';
                         if (markVisited) {
-                            this.ctx.fillStyle = '#b7e4c7';
+                            // Highlight visited tiles
+                            this.ctx.fillStyle = this.VISITED_COLOR;
                             this.ctx.fillRect(sx, sy, tileSize, tileSize);
                         } else {
+                            // Normal base tile
                             this.drawBaseTile(this.ctx, sx, sy, tileSize, tile, isExit, tile.visited, gameStarted, mode);
                         }
 
@@ -901,7 +912,7 @@
 
                         // Draw Player
                         if (x === player.x && y === player.y) {
-                            this.ctx.fillStyle = '#00f';
+                            this.ctx.fillStyle = this.PLAYER_COLOR;
                             this.ctx.beginPath();
                             this.ctx.arc(sx + tileSize / 2, sy + tileSize / 2, tileSize / 2.2, 0, 2 * Math.PI);
                             this.ctx.fill();
@@ -911,7 +922,7 @@
 
                 // Draw guide overlay after base grid to avoid per-tile checks
                 if (this.guideActive && this.guidePath && this.guideStep > 0) {
-                    this.ctx.fillStyle = '#00ffea';
+                    this.ctx.fillStyle = this.FOLLOW_PATH_COLOR;
                     for (let i = 0; i < this.guideStep; i++) {
                         const gp = this.guidePath[i];
                         if (!this.shouldDrawGuideAt(gp, mode, vx, vy, startX, startY, endX, endY)) continue;
@@ -944,20 +955,20 @@
 
             drawBaseTile(ctx, sx, sy, tileSize, tile, exit, isVisitedHighlight, gameStarted, mode) {
                 if (exit) {
-                    ctx.fillStyle = '#ffd700';
+                    ctx.fillStyle = this.EXIT_COLOR;
                     ctx.fillRect(sx, sy, tileSize, tileSize);
                     return;
                 }
                 if (tile.wall === true) {
-                    ctx.fillStyle = '#444';
+                    ctx.fillStyle = this.WALL_COLOR;
                     ctx.fillRect(sx, sy, tileSize, tileSize);
                     return;
                 }
                 // Base path tile
-                ctx.fillStyle = '#eee';
+                ctx.fillStyle = this.PATH_COLOR;
                 ctx.fillRect(sx, sy, tileSize, tileSize);
                 if (!gameStarted && mode === 'full' && isVisitedHighlight) {
-                    ctx.fillStyle = '#66c2ff';
+                    ctx.fillStyle = this.END_GAME_PATH_COLOR;
                     ctx.fillRect(sx + tileSize * 0.15, sy + tileSize * 0.15, tileSize * 0.7, tileSize * 0.7);
                 }
             };
