@@ -351,31 +351,6 @@
             steps = 0;
             startTime = Date.now();
             gameWon = false;
-
-            console.log(`Player placed at (${playerX}, ${playerY}) in cell (${startX}, ${startY}), facing ${directionNames[playerDir]} (${foundOpenDirection ? 'found' : 'forced'} open path)`);
-
-            // Debug: Show the area around the starting position
-            console.log("Area around starting position:");
-            for (let dy = -1; dy <= 1; dy++) {
-                let row = "";
-                for (let dx = -1; dx <= 1; dx++) {
-                    const checkX = startX + dx;
-                    const checkY = startY + dy;
-                    if (checkX >= 0 && checkX < mazeWidth && checkY >= 0 && checkY < mazeHeight) {
-                        if (dx === 0 && dy === 0) {
-                            row += "P"; // Player position
-                        } else if (maze[checkY][checkX].wall) {
-                            row += "█";
-                        } else {
-                            row += ".";
-                        }
-                    } else {
-                        row += " ";
-                    }
-                }
-                console.log(`  ${row}`);
-            }
-
             updateDisplay();
             render3D();
             updateStats();
