@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spirograph Drawer</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        html, body { height: 100%; overflow: hidden; }
+        /* Lay out canvas on left, controls on right */
+        #game-container { align-items: center; }
+        #canvas-panel { flex: 1 1 auto; display: flex; justify-content: center; }
+        #controls-panel { width: 360px; }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 20px;
+            margin-bottom: 16px;
+        }
+        .controls label { font-weight: 600; color: #333; }
+        .controls input, .controls select {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        .controls .full { grid-column: 1 / -1; }
+        #canvas-wrapper { display: flex; justify-content: center; align-items: center; }
+        canvas { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px #ccc; }
+        .note { font-size: 0.9em; color: #555; }
+        /* Modal styles */
+        .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); z-index: 2000; }
+        .modal.open { display: flex; }
+        .modal .content { background: #fff; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.2); max-width: 560px; width: calc(100% - 40px); max-height: 80vh; overflow: auto; padding: 20px; }
+        .modal .content h3 { margin-top: 0; color: #1976d2; }
+        .modal .close { position: absolute; top: 16px; right: 16px; background: #e0e0e0; border: none; border-radius: 20px; padding: 6px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Home</span>
+    </a>
+    <h1>Spirograph Drawer</h1>
+
+    <div id="game-container">
+        <div id="canvas-panel">
+            <div id="canvas-wrapper">
+                <canvas id="canvas" width="600" height="600"></canvas>
+            </div>
+        </div>
+        <div id="controls-panel">
+            <div id="game">
+                <div class="controls">
+                    <div>
+                        <label for="outerR">External ring radius (R)</label>
+                        <input type="number" id="outerR" min="10" max="360" value="180" />
+                    </div>
+                    <div>
+                        <label for="innerr">Internal circle radius (r)</label>
+                        <input type="number" id="innerr" min="5" max="350" value="60" />
+                    </div>
+                    <div>
+                        <label for="penOffset">Pen offset from inner center (d)</label>
+                        <input type="number" id="penOffset" min="0" max="350" value="60" />
+                    </div>
+                    <div>
+                        <label for="type">Type</label>
+                        <select id="type">
+                            <option value="hypotrochoid" selected>Inside (Hypotrochoid)</option>
+                            <option value="epitrochoid">Outside (Epitrochoid)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="strokeColor">Stroke color</label>
+                        <input type="color" id="strokeColor" value="#1976d2" />
+                    </div>
+                    <div>
+                        <label for="strokeWidth">Stroke width</label>
+                        <input type="number" id="strokeWidth" min="1" max="5" value="1" />
+                    </div>
+                    <div>
+                        <label for="autoRedraw">Auto redraw</label>
+                        <input type="checkbox" id="autoRedraw" checked />
+                    </div>
+                    <div>
+                        <label for="overlayMode">Overlay mode</label>
+                        <input type="checkbox" id="overlayMode" />
+                    </div>
+                    <div>
+                        <label for="offsetA">Offset A (d1)</label>
+                        <input type="number" id="offsetA" min="0" max="350" value="30" />
+                    </div>
+                    <div>
+                        <label for="offsetB">Offset B (d2)</label>
+                        <input type="number" id="offsetB" min="0" max="350" value="120" />
+                    </div>
+                    <div>
+                        <label for="animMs">Duration (ms)</label>
+                        <input type="number" id="animMs" min="100" max="20000" value="3000" />
+                    </div>
+                    <div>
+                        <label for="animPingPong">Ping-pong</label>
+                        <input type="checkbox" id="animPingPong" />
+                    </div>
+                    <div>
+                        <label for="animRepeat">Repeat</label>
+                        <input type="checkbox" id="animRepeat" />
+                    </div>
+                    <div class="full">
+                        <button id="drawBtn">Draw</button>
+                        <button id="clearBtn" style="margin-left:8px;background:#555;">Clear</button>
+                        <button id="helpBtn" style="margin-left:8px;background:#888;">Help</button>
+                        <button id="animateBtn" style="margin-left:8px;background:#2e7d32;">Animate</button>
+                        <button id="stopAnimBtn" style="margin-left:8px;background:#c62828;">Stop</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal" id="helpModal" aria-hidden="true" role="dialog">
+        <div class="content">
+            <button class="close" id="helpClose">Close</button>
+            <h3>How It Works</h3>
+            <ul>
+                <li><strong>R:</strong> Radius of the fixed outer ring</li>
+                <li><strong>r:</strong> Radius of the rolling inner circle</li>
+                <li><strong>d:</strong> Pen distance from inner circle center</li>
+                <li><strong>Type:</strong> Inside (hypotrochoid) or outside (epitrochoid)</li>
+            </ul>
+            <div class="strategy">
+                <strong>Shapes:</strong>
+                <ul>
+                    <li>Set <em>d = r</em> for sharp cusps (cycloids)</li>
+                    <li>Choose integer ratios R:r (e.g., 180:60) for closed curves</li>
+                    <li>Try prime or co-prime pairs for intricate patterns</li>
+                </ul>
+            </div>
+            <h3>Features</h3>
+            <ul>
+                <li><strong>Auto redraw:</strong> When enabled, updates the drawing as you change inputs.</li>
+                <li><strong>Overlay mode:</strong> Draw new patterns on top of the canvas without clearing.</li>
+                <li><strong>Animate:</strong> Interpolate the pen offset from <em>Offset A (d1)</em> to <em>Offset B (d2)</em> over the chosen <em>Duration</em>. Use <em>Stop</em> to cancel.</li>
+                <li><strong>Ping-pong:</strong> Animate forward and then backward. Combine with <em>Repeat</em> to loop continuously.</li>
+                <li><strong>Color & width:</strong> Pick a stroke color and line thickness for the curve.</li>
+                <li><strong>Viewport fit:</strong> The canvas auto-resizes to fit the screen without scrollbars; resizing the window triggers a redraw.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const outerR = document.getElementById('outerR');
+        const innerr = document.getElementById('innerr');
+        const penOffset = document.getElementById('penOffset');
+        const typeSel = document.getElementById('type');
+        const strokeColor = document.getElementById('strokeColor');
+        const strokeWidth = document.getElementById('strokeWidth');
+        const drawBtn = document.getElementById('drawBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const helpClose = document.getElementById('helpClose');
+        const autoRedraw = document.getElementById('autoRedraw');
+        const overlayMode = document.getElementById('overlayMode');
+        const offsetA = document.getElementById('offsetA');
+        const offsetB = document.getElementById('offsetB');
+        const animMs = document.getElementById('animMs');
+        const animateBtn = document.getElementById('animateBtn');
+        const stopAnimBtn = document.getElementById('stopAnimBtn');
+        const animPingPong = document.getElementById('animPingPong');
+        const animRepeat = document.getElementById('animRepeat');
+
+        let isAnimating = false;
+        let animReqId = null;
+
+        function resizeCanvasToViewport() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const controlsW = 360; // matches #controls-panel width
+            const margins = 60; // combined horizontal margins/gaps
+            const headerReserve = 100; // space for home link + title
+            const maxSize = Math.min(vw - controlsW - margins, vh - headerReserve - 40);
+            const size = Math.max(240, Math.floor(maxSize));
+            canvas.width = size;
+            canvas.height = size;
+        }
+
+        function gcd(a, b) {
+            a = Math.round(Math.abs(a));
+            b = Math.round(Math.abs(b));
+            while (b) { [a, b] = [b, a % b]; }
+            return a || 1;
+        }
+
+        function drawSpirograph() {
+            const R = parseFloat(outerR.value);
+            const r = parseFloat(innerr.value);
+            let d = parseFloat(penOffset.value);
+            const mode = typeSel.value; // 'hypotrochoid' or 'epitrochoid'
+
+            if (!(R > 0 && r > 0)) return;
+            if (d < 0) d = 0;
+            if (mode === 'hypotrochoid' && r > R) {
+                alert('For inside mode, r should be \u2264 R');
+                return;
+            }
+
+            ctx.save();
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            ctx.translate(cx, cy);
+            ctx.lineWidth = parseFloat(strokeWidth.value);
+            ctx.strokeStyle = strokeColor.value;
+            ctx.beginPath();
+
+            // Parameter range for a closed curve when R and r are integers
+            const g = gcd(R, r);
+            const lcmFactor = (mode === 'hypotrochoid') ? (R / g) : (R / g); // same period formula base
+            const maxT = 2 * Math.PI * (mode === 'hypotrochoid' ? (r / g) : (r / g));
+
+            const steps = Math.max(3000, Math.ceil(maxT * 400)); // dense sampling
+
+            for (let i = 0; i <= steps; i++) {
+                const t = maxT * (i / steps);
+                let x, y;
+                if (mode === 'hypotrochoid') {
+                    // Inside roll: Hypotrochoid
+                    // x = (R - r) cos t + d cos(((R - r)/r) t)
+                    // y = (R - r) sin t - d sin(((R - r)/r) t)
+                    const k = (R - r) / r;
+                    x = (R - r) * Math.cos(t) + d * Math.cos(k * t);
+                    y = (R - r) * Math.sin(t) - d * Math.sin(k * t);
+                } else {
+                    // Outside roll: Epitrochoid
+                    // x = (R + r) cos t - d cos(((R + r)/r) t)
+                    // y = (R + r) sin t - d sin(((R + r)/r) t)
+                    const k = (R + r) / r;
+                    x = (R + r) * Math.cos(t) - d * Math.cos(k * t);
+                    y = (R + r) * Math.sin(t) - d * Math.sin(k * t);
+                }
+
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function render() {
+            const overlay = overlayMode.checked;
+            if (!overlay) {
+                if (!isAnimating) {
+                    // Avoid resizing on every animation frame for smoothness
+                    resizeCanvasToViewport();
+                }
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            drawSpirograph();
+        }
+
+        // Debounce helper to avoid excessive redraws while typing
+        function debounce(fn, ms) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), ms);
+            };
+        }
+
+        const handleChange = debounce(() => {
+            if (autoRedraw.checked) {
+                render();
+            }
+        }, 150);
+
+        drawBtn.addEventListener('click', () => { render(); });
+        clearBtn.addEventListener('click', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+        helpBtn.addEventListener('click', () => { helpModal.classList.add('open'); helpModal.setAttribute('aria-hidden', 'false'); });
+        helpClose.addEventListener('click', () => { helpModal.classList.remove('open'); helpModal.setAttribute('aria-hidden', 'true'); });
+        helpModal.addEventListener('click', (e) => { if (e.target === helpModal) { helpModal.classList.remove('open'); helpModal.setAttribute('aria-hidden', 'true'); } });
+
+        // Keep pen offset synced: default d=r when user changes r
+        innerr.addEventListener('input', () => {
+            const r = parseFloat(innerr.value) || 0;
+            if (parseFloat(penOffset.value) === 0 || document.activeElement !== penOffset) {
+                penOffset.value = r;
+            }
+            handleChange();
+        });
+        outerR.addEventListener('input', handleChange);
+        penOffset.addEventListener('input', handleChange);
+        typeSel.addEventListener('change', handleChange);
+        strokeColor.addEventListener('input', handleChange);
+        strokeWidth.addEventListener('input', handleChange);
+        autoRedraw.addEventListener('change', handleChange);
+        overlayMode.addEventListener('change', handleChange);
+        animPingPong.addEventListener('change', handleChange);
+        animRepeat.addEventListener('change', handleChange);
+
+        function stopAnimation() {
+            isAnimating = false;
+            if (animReqId) {
+                cancelAnimationFrame(animReqId);
+                animReqId = null;
+            }
+            animateBtn.disabled = false;
+        }
+
+        function animateOffset() {
+            const d1 = Math.max(0, parseFloat(offsetA.value) || 0);
+            const d2 = Math.max(0, parseFloat(offsetB.value) || 0);
+            const duration = Math.max(100, parseFloat(animMs.value) || 3000);
+            let start = 0;
+            let dir = 1; // 1: d1->d2, -1: d2->d1
+            let segmentsCompleted = 0; // count forward/back segments when ping-pong
+
+            stopAnimation();
+            isAnimating = true;
+            animateBtn.disabled = true;
+
+            function step(ts) {
+                if (!start) start = ts;
+                const t = Math.min(1, (ts - start) / duration);
+                const d = dir === 1
+                    ? (d1 + (d2 - d1) * t)
+                    : (d2 + (d1 - d2) * t);
+                penOffset.value = d.toFixed(2);
+                render();
+                if (t < 1 && isAnimating) {
+                    animReqId = requestAnimationFrame(step);
+                } else {
+                    // Segment finished
+                    segmentsCompleted++;
+                    const ping = animPingPong.checked;
+                    const repeat = animRepeat.checked;
+                    if (ping) {
+                        dir *= -1; // reverse direction
+                        if (!repeat && segmentsCompleted >= 2) {
+                            // completed forward + backward once
+                            isAnimating = false;
+                            animateBtn.disabled = false;
+                            return;
+                        }
+                        start = ts; // start next segment
+                        if (isAnimating) animReqId = requestAnimationFrame(step);
+                    } else if (repeat) {
+                        // repeat forward segments
+                        start = ts;
+                        if (isAnimating) animReqId = requestAnimationFrame(step);
+                    } else {
+                        isAnimating = false;
+                        animateBtn.disabled = false;
+                    }
+                }
+            }
+            animReqId = requestAnimationFrame(step);
+        }
+
+        animateBtn.addEventListener('click', animateOffset);
+        stopAnimBtn.addEventListener('click', stopAnimation);
+
+        // Initial layout + preview
+        resizeCanvasToViewport();
+        drawSpirograph();
+        window.addEventListener('resize', () => { resizeCanvasToViewport(); drawSpirograph(); });
+    </script>
+</body>
+</html>
