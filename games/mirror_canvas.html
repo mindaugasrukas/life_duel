@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mirror Canvas</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body {
+            background: #f8f8f8;
+        }
+
+        #canvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            background: #fff;
+            cursor: crosshair;
+        }
+
+        #toolbar {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 10px 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            max-width: calc(100vw - 20px);
+        }
+
+        #toolbar label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+            white-space: nowrap;
+        }
+
+        #toolbar select,
+        #toolbar input {
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        #toolbar .btn {
+            margin-top: 0;
+        }
+
+        #toolbar .separator {
+            width: 1px;
+            height: 28px;
+            background: #e0e0e0;
+            margin: 0 2px;
+        }
+
+        #hint {
+            position: fixed;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #ccc;
+            padding: 10px 12px;
+            color: #333;
+            font-size: 0.95em;
+            max-width: calc(100vw - 20px);
+            text-align: center;
+        }
+
+        .kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 720px) {
+            #toolbar {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            #toolbar .separator {
+                display: none;
+            }
+        }
+    </style>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5Q8WV6YPBP"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-5Q8WV6YPBP');
+    </script>
+</head>
+
+<body>
+    <a href="../index.html" title="Back to Home" class="home-link">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </svg>
+        <span>Home</span>
+    </a>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="toolbar" role="toolbar" aria-label="Drawing tools">
+        <label for="behavior" title="Choose how strokes are mirrored/duplicated">Behavior</label>
+        <select id="behavior" title="Choose how strokes are mirrored/duplicated">
+            <option value="free" selected>Free</option>
+            <option value="mirror-vertical">Mirror (Left ↔ Right)</option>
+            <option value="mirror-horizontal">Mirror (Top ↔ Bottom)</option>
+            <option value="quad">Quad Mirror</option>
+            <option value="corner-opposite">Corner Opposite Mirror</option>
+            <option value="radial">Radial Mirror (N-fold)</option>
+            <option value="grid">Grid Stamp</option>
+            <option value="echo">Time Echo</option>
+            <option value="velocity">Velocity Brush</option>
+        </select>
+
+        <div id="modeOptions" aria-label="Mode options" title="Mode-specific controls">
+            <span class="mode-opt" data-mode="radial">
+                <label for="symN">N</label>
+                <input id="symN" type="number" min="2" max="36" value="8" style="width:72px;" />
+            </span>
+            <span class="mode-opt" data-mode="grid">
+                <label for="gridDx">dx</label>
+                <input id="gridDx" type="number" min="10" max="800" value="120" style="width:84px;" />
+                <label for="gridDy">dy</label>
+                <input id="gridDy" type="number" min="10" max="800" value="120" style="width:84px;" />
+            </span>
+            <span class="mode-opt" data-mode="echo">
+                <label for="echoCount">echo</label>
+                <input id="echoCount" type="number" min="1" max="12" value="5" style="width:76px;" />
+            </span>
+            <span class="mode-opt" data-mode="velocity">
+                <label for="velMin">min</label>
+                <input id="velMin" type="number" min="1" max="40" value="2" style="width:70px;" />
+                <label for="velMax">max</label>
+                <input id="velMax" type="number" min="1" max="80" value="18" style="width:70px;" />
+            </span>
+        </div>
+
+        <div class="separator" aria-hidden="true"></div>
+
+        <label for="tool" title="Pick pen or eraser">Tool</label>
+        <select id="tool" title="Pick pen or eraser">
+            <option value="pen" selected>Pen</option>
+            <option value="eraser">Eraser</option>
+        </select>
+
+        <label for="color" title="Primary stroke color">Color</label>
+        <input id="color" type="color" value="#1976d2" title="Primary stroke color" />
+
+    <label for="mirrorColorEnabled" title="Use a different color for mirrored copies">Mirror color</label>
+    <input id="mirrorColorEnabled" type="checkbox" title="Use a different color for mirrored copies" />
+    <input id="mirrorColor" type="color" value="#e91e63" title="Mirror copy color" />
+
+        <label for="fadeEnabled" title="Make strokes disappear after the delay">Fade</label>
+        <input id="fadeEnabled" type="checkbox" title="Make strokes disappear after the delay" />
+        <input id="fadeRate" type="number" min="0.2" max="60" step="0.2" value="1" style="width:92px;" title="Seconds before strokes disappear" />
+
+        <label for="size" title="Stroke size">Size</label>
+        <input id="size" type="range" min="1" max="40" value="6" title="Stroke size" />
+
+        <button class="btn" id="clearBtn" title="Clear the canvas (Esc)">Clear</button>
+    </div>
+
+    <div id="hint">
+        Draw with mouse/touch. Press <span class="kbd">Esc</span> to clear.
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+
+        const BACKGROUND_COLOR = '#ffffff';
+
+        const drawBuffer = document.createElement('canvas');
+        let drawCtx = drawBuffer.getContext('2d', { alpha: true });
+        let dpr = 1;
+
+        const behaviorEl = document.getElementById('behavior');
+        const modeOptionsEl = document.getElementById('modeOptions');
+        const symNEl = document.getElementById('symN');
+        const gridDxEl = document.getElementById('gridDx');
+        const gridDyEl = document.getElementById('gridDy');
+        const echoCountEl = document.getElementById('echoCount');
+        const velMinEl = document.getElementById('velMin');
+        const velMaxEl = document.getElementById('velMax');
+        const mirrorColorEnabledEl = document.getElementById('mirrorColorEnabled');
+        const mirrorColorEl = document.getElementById('mirrorColor');
+        const fadeEnabledEl = document.getElementById('fadeEnabled');
+        const fadeRateEl = document.getElementById('fadeRate');
+        const toolEl = document.getElementById('tool');
+        const colorEl = document.getElementById('color');
+        const sizeEl = document.getElementById('size');
+        const clearBtn = document.getElementById('clearBtn');
+
+        let isDrawing = false;
+        let lastPoint = null;
+        let pointerIdActive = null;
+        let lastMoveTs = null;
+
+        let fadeReq = null;
+        let lastFadeTs = null;
+        let fadeSnapshot = null;
+        let fadeSnapshotTime = null;
+        const fadeSegments = [];
+
+        function getViewportSize() {
+            return { w: window.innerWidth, h: window.innerHeight };
+        }
+
+        function renderToScreen() {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = BACKGROUND_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(drawBuffer, 0, 0);
+            ctx.restore();
+        }
+
+        function resizeCanvas(preserveDrawing = true) {
+            const nextDpr = Math.max(1, window.devicePixelRatio || 1);
+
+            let oldBuffer = null;
+            if (preserveDrawing && drawBuffer.width > 0 && drawBuffer.height > 0) {
+                oldBuffer = document.createElement('canvas');
+                oldBuffer.width = drawBuffer.width;
+                oldBuffer.height = drawBuffer.height;
+                const oldCtx = oldBuffer.getContext('2d');
+                oldCtx.drawImage(drawBuffer, 0, 0);
+            }
+
+            dpr = nextDpr;
+
+            const { w, h } = getViewportSize();
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+
+            const pxW = Math.max(1, Math.floor(w * dpr));
+            const pxH = Math.max(1, Math.floor(h * dpr));
+            canvas.width = pxW;
+            canvas.height = pxH;
+
+            drawBuffer.width = pxW;
+            drawBuffer.height = pxH;
+            drawCtx = drawBuffer.getContext('2d', { alpha: true });
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawCtx.lineCap = 'round';
+            drawCtx.lineJoin = 'round';
+
+            // Keep the drawing buffer transparent; background is painted during render.
+            drawCtx.save();
+            drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+            drawCtx.clearRect(0, 0, drawBuffer.width, drawBuffer.height);
+            drawCtx.restore();
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            if (oldBuffer) {
+                drawCtx.save();
+                drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+                drawCtx.drawImage(oldBuffer, 0, 0, oldBuffer.width, oldBuffer.height, 0, 0, drawBuffer.width, drawBuffer.height);
+                drawCtx.restore();
+                drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+
+            renderToScreen();
+        }
+
+        function clearCanvas() {
+            drawCtx.save();
+            drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+            drawCtx.clearRect(0, 0, drawBuffer.width, drawBuffer.height);
+            drawCtx.restore();
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            renderToScreen();
+        }
+
+        function clampNumber(value, min, max, fallback) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return fallback;
+            return Math.max(min, Math.min(max, n));
+        }
+
+        function showModeOptions() {
+            const mode = behaviorEl.value;
+            const opts = modeOptionsEl.querySelectorAll('.mode-opt');
+            opts.forEach((el) => {
+                const modes = (el.getAttribute('data-mode') || '').split(/\s+/).filter(Boolean);
+                el.style.display = modes.includes(mode) ? 'inline-flex' : 'none';
+                if (el.style.display !== 'none') {
+                    el.style.gap = '8px';
+                    el.style.alignItems = 'center';
+                    el.style.marginLeft = '10px';
+                }
+            });
+        }
+
+        function stopFade() {
+            if (fadeReq !== null) {
+                cancelAnimationFrame(fadeReq);
+                fadeReq = null;
+            }
+            lastFadeTs = null;
+        }
+
+        function captureFadeSnapshot() {
+            fadeSnapshot = document.createElement('canvas');
+            fadeSnapshot.width = drawBuffer.width;
+            fadeSnapshot.height = drawBuffer.height;
+            const snapCtx = fadeSnapshot.getContext('2d');
+            snapCtx.drawImage(drawBuffer, 0, 0);
+            fadeSnapshotTime = performance.now();
+        }
+
+        function bakeFadeState() {
+            // Render current fade state to the buffer and clear fade history.
+            renderFadeFrame(performance.now(), true);
+            fadeSnapshot = null;
+            fadeSnapshotTime = null;
+            fadeSegments.length = 0;
+        }
+
+        function renderFadeFrame(now, bakeOnly = false) {
+            const delaySec = clampNumber(fadeRateEl.value, 0.2, 60, 1);
+
+            drawCtx.save();
+            // Clear in device pixels.
+            drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+            drawCtx.clearRect(0, 0, drawBuffer.width, drawBuffer.height);
+
+            const drawWithAlpha = (img, alpha) => {
+                if (!img || alpha <= 0) return;
+                drawCtx.globalAlpha = alpha;
+                drawCtx.globalCompositeOperation = 'source-over';
+                drawCtx.drawImage(img, 0, 0);
+            };
+
+            // Snapshot is already in device pixels.
+            if (fadeSnapshot && fadeSnapshotTime !== null) {
+                const age = (now - fadeSnapshotTime) / 1000;
+                if (age <= delaySec) {
+                    drawWithAlpha(fadeSnapshot, 1);
+                } else {
+                    fadeSnapshot = null;
+                    fadeSnapshotTime = null;
+                }
+            }
+
+            // Draw live segments in CSS pixels using DPR transform.
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const remaining = [];
+            for (const seg of fadeSegments) {
+                const age = (now - seg.time) / 1000;
+                if (age > delaySec) continue;
+
+                drawCtx.globalAlpha = seg.alpha;
+                if (seg.tool === 'eraser') {
+                    drawCtx.globalCompositeOperation = 'destination-out';
+                    drawCtx.strokeStyle = 'rgba(0,0,0,1)';
+                } else {
+                    drawCtx.globalCompositeOperation = 'source-over';
+                    drawCtx.strokeStyle = seg.color;
+                }
+                drawCtx.lineWidth = seg.width;
+                drawCtx.beginPath();
+                drawCtx.moveTo(seg.a.x, seg.a.y);
+                drawCtx.lineTo(seg.b.x, seg.b.y);
+                drawCtx.stroke();
+
+                remaining.push(seg);
+            }
+            fadeSegments.length = 0;
+            fadeSegments.push(...remaining);
+
+            drawCtx.restore();
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            if (!bakeOnly) renderToScreen();
+        }
+
+        function ensureFadeLoop() {
+            if (fadeReq !== null) return;
+            fadeReq = requestAnimationFrame(fadeTick);
+        }
+
+        function fadeTick(now) {
+            fadeReq = null;
+            if (!fadeEnabledEl.checked) return;
+
+            renderFadeFrame(now, false);
+
+            if (fadeSegments.length > 0 || fadeSnapshot) {
+                ensureFadeLoop();
+            }
+        }
+
+        function enqueueFadeSegment(a, b, color, width, alpha, tool) {
+            fadeSegments.push({
+                a: { x: a.x, y: a.y },
+                b: { x: b.x, y: b.y },
+                color,
+                width,
+                alpha,
+                tool,
+                time: performance.now(),
+            });
+            ensureFadeLoop();
+        }
+
+        function startFadeIfNeeded() {
+            if (fadeEnabledEl.checked) {
+                captureFadeSnapshot();
+                ensureFadeLoop();
+                return;
+            }
+
+            // Fade disabled: bake current visible state into buffer.
+            if (fadeSegments.length > 0 || fadeSnapshot) {
+                bakeFadeState();
+            }
+            stopFade();
+        }
+
+        function getSymmetryPoints(p) {
+            const { w, h } = getViewportSize();
+            const mode = behaviorEl.value;
+
+            if (mode === 'mirror-vertical') {
+                return [
+                    { x: p.x, y: p.y },
+                    { x: w - p.x, y: p.y },
+                ];
+            }
+
+            if (mode === 'mirror-horizontal') {
+                return [
+                    { x: p.x, y: p.y },
+                    { x: p.x, y: h - p.y },
+                ];
+            }
+
+            if (mode === 'quad') {
+                return [
+                    { x: p.x, y: p.y },
+                    { x: w - p.x, y: p.y },
+                    { x: p.x, y: h - p.y },
+                    { x: w - p.x, y: h - p.y },
+                ];
+            }
+
+            if (mode === 'corner-opposite') {
+                return [
+                    { x: p.x, y: p.y },
+                    { x: w - p.x, y: h - p.y },
+                ];
+            }
+
+            return [{ x: p.x, y: p.y }];
+        }
+
+        function rotateAroundCenter(p, angleRad) {
+            const { w, h } = getViewportSize();
+            const cx = w / 2;
+            const cy = h / 2;
+            const x = p.x - cx;
+            const y = p.y - cy;
+            const c = Math.cos(angleRad);
+            const s = Math.sin(angleRad);
+            return {
+                x: cx + x * c - y * s,
+                y: cy + x * s + y * c,
+            };
+        }
+
+        function mirrorColorEnabled() {
+            return !!mirrorColorEnabledEl.checked;
+        }
+
+
+        function computeBaseLineWidth(a, b, nowTs) {
+            const mode = behaviorEl.value;
+            const baseSize = parseFloat(sizeEl.value);
+
+            if (mode !== 'velocity') return baseSize;
+
+            const minW = clampNumber(velMinEl.value, 1, 40, 2);
+            const maxW = clampNumber(velMaxEl.value, 1, 80, 18);
+            if (!lastMoveTs || !nowTs) return baseSize;
+
+            const dt = Math.max(1, nowTs - lastMoveTs);
+            const dist = Math.hypot(b.x - a.x, b.y - a.y);
+            const speed = dist / dt; // px per ms
+            const t = Math.max(0, Math.min(1, speed / 1.3));
+
+            // Faster -> thinner (invert)
+            return maxW + (minW - maxW) * t;
+        }
+
+        function withDrawingStyle(fn, { alpha = 1, lineWidth = null, strokeStyle = null } = {}) {
+            const tool = toolEl.value;
+
+            drawCtx.save();
+            drawCtx.globalAlpha = alpha;
+
+            if (lineWidth !== null) {
+                drawCtx.lineWidth = lineWidth;
+            } else {
+                drawCtx.lineWidth = parseFloat(sizeEl.value);
+            }
+
+            if (tool === 'eraser') {
+                drawCtx.globalCompositeOperation = 'destination-out';
+                drawCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                drawCtx.globalCompositeOperation = 'source-over';
+                drawCtx.strokeStyle = strokeStyle || colorEl.value;
+            }
+
+            fn();
+            drawCtx.restore();
+        }
+
+        function strokeLine(a, b) {
+            drawCtx.beginPath();
+            drawCtx.moveTo(a.x, a.y);
+            drawCtx.lineTo(b.x, b.y);
+            drawCtx.stroke();
+        }
+
+        function strokePolyline(points) {
+            if (!points || points.length < 2) return;
+            drawCtx.beginPath();
+            drawCtx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) drawCtx.lineTo(points[i].x, points[i].y);
+            drawCtx.stroke();
+        }
+
+        function drawEchoes(a, b, baseWidth, nowTs) {
+            const count = clampNumber(echoCountEl.value, 1, 12, 5);
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+
+            for (let i = 1; i <= count; i++) {
+                const t = i / (count + 1);
+                const alpha = 0.35 * (1 - t);
+                const back = 10 * i;
+                const a2 = { x: a.x - ux * back, y: a.y - uy * back };
+                const b2 = { x: b.x - ux * back, y: b.y - uy * back };
+                const w2 = Math.max(1, baseWidth * (1 - 0.08 * i));
+                withDrawingStyle(() => strokeLine(a2, b2), { alpha, lineWidth: w2 });
+            }
+        }
+
+        function drawSegment(a, b, nowTs) {
+            const tool = toolEl.value;
+
+            // tool is referenced via withDrawingStyle for consistency
+            void tool;
+
+            const mode = behaviorEl.value;
+            const { w, h } = getViewportSize();
+
+            const baseWidth = computeBaseLineWidth(a, b, nowTs);
+
+            const wantsMirrorColor = mirrorColorEnabled();
+            const baseColor = colorEl.value;
+            const mirrorColor = mirrorColorEl.value;
+
+            const drawLineWithColor = (p1, p2, color, width, alpha = 1) => {
+                if (fadeEnabledEl.checked) {
+                    enqueueFadeSegment(p1, p2, color, width, alpha, toolEl.value);
+                } else {
+                    withDrawingStyle(() => strokeLine(p1, p2), { lineWidth: width, alpha, strokeStyle: color });
+                }
+            };
+
+            // Each mode emits one or more segments/polylines.
+            if (mode === 'free' || mode === 'mirror-vertical' || mode === 'mirror-horizontal' || mode === 'quad' || mode === 'corner-opposite') {
+                const pointsA = getSymmetryPoints(a);
+                const pointsB = getSymmetryPoints(b);
+                const count = Math.min(pointsA.length, pointsB.length);
+                for (let i = 0; i < count; i++) {
+                    const isPrimary = i === 0;
+                    const color = (tool === 'eraser' || !wantsMirrorColor || isPrimary) ? baseColor : mirrorColor;
+                    drawLineWithColor(pointsA[i], pointsB[i], color, baseWidth);
+                }
+                return;
+            }
+
+            if (mode === 'radial') {
+                const N = clampNumber(symNEl.value, 2, 36, 8);
+                const wedgeAngle = (2 * Math.PI) / N;
+                for (let i = 0; i < N; i++) {
+                    const ang = i * wedgeAngle;
+                    const a2 = rotateAroundCenter(a, ang);
+                    const b2 = rotateAroundCenter(b, ang);
+                    const isPrimary = i === 0;
+                    const color = (tool === 'eraser' || !wantsMirrorColor || isPrimary) ? baseColor : mirrorColor;
+                    drawLineWithColor(a2, b2, color, baseWidth);
+                }
+                return;
+            }
+
+            if (mode === 'grid') {
+                const dx = clampNumber(gridDxEl.value, 10, 800, 120);
+                const dy = clampNumber(gridDyEl.value, 10, 800, 120);
+                const maxI = Math.min(40, Math.ceil(w / dx) + 1);
+                const maxJ = Math.min(40, Math.ceil(h / dy) + 1);
+                for (let i = -maxI; i <= maxI; i++) {
+                    for (let j = -maxJ; j <= maxJ; j++) {
+                        const ox = i * dx;
+                        const oy = j * dy;
+                        const isPrimary = (i === 0 && j === 0);
+                        const color = (tool === 'eraser' || !wantsMirrorColor || isPrimary) ? baseColor : mirrorColor;
+                        drawLineWithColor({ x: a.x + ox, y: a.y + oy }, { x: b.x + ox, y: b.y + oy }, color, baseWidth);
+                    }
+                }
+                return;
+            }
+
+            if (mode === 'echo') {
+                drawLineWithColor(a, b, baseColor, baseWidth);
+                drawEchoes(a, b, baseWidth, nowTs);
+                return;
+            }
+
+            if (mode === 'velocity') {
+                drawLineWithColor(a, b, baseColor, baseWidth);
+                return;
+            }
+
+        }
+
+        function clampPointToViewport(p) {
+            const { w, h } = getViewportSize();
+            return {
+                x: Math.max(0, Math.min(w, p.x)),
+                y: Math.max(0, Math.min(h, p.y)),
+            };
+        }
+
+        function eventPoint(e) {
+            return clampPointToViewport({
+                x: e.clientX,
+                y: e.clientY,
+            });
+        }
+
+        function startDrawing(e) {
+            if (pointerIdActive !== null) return;
+
+            pointerIdActive = e.pointerId;
+            canvas.setPointerCapture(pointerIdActive);
+            isDrawing = true;
+            lastPoint = eventPoint(e);
+            lastMoveTs = performance.now();
+        }
+
+        function moveDrawing(e) {
+            if (!isDrawing) return;
+            if (e.pointerId !== pointerIdActive) return;
+
+            const current = eventPoint(e);
+            const next = current;
+
+            const nowTs = performance.now();
+
+            if (lastPoint) {
+                drawSegment(lastPoint, next, nowTs);
+                if (!fadeEnabledEl.checked) {
+                    renderToScreen();
+                }
+            }
+
+            lastPoint = next;
+            lastMoveTs = nowTs;
+        }
+
+        function stopDrawing(e) {
+            if (e.pointerId !== pointerIdActive) return;
+
+            isDrawing = false;
+            lastPoint = null;
+            pointerIdActive = null;
+            lastMoveTs = null;
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            startDrawing(e);
+        });
+        canvas.addEventListener('pointermove', (e) => {
+            e.preventDefault();
+            moveDrawing(e);
+        });
+        canvas.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            stopDrawing(e);
+        });
+        canvas.addEventListener('pointercancel', (e) => {
+            e.preventDefault();
+            stopDrawing(e);
+        });
+
+        clearBtn.addEventListener('click', () => clearCanvas());
+
+        behaviorEl.addEventListener('change', () => {
+            showModeOptions();
+        });
+
+        fadeEnabledEl.addEventListener('change', () => startFadeIfNeeded());
+        fadeRateEl.addEventListener('change', () => startFadeIfNeeded());
+        fadeRateEl.addEventListener('input', () => startFadeIfNeeded());
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                clearCanvas();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            resizeCanvas(true);
+        });
+
+        resizeCanvas(false);
+        showModeOptions();
+        startFadeIfNeeded();
+    </script>
+</body>
+
+</html>
