@@ -10,7 +10,7 @@ Life Duel is an experimental journey exploring the limits of Large Language Mode
 
 This project is a father-son collaboration documenting the future of human-AI collaboration in software development, one HTML file at a time. Every game tells a story of experimentation, learning, and discovery.
 
-**Current Progress:** 18/100 games completed
+**Current Progress:** 20/100 games completed
 
 ---
 
