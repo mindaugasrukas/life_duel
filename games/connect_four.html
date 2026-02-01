@@ -234,6 +234,16 @@
         const hoverPiece = document.getElementById('hoverPiece');
         const messageDiv = document.getElementById('message');
 
+        // // Initial board state for testing
+        // // Uncomment the following line to start with a predefined board state
+        // board = [[null, null, null, null, null, null, null],
+        //          [null, null, null, null, null, null, null],
+        //          [null, null, null, null, null, null, null],
+        //          [null, null, null, null, null, 'Y', null],
+        //          [null, null, null, 'R', null, 'R', 'Y'],
+        //          [null, 'Y', 'R', 'R', 'R', 'Y', 'Y']
+        //         ];
+
         // Initialize the game board
         function createBoard() {
             // Create board holes
@@ -440,8 +450,8 @@
         }
 
         // Check if the board is full
-        function isFull() {
-            return board[0].every(cell => cell);
+        function isFull(b = board) {
+            return b[0].every(cell => cell);
         }
 
         // Check for a winner
@@ -490,7 +500,7 @@
         function minimax(b, depth, maximizing) {
             if (checkWinner(b, AI)) return [1000, null];
             if (checkWinner(b, HUMAN)) return [-1000, null];
-            if (isFull()) return [0, null];
+            if (isFull(b)) return [0, null];
 
             if (maximizing) {
                 let maxEval = -Infinity;
@@ -531,6 +541,7 @@
                 }
 
                 // Randomly select from best columns
+                if (bestCols.length === 0) return [0, null];
                 const bestCol = bestCols[Math.floor(Math.random() * bestCols.length)];
                 return [maxEval, bestCol];
             } else {
@@ -562,6 +573,7 @@
                     }
                 }
                 // Randomly select from best columns
+                if (bestCols.length === 0) return [0, null];
                 const bestCol = bestCols[Math.floor(Math.random() * bestCols.length)];
                 return [minEval, bestCol];
             }
