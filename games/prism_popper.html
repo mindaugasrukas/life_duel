@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prism Popper</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06070f;
+      --panel: #0f172a;
+      --accent: #f472b6;
+      --accent-2: #60a5fa;
+      --danger: #fb7185;
+      --text: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #111827, var(--bg));
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .frame {
+      display: grid;
+      gap: 16px;
+      width: min(900px, 92vw);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.4);
+    }
+    .title {
+      font-size: 1.05rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: linear-gradient(180deg, #0b1020, #040710);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #0f172a;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(244, 114, 182, 0.35);
+    }
+    button:active { transform: scale(0.98); }
+    .tip { opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="hud">
+      <div class="card">
+        <div class="title">Score</div>
+        <div class="value" id="score">0</div>
+      </div>
+      <div class="card">
+        <div class="title">Lives</div>
+        <div class="value" id="lives">3</div>
+      </div>
+      <div class="card">
+        <div class="title">Chain</div>
+        <div class="value" id="chain">x1</div>
+      </div>
+      <div class="card">
+        <div class="title">Round</div>
+        <div class="value" id="round">1</div>
+      </div>
+    </div>
+
+    <canvas id="game" width="960" height="540" aria-label="Prism Popper"></canvas>
+
+    <div class="controls">
+      <div class="tip">Click prisms to pop · Misses cost lives · Keep a chain alive</div>
+      <button id="restart">Restart Pop</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const livesEl = document.getElementById("lives");
+    const chainEl = document.getElementById("chain");
+    const roundEl = document.getElementById("round");
+    const restartBtn = document.getElementById("restart");
+
+    const state = {
+      score: 0,
+      lives: 3,
+      chain: 1,
+      round: 1,
+      running: true,
+      prisms: [],
+      pointer: { x: 0, y: 0 },
+      shards: []
+    };
+
+    function resetGame() {
+      state.score = 0;
+      state.lives = 3;
+      state.chain = 1;
+      state.round = 1;
+      state.running = true;
+      state.prisms = [];
+      state.shards = [];
+      spawnPrisms();
+      updateHud();
+    }
+
+    function updateHud() {
+      scoreEl.textContent = Math.floor(state.score);
+      livesEl.textContent = state.lives;
+      chainEl.textContent = `x${state.chain}`;
+      roundEl.textContent = state.round;
+    }
+
+    function spawnPrisms() {
+      const target = 6 + state.round * 2;
+      while (state.prisms.length < target) {
+        const size = 18 + Math.random() * 16;
+        const x = 40 + Math.random() * (canvas.width - 80);
+        const y = 40 + Math.random() * (canvas.height - 80);
+        const vx = (Math.random() - 0.5) * (1.6 + state.round * 0.2);
+        const vy = (Math.random() - 0.5) * (1.6 + state.round * 0.2);
+        state.prisms.push({ x, y, vx, vy, size, hue: 280 + Math.random() * 80, life: 1 });
+      }
+    }
+
+    function updatePrisms() {
+      state.prisms.forEach((prism) => {
+        prism.x += prism.vx;
+        prism.y += prism.vy;
+        if (prism.x < 30 || prism.x > canvas.width - 30) prism.vx *= -1;
+        if (prism.y < 30 || prism.y > canvas.height - 30) prism.vy *= -1;
+      });
+    }
+
+    function popAt(x, y) {
+      if (!state.running) return;
+      let hit = false;
+      for (let i = state.prisms.length - 1; i >= 0; i -= 1) {
+        const prism = state.prisms[i];
+        const dist = Math.hypot(prism.x - x, prism.y - y);
+        if (dist < prism.size + 6) {
+          hit = true;
+          state.prisms.splice(i, 1);
+          state.score += (30 + prism.size) * state.chain;
+          state.chain = Math.min(6, state.chain + 1);
+          state.shards.push({ x: prism.x, y: prism.y, life: 0.7, hue: prism.hue });
+        }
+      }
+
+      if (!hit) {
+        state.lives -= 1;
+        state.chain = 1;
+        if (state.lives <= 0) state.running = false;
+      }
+
+      if (state.prisms.length === 0) {
+        state.round += 1;
+        spawnPrisms();
+      }
+    }
+
+    function updateShards(dt) {
+      state.shards.forEach((shard) => {
+        shard.life -= dt;
+      });
+      state.shards = state.shards.filter((shard) => shard.life > 0);
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#05060f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      for (let i = 0; i < 90; i += 1) {
+        const x = (i * 83) % canvas.width;
+        const y = (i * 53 + state.round * 40) % canvas.height;
+        ctx.fillStyle = i % 2 === 0 ? "#94a3b8" : "#334155";
+        ctx.fillRect(x, y, 2, 2);
+      }
+      ctx.restore();
+    }
+
+    function drawPrisms() {
+      state.prisms.forEach((prism) => {
+        ctx.beginPath();
+        ctx.fillStyle = `hsl(${prism.hue} 80% 70%)`;
+        ctx.moveTo(prism.x, prism.y - prism.size);
+        ctx.lineTo(prism.x + prism.size, prism.y + prism.size);
+        ctx.lineTo(prism.x - prism.size, prism.y + prism.size);
+        ctx.closePath();
+        ctx.fill();
+      });
+    }
+
+    function drawShards() {
+      state.shards.forEach((shard) => {
+        const alpha = Math.max(0, shard.life);
+        ctx.beginPath();
+        ctx.strokeStyle = `hsla(${shard.hue} 80% 70% / ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.arc(shard.x, shard.y, 30 * (1 - alpha) + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    }
+
+    function drawOverlay() {
+      if (state.running) return;
+      ctx.save();
+      ctx.fillStyle = "rgba(2, 6, 23, 0.7)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "bold 40px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Prisms Gone", canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = "20px Inter, sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("Press Restart to pop again", canvas.width / 2, canvas.height / 2 + 26);
+      ctx.restore();
+    }
+
+    function loop(timestamp) {
+      const dt = Math.min(0.033, (timestamp - (state.lastTime || timestamp)) / 1000);
+      state.lastTime = timestamp;
+
+      if (state.running) {
+        updatePrisms();
+        updateShards(dt);
+      }
+
+      drawBackground();
+      drawShards();
+      drawPrisms();
+      drawOverlay();
+      updateHud();
+
+      requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener("click", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+      popAt(x, y);
+    });
+
+    restartBtn.addEventListener("click", resetGame);
+
+    resetGame();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
