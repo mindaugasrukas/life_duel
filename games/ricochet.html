@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ricochet</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            color: #fff;
+        }
+        #gameContainer {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 800px;
+            padding: 0 10px;
+        }
+        #header h1 {
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: #00e5ff;
+            text-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+        }
+        .stat {
+            font-size: 14px;
+            color: #aaa;
+            letter-spacing: 2px;
+        }
+        .stat span {
+            color: #00e5ff;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        canvas {
+            border: 1px solid #1a1a3a;
+            border-radius: 8px;
+            cursor: crosshair;
+            box-shadow: 0 0 40px rgba(0, 229, 255, 0.1);
+        }
+        #controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        button {
+            background: transparent;
+            border: 1px solid #00e5ff;
+            color: #00e5ff;
+            padding: 8px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: rgba(0, 229, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+        }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: 300;
+            letter-spacing: 12px;
+            text-transform: uppercase;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+            text-shadow: 0 0 30px rgba(0, 229, 255, 0.8);
+            z-index: 10;
+        }
+        #message.show { opacity: 1; }
+        .back-link {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 14px;
+            letter-spacing: 2px;
+            transition: color 0.3s;
+        }
+        .back-link:hover { color: #00e5ff; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-link">← BACK</a>
+    <div id="gameContainer">
+        <div id="header">
+            <h1>Ricochet</h1>
+            <div style="display:flex; gap:30px;">
+                <div class="stat">Level <span id="levelNum">1</span></div>
+                <div class="stat">Shots <span id="shotCount">0</span> / <span id="maxShots">1</span></div>
+                <div class="stat">Score <span id="score">0</span></div>
+            </div>
+        </div>
+        <canvas id="canvas" width="800" height="600"></canvas>
+        <div id="controls">
+            <button id="resetBtn" onclick="resetLevel()">Reset</button>
+            <button id="nextBtn" onclick="nextLevel()" style="display:none">Next Level →</button>
+        </div>
+        <div id="message"></div>
+    </div>
+
+    <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const message = document.getElementById('message');
+    const nextBtn = document.getElementById('nextBtn');
+
+    // Game state
+    let state = 'aiming'; // aiming, shooting, won, lost
+    let currentLevel = 0;
+    let score = 0;
+    let shotsFired = 0;
+    let ball = null;
+    let targets = [];
+    let walls = [];
+    let dangerWalls = [];
+    let obstacles = [];
+    let portals = [];
+    let launcher = { x: 100, y: 500 };
+    let aimAngle = -Math.PI / 4;
+    let aimPower = 12;
+    let mousePos = { x: 400, y: 300 };
+    let trail = [];
+    let particles = [];
+    let hitTargets = 0;
+    let totalTargets = 0;
+    let bounceCount = 0;
+    let maxBounces = 50;
+    let portalCooldown = 0;
+
+    // Levels
+    const levels = [
+        // Level 1: Simple - one target, straight-ish shot
+        {
+            launcher: { x: 100, y: 500 },
+            maxShots: 3,
+            targets: [
+                { x: 650, y: 150, radius: 20 }
+            ],
+            walls: [],
+            obstacles: [],
+            portals: []
+        },
+        // Level 2: Bounce off a wall
+        {
+            launcher: { x: 100, y: 300 },
+            maxShots: 3,
+            targets: [
+                { x: 650, y: 500, radius: 20 }
+            ],
+            walls: [
+                { x: 300, y: 100, w: 20, h: 400 }
+            ],
+            obstacles: [],
+            portals: []
+        },
+        // Level 3: Two targets + danger wall
+        {
+            launcher: { x: 100, y: 550 },
+            maxShots: 2,
+            targets: [
+                { x: 700, y: 100, radius: 18 },
+                { x: 400, y: 80, radius: 18 }
+            ],
+            walls: [
+                { x: 250, y: 200, w: 20, h: 300 }
+            ],
+            dangerWalls: [
+                { x: 500, y: 300, w: 20, h: 200 }
+            ],
+            obstacles: [],
+            portals: []
+        },
+        // Level 4: Obstacle course with danger
+        {
+            launcher: { x: 80, y: 520 },
+            maxShots: 3,
+            targets: [
+                { x: 720, y: 520, radius: 18 }
+            ],
+            walls: [
+                { x: 195, y: 0, w: 30, h: 400 },
+                { x: 395, y: 200, w: 30, h: 400 },
+                { x: 595, y: 0, w: 30, h: 400 }
+            ],
+            dangerWalls: [
+                { x: 295, y: 450, w: 100, h: 20 }
+            ],
+            obstacles: [],
+            portals: []
+        },
+        // Level 5: Moving obstacle + danger
+        {
+            launcher: { x: 100, y: 500 },
+            maxShots: 3,
+            targets: [
+                { x: 650, y: 300, radius: 22 }
+            ],
+            walls: [],
+            dangerWalls: [
+                { x: 300, y: 0, w: 20, h: 200 },
+                { x: 300, y: 400, w: 20, h: 200 }
+            ],
+            obstacles: [
+                { x: 400, y: 100, w: 30, h: 120, vy: 2, minY: 100, maxY: 380 }
+            ],
+            portals: []
+        },
+        // Level 6: Portal introduction
+        {
+            launcher: { x: 100, y: 300 },
+            maxShots: 2,
+            targets: [
+                { x: 700, y: 300, radius: 18 }
+            ],
+            walls: [
+                { x: 350, y: 0, w: 20, h: 600 }
+            ],
+            obstacles: [],
+            portals: [
+                { x1: 200, y1: 100, x2: 500, y2: 500, radius: 25 }
+            ]
+        },
+        // Level 7: Complex maze
+        {
+            launcher: { x: 60, y: 540 },
+            maxShots: 3,
+            targets: [
+                { x: 400, y: 300, radius: 16 },
+                { x: 60, y: 60, radius: 16 }
+            ],
+            walls: [
+                { x: 150, y: 100, w: 24, h: 350 },
+                { x: 300, y: 150, w: 24, h: 350 },
+                { x: 450, y: 100, w: 24, h: 350 },
+                { x: 600, y: 150, w: 24, h: 350 },
+                { x: 150, y: 100, w: 150, h: 24 },
+                { x: 450, y: 485, w: 150, h: 24 }
+            ],
+            dangerWalls: [
+                { x: 520, y: 250, w: 80, h: 20 }
+            ],
+            obstacles: [],
+            portals: []
+        },
+        // Level 8: Double portal chaos
+        {
+            launcher: { x: 400, y: 550 },
+            maxShots: 2,
+            targets: [
+                { x: 100, y: 100, radius: 16 },
+                { x: 700, y: 100, radius: 16 }
+            ],
+            walls: [
+                { x: 0, y: 250, w: 300, h: 24 },
+                { x: 500, y: 250, w: 300, h: 24 }
+            ],
+            obstacles: [
+                { x: 370, y: 50, w: 60, h: 200, vy: 0, minY: 50, maxY: 50 }
+            ],
+            portals: [
+                { x1: 200, y1: 450, x2: 200, y2: 100, radius: 22 },
+                { x1: 600, y1: 450, x2: 600, y2: 100, radius: 22 }
+            ]
+        },
+        // Level 9: Precision
+        {
+            launcher: { x: 400, y: 550 },
+            maxShots: 1,
+            targets: [
+                { x: 200, y: 100, radius: 14 },
+                { x: 600, y: 100, radius: 14 },
+                { x: 400, y: 50, radius: 14 }
+            ],
+            walls: [
+                { x: 296, y: 150, w: 24, h: 300 },
+                { x: 486, y: 150, w: 24, h: 300 }
+            ],
+            dangerWalls: [
+                { x: 350, y: 300, w: 100, h: 20 }
+            ],
+            obstacles: [],
+            portals: []
+        },
+        // Level 10: The gauntlet
+        {
+            launcher: { x: 50, y: 550 },
+            maxShots: 2,
+            targets: [
+                { x: 750, y: 50, radius: 20 },
+                { x: 400, y: 550, radius: 20 },
+                { x: 50, y: 50, radius: 20 }
+            ],
+            walls: [
+                { x: 150, y: 100, w: 24, h: 250 },
+                { x: 300, y: 250, w: 24, h: 250 },
+                { x: 500, y: 100, w: 24, h: 250 },
+                { x: 650, y: 250, w: 24, h: 250 }
+            ],
+            obstacles: [
+                { x: 225, y: 100, w: 25, h: 25, vy: 1.5, minY: 100, maxY: 475 },
+                { x: 400, y: 300, w: 25, h: 25, vy: -1.5, minY: 100, maxY: 475 }
+            ],
+            portals: [
+                { x1: 750, y1: 550, x2: 50, y2: 300, radius: 22 }
+            ]
+        }
+    ];
+
+    // Seeded random for reproducible procedural levels
+    function seededRandom(seed) {
+        let s = seed;
+        return function() {
+            s = (s * 16807 + 0) % 2147483647;
+            return (s - 1) / 2147483646;
+        };
+    }
+
+    function generateLevel(idx) {
+        const rng = seededRandom(idx * 7919 + 1337);
+        const difficulty = Math.min(idx - 10, 40); // 0-40 difficulty scale
+        const margin = 60;
+        const W = canvas.width;
+        const H = canvas.height;
+
+        // Launcher position — varies
+        const launcherPositions = [
+            { x: margin, y: H - margin },
+            { x: W / 2, y: H - margin },
+            { x: margin, y: H / 2 },
+            { x: W - margin, y: H - margin },
+            { x: W / 2, y: margin }
+        ];
+        const lp = launcherPositions[Math.floor(rng() * launcherPositions.length)];
+
+        // Targets: 1-4 based on difficulty
+        const numTargets = Math.min(1 + Math.floor(rng() * (1 + difficulty / 10)), 4);
+        const targs = [];
+        for (let i = 0; i < numTargets; i++) {
+            let tx, ty, tooClose;
+            let attempts = 0;
+            do {
+                tx = margin + rng() * (W - margin * 2);
+                ty = margin + rng() * (H - margin * 2);
+                tooClose = Math.hypot(tx - lp.x, ty - lp.y) < 150;
+                for (const t of targs) {
+                    if (Math.hypot(tx - t.x, ty - t.y) < 80) tooClose = true;
+                }
+                attempts++;
+            } while (tooClose && attempts < 50);
+            targs.push({ x: tx, y: ty, radius: Math.max(12, 22 - difficulty * 0.2) });
+        }
+
+        // Walls: 1-5
+        const numWalls = 1 + Math.floor(rng() * Math.min(2 + difficulty / 8, 5));
+        const wls = [];
+        for (let i = 0; i < numWalls; i++) {
+            const vertical = rng() > 0.35;
+            let wx, wy, ww, wh;
+            if (vertical) {
+                ww = 24;
+                wh = 120 + rng() * 280;
+                wx = margin + rng() * (W - margin * 2 - ww);
+                wy = rng() * (H - wh);
+            } else {
+                ww = 120 + rng() * 280;
+                wh = 24;
+                wx = rng() * (W - ww);
+                wy = margin + rng() * (H - margin * 2 - wh);
+            }
+            wls.push({ x: Math.round(wx), y: Math.round(wy), w: Math.round(ww), h: Math.round(wh) });
+        }
+
+        // Danger walls: 0-3 based on difficulty (introduced at difficulty 3+)
+        const numDanger = difficulty >= 3 ? Math.min(Math.floor(rng() * (1 + difficulty / 10)), 3) : 0;
+        const dws = [];
+        for (let i = 0; i < numDanger; i++) {
+            const vertical = rng() > 0.4;
+            let dx, dy, dw, dh;
+            if (vertical) {
+                dw = 20;
+                dh = 80 + rng() * 180;
+                dx = margin + rng() * (W - margin * 2 - dw);
+                dy = margin + rng() * (H - margin * 2 - dh);
+            } else {
+                dw = 80 + rng() * 180;
+                dh = 20;
+                dx = margin + rng() * (W - margin * 2 - dw);
+                dy = margin + rng() * (H - margin * 2 - dh);
+            }
+            dws.push({ x: Math.round(dx), y: Math.round(dy), w: Math.round(dw), h: Math.round(dh) });
+        }
+
+        // Moving obstacles: 0-2 based on difficulty
+        const numObs = difficulty >= 2 ? Math.min(Math.floor(rng() * (1 + difficulty / 12)), 2) : 0;
+        const obs = [];
+        for (let i = 0; i < numObs; i++) {
+            const ox = margin + rng() * (W - margin * 2 - 30);
+            const oy = margin + rng() * (H / 2);
+            const spd = 1 + rng() * 1.5;
+            obs.push({ x: Math.round(ox), y: Math.round(oy), w: 28, h: 80 + rng() * 60, vy: rng() > 0.5 ? spd : -spd, minY: margin, maxY: H - margin - 80 });
+        }
+
+        // Portals: 0-2 (introduced at difficulty 5+)
+        const numPortals = difficulty >= 5 ? Math.min(Math.floor(rng() * 2) + 1, 2) : (rng() > 0.7 ? 1 : 0);
+        const pts = [];
+        for (let i = 0; i < numPortals; i++) {
+            pts.push({
+                x1: margin + rng() * (W / 2 - margin * 2),
+                y1: margin + rng() * (H - margin * 2),
+                x2: W / 2 + rng() * (W / 2 - margin),
+                y2: margin + rng() * (H - margin * 2),
+                radius: 22
+            });
+        }
+
+        // Shots: more for more targets, fewer as difficulty rises
+        const maxShots = Math.max(1, numTargets + 1 - Math.floor(difficulty / 15));
+
+        return {
+            launcher: lp,
+            maxShots,
+            targets: targs,
+            walls: wls,
+            dangerWalls: dws,
+            obstacles: obs,
+            portals: pts
+        };
+    }
+
+    function getLevel(idx) {
+        if (idx < levels.length) {
+            const l = levels[idx];
+            l.dangerWalls = l.dangerWalls || [];
+            return l;
+        }
+        return generateLevel(idx);
+    }
+
+    function loadLevel(idx) {
+        const level = getLevel(idx);
+        launcher = { ...level.launcher };
+        ball = null;
+        trail = [];
+        particles = [];
+        shotsFired = 0;
+        bounceCount = 0;
+        hitTargets = 0;
+        portalCooldown = 0;
+        state = 'aiming';
+
+        targets = level.targets.map(t => ({ ...t, hit: false, alpha: 1, pulsePhase: Math.random() * Math.PI * 2 }));
+        totalTargets = targets.length;
+        walls = level.walls.map(w => ({ ...w }));
+        dangerWalls = (level.dangerWalls || []).map(w => ({ ...w }));
+        obstacles = level.obstacles.map(o => ({ ...o, originalY: o.x !== undefined ? o.y : 0 }));
+        portals = level.portals.map(p => ({ ...p, phase: 0 }));
+
+        nextBtn.style.display = 'none';
+        document.getElementById('levelNum').textContent = idx + 1;
+        document.getElementById('shotCount').textContent = '0';
+        document.getElementById('maxShots').textContent = level.maxShots;
+        document.getElementById('score').textContent = score;
+    }
+
+    function resetLevel() {
+        loadLevel(currentLevel);
+    }
+
+    function nextLevel() {
+        currentLevel++;
+        loadLevel(currentLevel);
+    }
+
+    function showMessage(text, duration = 2000) {
+        message.textContent = text;
+        message.className = 'show';
+        setTimeout(() => { message.className = ''; }, duration);
+    }
+
+    // Shooting
+    function shoot() {
+        const level = getLevel(currentLevel);
+        if (shotsFired >= level.maxShots) return;
+        if (state !== 'aiming') return;
+
+        const dx = mousePos.x - launcher.x;
+        const dy = mousePos.y - launcher.y;
+        const angle = Math.atan2(dy, dx);
+        const power = Math.min(Math.hypot(dx, dy) / 20, 18);
+
+        ball = {
+            x: launcher.x,
+            y: launcher.y,
+            vx: Math.cos(angle) * power,
+            vy: Math.sin(angle) * power,
+            radius: 6,
+            alive: true
+        };
+
+        trail = [];
+        bounceCount = 0;
+        portalCooldown = 0;
+        shotsFired++;
+        state = 'shooting';
+        document.getElementById('shotCount').textContent = shotsFired;
+    }
+
+    // Physics update — uses substeps to prevent tunneling through thin walls
+    function updateBall() {
+        if (!ball || !ball.alive) return;
+
+        // Determine how many substeps we need based on ball speed
+        const speed = Math.hypot(ball.vx, ball.vy);
+        const maxStep = 2; // never move more than 2px per substep — prevents tunneling through thin walls
+        const substeps = Math.max(1, Math.ceil(speed / maxStep));
+        const dt = 1 / substeps;
+
+        // Apply gravity once per frame (split across substeps)
+        const gravityPerStep = 0.04 * dt;
+
+        for (let step = 0; step < substeps; step++) {
+            if (!ball.alive) break;
+
+            const prevX = ball.x;
+            const prevY = ball.y;
+
+            ball.vy += gravityPerStep;
+            ball.x += ball.vx * dt;
+            ball.y += ball.vy * dt;
+
+            // Bounce off canvas edges
+            if (ball.x - ball.radius <= 0) {
+                ball.x = ball.radius;
+                ball.vx = Math.abs(ball.vx) * 0.98;
+                bounceCount++;
+                spawnBounceParticles(ball.x, ball.y);
+            } else if (ball.x + ball.radius >= canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                ball.vx = -Math.abs(ball.vx) * 0.98;
+                bounceCount++;
+                spawnBounceParticles(ball.x, ball.y);
+            }
+            if (ball.y - ball.radius <= 0) {
+                ball.y = ball.radius;
+                ball.vy = Math.abs(ball.vy) * 0.98;
+                bounceCount++;
+                spawnBounceParticles(ball.x, ball.y);
+            } else if (ball.y + ball.radius >= canvas.height) {
+                ball.y = canvas.height - ball.radius;
+                ball.vy = -Math.abs(ball.vy) * 0.98;
+                bounceCount++;
+                spawnBounceParticles(ball.x, ball.y);
+            }
+
+            // Portal check FIRST — so walls near portals don't steal the ball
+            if (portalCooldown > 0) {
+                portalCooldown--;
+            } else {
+                let teleported = false;
+                for (const p of portals) {
+                    const d1 = Math.hypot(ball.x - p.x1, ball.y - p.y1);
+                    if (d1 < p.radius) {
+                        ball.x = p.x2;
+                        ball.y = p.y2;
+                        portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
+                        spawnPortalParticles(p.x2, p.y2);
+                        teleported = true;
+                        break;
+                    }
+                    const d2 = Math.hypot(ball.x - p.x2, ball.y - p.y2);
+                    if (d2 < p.radius) {
+                        ball.x = p.x1;
+                        ball.y = p.y1;
+                        portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
+                        spawnPortalParticles(p.x1, p.y1);
+                        teleported = true;
+                        break;
+                    }
+                }
+                if (teleported) continue; // skip wall checks this substep after teleporting
+            }
+
+            // Check if ball is inside a portal zone — skip wall collision there
+            let inPortalZone = false;
+            for (const p of portals) {
+                if (Math.hypot(ball.x - p.x1, ball.y - p.y1) < p.radius * 1.5 ||
+                    Math.hypot(ball.x - p.x2, ball.y - p.y2) < p.radius * 1.5) {
+                    inPortalZone = true;
+                    break;
+                }
+            }
+
+            // Bounce off walls (may need multiple passes to resolve overlaps)
+            if (!inPortalZone) {
+                for (let pass = 0; pass < 3; pass++) {
+                    let collided = false;
+                    for (const w of walls) {
+                        if (rectCircleCollision(ball, w)) {
+                            resolveRectCollision(ball, w);
+                            bounceCount++;
+                            spawnBounceParticles(ball.x, ball.y);
+                            collided = true;
+                        }
+                    }
+                    if (!collided) break;
+                }
+            }
+
+            // Danger wall collision — instant level restart
+            // Check both current position AND swept line from previous position
+            let hitDanger = false;
+            for (const dw of dangerWalls) {
+                if (rectCircleCollision(ball, dw) || lineRectIntersection(prevX, prevY, ball.x, ball.y, dw)) {
+                    hitDanger = true;
+                    break;
+                }
+            }
+            // Moving obstacles (red) also kill
+            if (!hitDanger) {
+                for (const o of obstacles) {
+                    if (rectCircleCollision(ball, o) || lineRectIntersection(prevX, prevY, ball.x, ball.y, o)) {
+                        hitDanger = true;
+                        break;
+                    }
+                }
+            }
+            if (hitDanger) {
+                ball.alive = false;
+                spawnDangerParticles(ball.x, ball.y);
+                state = 'lost';
+                showMessage('Danger!', 1500);
+                setTimeout(() => resetLevel(), 1500);
+            }
+            if (!ball.alive) break;
+
+            // Target collision
+            for (const t of targets) {
+                if (t.hit) continue;
+                const dist = Math.hypot(ball.x - t.x, ball.y - t.y);
+                if (dist < t.radius + ball.radius) {
+                    t.hit = true;
+                    hitTargets++;
+                    score += 100 + bounceCount * 10;
+                    document.getElementById('score').textContent = score;
+                    spawnTargetParticles(t.x, t.y);
+
+                    if (hitTargets === totalTargets) {
+                        state = 'won';
+                        ball.alive = false;
+                        showMessage('Clear!');
+                        nextBtn.style.display = 'inline-block';
+                    }
+                }
+            }
+        }
+
+        // Trail (once per frame)
+        if (ball.alive) {
+            trail.push({ x: ball.x, y: ball.y, age: 0 });
+            if (trail.length > 80) trail.shift();
+        }
+
+        // Ball too slow or too many bounces -> die
+        const finalSpeed = Math.hypot(ball.vx, ball.vy);
+        if (finalSpeed < 0.3 || bounceCount > maxBounces) {
+            ball.alive = false;
+            if (hitTargets < totalTargets) {
+                const level = getLevel(currentLevel);
+                if (shotsFired >= level.maxShots) {
+                    state = 'lost';
+                    showMessage('Try Again');
+                    setTimeout(() => resetLevel(), 2000);
+                } else {
+                    state = 'aiming';
+                }
+            }
+        }
+    }
+
+    function rectCircleCollision(circle, rect) {
+        const cx = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+        const cy = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+        const dist = Math.hypot(circle.x - cx, circle.y - cy);
+        return dist < circle.radius;
+    }
+
+    // Ray-cast: did the line from (x1,y1)->(x2,y2) cross through the rect?
+    function lineRectIntersection(x1, y1, x2, y2, rect) {
+        // Expand rect by ball radius for swept collision
+        const r = ball ? ball.radius : 6;
+        const rx = rect.x - r;
+        const ry = rect.y - r;
+        const rw = rect.w + r * 2;
+        const rh = rect.h + r * 2;
+
+        // Check if line segment intersects expanded rectangle
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+
+        let tmin = 0, tmax = 1;
+
+        if (Math.abs(dx) > 0.0001) {
+            let t1 = (rx - x1) / dx;
+            let t2 = (rx + rw - x1) / dx;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+            tmin = Math.max(tmin, t1);
+            tmax = Math.min(tmax, t2);
+            if (tmin > tmax) return false;
+        } else {
+            if (x1 < rx || x1 > rx + rw) return false;
+        }
+
+        if (Math.abs(dy) > 0.0001) {
+            let t1 = (ry - y1) / dy;
+            let t2 = (ry + rh - y1) / dy;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+            tmin = Math.max(tmin, t1);
+            tmax = Math.min(tmax, t2);
+            if (tmin > tmax) return false;
+        } else {
+            if (y1 < ry || y1 > ry + rh) return false;
+        }
+
+        return true;
+    }
+
+    function resolveRectCollision(circle, rect) {
+        const cx = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+        const cy = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+
+        const dx = circle.x - cx;
+        const dy = circle.y - cy;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist === 0) {
+            // Ball center is inside the rect — push out along the shortest axis
+            const leftDist  = circle.x - rect.x;
+            const rightDist = (rect.x + rect.w) - circle.x;
+            const topDist   = circle.y - rect.y;
+            const botDist   = (rect.y + rect.h) - circle.y;
+            const minDist   = Math.min(leftDist, rightDist, topDist, botDist);
+
+            if (minDist === leftDist) {
+                circle.x = rect.x - circle.radius;
+                circle.vx = -Math.abs(circle.vx);
+            } else if (minDist === rightDist) {
+                circle.x = rect.x + rect.w + circle.radius;
+                circle.vx = Math.abs(circle.vx);
+            } else if (minDist === topDist) {
+                circle.y = rect.y - circle.radius;
+                circle.vy = -Math.abs(circle.vy);
+            } else {
+                circle.y = rect.y + rect.h + circle.radius;
+                circle.vy = Math.abs(circle.vy);
+            }
+            circle.vx *= 0.98;
+            circle.vy *= 0.98;
+            return;
+        }
+
+        // Push out
+        const overlap = circle.radius - dist;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        circle.x += nx * (overlap + 0.1);
+        circle.y += ny * (overlap + 0.1);
+
+        // Reflect velocity
+        const dot = circle.vx * nx + circle.vy * ny;
+        circle.vx -= 2 * dot * nx;
+        circle.vy -= 2 * dot * ny;
+
+        // Damping
+        circle.vx *= 0.98;
+        circle.vy *= 0.98;
+    }
+
+    // Obstacles update
+    function updateObstacles() {
+        for (const o of obstacles) {
+            if (o.vy === 0) continue;
+            o.y += o.vy;
+            if (o.y <= o.minY || o.y + o.h >= o.maxY + o.h) {
+                o.vy *= -1;
+            }
+        }
+    }
+
+    // Particles
+    function spawnBounceParticles(x, y) {
+        for (let i = 0; i < 6; i++) {
+            particles.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 0.5) * 4,
+                life: 1,
+                decay: 0.03 + Math.random() * 0.02,
+                color: '#00e5ff',
+                size: 2 + Math.random() * 2
+            });
+        }
+    }
+
+    function spawnTargetParticles(x, y) {
+        for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
+            const speed = 2 + Math.random() * 4;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                decay: 0.015 + Math.random() * 0.01,
+                color: `hsl(${Math.random() * 60 + 150}, 100%, 60%)`,
+                size: 3 + Math.random() * 3
+            });
+        }
+    }
+
+    function spawnPortalParticles(x, y) {
+        for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 * i) / 12;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * 3,
+                vy: Math.sin(angle) * 3,
+                life: 1,
+                decay: 0.03,
+                color: '#ff00ff',
+                size: 3
+            });
+        }
+    }
+
+    function spawnDangerParticles(x, y) {
+        for (let i = 0; i < 25; i++) {
+            const angle = (Math.PI * 2 * i) / 25;
+            const speed = 2 + Math.random() * 5;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                decay: 0.02 + Math.random() * 0.01,
+                color: `hsl(${Math.random() * 20}, 100%, ${50 + Math.random() * 20}%)`,
+                size: 3 + Math.random() * 4
+            });
+        }
+    }
+
+    function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.96;
+            p.vy *= 0.96;
+            p.life -= p.decay;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+    }
+
+    // Drawing
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Background grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 40) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 40) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        const time = Date.now() / 1000;
+
+        // Draw walls
+        for (const w of walls) {
+            ctx.fillStyle = '#2a2a5a';
+            ctx.fillRect(w.x, w.y, w.w, w.h);
+            ctx.strokeStyle = '#4a4a8a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(w.x, w.y, w.w, w.h);
+        }
+
+        // Draw obstacles (moving)
+        for (const o of obstacles) {
+            ctx.fillStyle = '#5a2a2a';
+            ctx.fillRect(o.x, o.y, o.w, o.h);
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(o.x, o.y, o.w, o.h);
+        }
+
+        // Draw danger walls (red glow — instant death)
+        for (const dw of dangerWalls) {
+            const pulse = 0.7 + Math.sin(time * 4) * 0.3;
+            ctx.fillStyle = `rgba(200, 20, 20, ${0.6 + pulse * 0.2})`;
+            ctx.fillRect(dw.x, dw.y, dw.w, dw.h);
+            ctx.strokeStyle = `rgba(255, 60, 60, ${pulse})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(dw.x, dw.y, dw.w, dw.h);
+            // Red glow
+            ctx.shadowColor = '#ff2222';
+            ctx.shadowBlur = 12 * pulse;
+            ctx.strokeRect(dw.x, dw.y, dw.w, dw.h);
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw portals
+        for (const p of portals) {
+            p.phase += 0.05;
+            drawPortal(p.x1, p.y1, p.radius, p.phase);
+            drawPortal(p.x2, p.y2, p.radius, p.phase + Math.PI);
+            // Draw connecting line
+            ctx.strokeStyle = 'rgba(255, 0, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 10]);
+            ctx.beginPath();
+            ctx.moveTo(p.x1, p.y1);
+            ctx.lineTo(p.x2, p.y2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Draw targets
+        for (const t of targets) {
+            if (t.hit) continue;
+            t.pulsePhase += 0.04;
+            const pulse = 1 + Math.sin(t.pulsePhase) * 0.15;
+            const r = t.radius * pulse;
+
+            // Glow
+            const grad = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, r * 2.5);
+            grad.addColorStop(0, 'rgba(0, 229, 255, 0.3)');
+            grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, r * 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Target ring
+            ctx.strokeStyle = '#00e5ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner dot
+            ctx.fillStyle = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Crosshair
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
+            ctx.lineWidth = 1;
+            const ch = r + 5;
+            ctx.beginPath(); ctx.moveTo(t.x - ch, t.y); ctx.lineTo(t.x - r + 5, t.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(t.x + r - 5, t.y); ctx.lineTo(t.x + ch, t.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(t.x, t.y - ch); ctx.lineTo(t.x, t.y - r + 5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(t.x, t.y + r - 5); ctx.lineTo(t.x, t.y + ch); ctx.stroke();
+        }
+
+        // Draw launcher
+        const launcherPulse = 1 + Math.sin(time * 3) * 0.1;
+        ctx.fillStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.arc(launcher.x, launcher.y, 8 * launcherPulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        const launcherGrad = ctx.createRadialGradient(launcher.x, launcher.y, 0, launcher.x, launcher.y, 20);
+        launcherGrad.addColorStop(0, 'rgba(0, 229, 255, 0.3)');
+        launcherGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+        ctx.fillStyle = launcherGrad;
+        ctx.beginPath();
+        ctx.arc(launcher.x, launcher.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw aim line
+        if (state === 'aiming') {
+            const dx = mousePos.x - launcher.x;
+            const dy = mousePos.y - launcher.y;
+            const angle = Math.atan2(dy, dx);
+            const power = Math.min(Math.hypot(dx, dy) / 20, 18);
+            const len = power * 12;
+
+            // Dotted aim line
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 8]);
+            ctx.beginPath();
+            ctx.moveTo(launcher.x, launcher.y);
+            ctx.lineTo(
+                launcher.x + Math.cos(angle) * len,
+                launcher.y + Math.sin(angle) * len
+            );
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Power indicator
+            const powerPct = power / 18;
+            const barW = 60;
+            const barH = 4;
+            const barX = launcher.x - barW / 2;
+            const barY = launcher.y + 25;
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.fillRect(barX, barY, barW, barH);
+            const powerColor = powerPct < 0.5 ? '#00e5ff' : powerPct < 0.8 ? '#ffaa00' : '#ff4444';
+            ctx.fillStyle = powerColor;
+            ctx.fillRect(barX, barY, barW * powerPct, barH);
+
+            // Trajectory preview (simple, no bouncing)
+            drawTrajectoryPreview(angle, power);
+        }
+
+        // Draw trail
+        for (let i = 0; i < trail.length; i++) {
+            const t = trail[i];
+            t.age++;
+            const alpha = Math.max(0, 1 - t.age / 60);
+            const size = Math.max(0.5, 3 * alpha);
+            ctx.fillStyle = `rgba(0, 229, 255, ${alpha * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw ball
+        if (ball && ball.alive) {
+            // Ball glow
+            const ballGrad = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius * 3);
+            ballGrad.addColorStop(0, 'rgba(0, 229, 255, 0.5)');
+            ballGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+            ctx.fillStyle = ballGrad;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius * 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw particles
+        for (const p of particles) {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    function drawPortal(x, y, radius, phase) {
+        // Swirling portal effect
+        for (let i = 0; i < 3; i++) {
+            const r = radius - i * 4;
+            if (r <= 0) continue;
+            ctx.strokeStyle = `rgba(255, 0, 255, ${0.6 - i * 0.15})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, r, phase + i * 0.5, phase + i * 0.5 + Math.PI * 1.5);
+            ctx.stroke();
+        }
+        // Center glow
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        grad.addColorStop(0, 'rgba(255, 0, 255, 0.3)');
+        grad.addColorStop(1, 'rgba(255, 0, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawTrajectoryPreview(angle, power) {
+        const steps = 40;
+        let px = launcher.x;
+        let py = launcher.y;
+        let pvx = Math.cos(angle) * power;
+        let pvy = Math.sin(angle) * power;
+
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.15)';
+        for (let i = 0; i < steps; i++) {
+            pvy += 0.04;
+            px += pvx;
+            py += pvy;
+
+            // Simple boundary bounce for preview
+            if (px <= 0 || px >= canvas.width) pvx *= -1;
+            if (py <= 0 || py >= canvas.height) pvy *= -1;
+            px = Math.max(0, Math.min(canvas.width, px));
+            py = Math.max(0, Math.min(canvas.height, py));
+
+            if (i % 2 === 0) {
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    // Input
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mousePos.x = e.clientX - rect.left;
+        mousePos.y = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('click', (e) => {
+        if (state === 'aiming') {
+            shoot();
+        }
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') resetLevel();
+        if (e.key === ' ' && state === 'aiming') {
+            e.preventDefault();
+            shoot();
+        }
+        if (e.key === 'Enter' && state === 'won') nextLevel();
+    });
+
+    // Game loop
+    function gameLoop() {
+        updateObstacles();
+        if (state === 'shooting') {
+            updateBall();
+        }
+        updateParticles();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Start
+    loadLevel(0);
+    gameLoop();
+    </script>
+</body>
+</html>
