@@ -153,8 +153,8 @@
         </div>
         <canvas id="canvas" width="800" height="600"></canvas>
         <div id="controls">
-            <button id="resetBtn" onclick="resetLevel()">Reset</button>
-            <button id="nextBtn" onclick="nextLevel()" style="display:none">Next Level →</button>
+            <button id="resetBtn">Reset</button>
+            <button id="nextBtn" style="display:none">Next Level →</button>
         </div>
         <div id="message"></div>
     </div>
@@ -163,11 +163,13 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const message = document.getElementById('message');
+    const resetBtn = document.getElementById('resetBtn');
     const nextBtn = document.getElementById('nextBtn');
 
     class UIController {
         constructor() {
             this.message = message;
+            this.resetBtn = resetBtn;
             this.nextBtn = nextBtn;
             this.title = document.querySelector('#header h1');
             this.levelNum = document.getElementById('levelNum');
@@ -219,6 +221,15 @@
             }
             if (onKeyDown) {
                 document.addEventListener('keydown', onKeyDown);
+            }
+        }
+
+        bindControlListeners({ onReset, onNext }) {
+            if (this.resetBtn && onReset) {
+                this.resetBtn.addEventListener('click', onReset);
+            }
+            if (this.nextBtn && onNext) {
+                this.nextBtn.addEventListener('click', onNext);
             }
         }
     }
@@ -3251,7 +3262,9 @@
         CANVAS_MOUSE_DOWN: 'CANVAS_MOUSE_DOWN',
         CANVAS_MOUSE_UP: 'CANVAS_MOUSE_UP',
         CANVAS_CLICK: 'CANVAS_CLICK',
-        KEY_DOWN: 'KEY_DOWN'
+        KEY_DOWN: 'KEY_DOWN',
+        RESET_BUTTON_CLICK: 'RESET_BUTTON_CLICK',
+        NEXT_BUTTON_CLICK: 'NEXT_BUTTON_CLICK'
     };
 
     let app = null;
@@ -3318,6 +3331,14 @@
             }
             if (action.type === InputActionType.KEY_DOWN) {
                 this.handleKeyDown(action.event);
+                return;
+            }
+            if (action.type === InputActionType.RESET_BUTTON_CLICK) {
+                this.handleResetButtonClick();
+                return;
+            }
+            if (action.type === InputActionType.NEXT_BUTTON_CLICK) {
+                this.handleNextButtonClick();
             }
         }
 
@@ -3395,9 +3416,21 @@
             if (event.key === 'Enter' && state === 'won') nextLevel();
         }
 
+        handleResetButtonClick() {
+            resetLevel();
+        }
+
+        handleNextButtonClick() {
+            nextLevel();
+        }
+
         bootstrap() {
             currentLevel = parseUrlOptions();
             this.mode = this.resolveModeFromFlags();
+            ui.bindControlListeners({
+                onReset: () => this.dispatch({ type: InputActionType.RESET_BUTTON_CLICK }),
+                onNext: () => this.dispatch({ type: InputActionType.NEXT_BUTTON_CLICK })
+            });
             initGlobalModeSwitcher();
             this.switchMode(this.mode);
             this.startLoop();
