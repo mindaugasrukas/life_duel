@@ -246,7 +246,7 @@
             hitTargets: 0,
             totalTargets: 0,
             bounceCount: 0,
-            maxBounces: 50,
+            maxBounces: 180,
             activeMaxShots: 1,
             activeUnlimitedShots: false
         },
@@ -1774,7 +1774,8 @@
                 radius: 6,
                 alive: true,
                 portalCooldown: 0,
-                bounceCount: 0
+                bounceCount: 0,
+                slowFrames: 0
             });
         }
 
@@ -1908,31 +1909,43 @@
                 }
 
                 // Bounce off walls (may need multiple passes to resolve overlaps)
+                let resolvedSolidCollisionThisStep = false;
                 if (!inPortalZone) {
+                    let wallBouncedThisSubstep = false;
                     for (let pass = 0; pass < 3; pass++) {
                         let collided = false;
                         for (const w of walls) {
-                            if (w.collidesWithBall(currentBall)) {
+                            const hitByOverlap = w.collidesWithBall(currentBall);
+                            const hitBySweep = pass === 0 && w.intersectsBallPath(prevX, prevY, currentBall);
+                            if (hitByOverlap || hitBySweep) {
                                 w.resolveBallCollision(currentBall);
-                                currentBall.bounceCount++;
                                 spawnBounceParticles(currentBall.x, currentBall.y);
                                 collided = true;
+                                wallBouncedThisSubstep = true;
+                                resolvedSolidCollisionThisStep = true;
                             }
                         }
                         if (!collided) break;
+                    }
+                    if (wallBouncedThisSubstep) {
+                        currentBall.bounceCount++;
                     }
                 }
 
                 // Duplicator walls: bounce and spawn a cloned orb on hit
                 if (!inPortalZone) {
+                    let duplicatorBouncedThisSubstep = false;
                     for (let pass = 0; pass < 2; pass++) {
                         let collided = false;
                         for (const w of duplicatorWalls) {
-                            if (w.collidesWithBall(currentBall)) {
+                            const hitByOverlap = w.collidesWithBall(currentBall);
+                            const hitBySweep = pass === 0 && w.intersectsBallPath(prevX, prevY, currentBall);
+                            if (hitByOverlap || hitBySweep) {
                                 w.resolveBallCollision(currentBall);
-                                currentBall.bounceCount++;
                                 spawnBounceParticles(currentBall.x, currentBall.y);
                                 collided = true;
+                                duplicatorBouncedThisSubstep = true;
+                                resolvedSolidCollisionThisStep = true;
 
                                 if ((currentBall.dupCooldown || 0) <= 0 && balls.length + spawnedBalls.length < maxActiveOrbs) {
                                     const speed = Math.hypot(currentBall.vx, currentBall.vy);
@@ -1948,6 +1961,7 @@
                                         alive: true,
                                         portalCooldown: currentBall.portalCooldown || 0,
                                         bounceCount: currentBall.bounceCount,
+                                        slowFrames: 0,
                                         dupCooldown: 14
                                     };
                                     currentBall.dupCooldown = 10;
@@ -1956,6 +1970,9 @@
                             }
                         }
                         if (!collided) break;
+                    }
+                    if (duplicatorBouncedThisSubstep) {
+                        currentBall.bounceCount++;
                     }
                 }
 
@@ -1988,7 +2005,10 @@
                 // Check both current position AND swept line from previous position
                 let hitDanger = false;
                 for (const dw of dangerWalls) {
-                    if (dw.collidesWithBall(currentBall) || dw.intersectsBallPath(prevX, prevY, currentBall)) {
+                    const collidedWithDanger = resolvedSolidCollisionThisStep
+                        ? dw.collidesWithBall(currentBall)
+                        : (dw.collidesWithBall(currentBall) || dw.intersectsBallPath(prevX, prevY, currentBall));
+                    if (collidedWithDanger) {
                         hitDanger = true;
                         break;
                     }
@@ -1996,7 +2016,10 @@
                 // Moving obstacles (red) also kill
                 if (!hitDanger) {
                     for (const o of obstacles) {
-                        if (o.collidesWithBall(currentBall) || o.intersectsBallPath(prevX, prevY, currentBall)) {
+                        const collidedWithObstacle = resolvedSolidCollisionThisStep
+                            ? o.collidesWithBall(currentBall)
+                            : (o.collidesWithBall(currentBall) || o.intersectsBallPath(prevX, prevY, currentBall));
+                        if (collidedWithObstacle) {
                             hitDanger = true;
                             break;
                         }
@@ -2052,7 +2075,12 @@
 
             // Ball too slow or too many bounces -> die
             const finalSpeed = Math.hypot(currentBall.vx, currentBall.vy);
-            if (finalSpeed < 0.3 || currentBall.bounceCount > maxBounces) {
+            if (finalSpeed < 0.3) {
+                currentBall.slowFrames = (currentBall.slowFrames || 0) + 1;
+            } else {
+                currentBall.slowFrames = 0;
+            }
+            if (currentBall.bounceCount > maxBounces || (currentBall.slowFrames || 0) > 45) {
                 currentBall.alive = false;
             }
         }
@@ -2211,12 +2239,23 @@
 
         // Reflect velocity
         const dot = circle.vx * nx + circle.vy * ny;
-        circle.vx -= 2 * dot * nx;
-        circle.vy -= 2 * dot * ny;
+        if (dot < 0) {
+            const speedBefore = Math.hypot(circle.vx, circle.vy);
+            circle.vx -= 2 * dot * nx;
+            circle.vy -= 2 * dot * ny;
 
-        // Damping
-        circle.vx *= 0.98;
-        circle.vy *= 0.98;
+            const speedAfter = Math.hypot(circle.vx, circle.vy);
+            const minRetainedSpeed = speedBefore * 0.96;
+            if (speedAfter > 0.0001 && speedAfter < minRetainedSpeed) {
+                const scale = minRetainedSpeed / speedAfter;
+                circle.vx *= scale;
+                circle.vy *= scale;
+            }
+
+            // Gentle damping to avoid infinite micro-bounce loops without draining too much energy.
+            circle.vx *= 0.995;
+            circle.vy *= 0.995;
+        }
     }
 
     // Obstacles update
