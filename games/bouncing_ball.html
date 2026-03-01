@@ -3246,64 +3246,29 @@
         refreshCreatorScene('creator');
     }
 
+    const InputActionType = {
+        CANVAS_MOUSE_MOVE: 'CANVAS_MOUSE_MOVE',
+        CANVAS_MOUSE_DOWN: 'CANVAS_MOUSE_DOWN',
+        CANVAS_MOUSE_UP: 'CANVAS_MOUSE_UP',
+        CANVAS_CLICK: 'CANVAS_CLICK',
+        KEY_DOWN: 'KEY_DOWN'
+    };
+
+    let app = null;
+
+    function dispatchInputAction(action) {
+        if (!app || !action) return;
+        app.dispatch(action);
+    }
+
     // Input
     ui.bindInputListeners({
         canvas,
-        onMouseMove: (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mousePos.x = e.clientX - rect.left;
-            mousePos.y = e.clientY - rect.top;
-
-            if (creatorMode && state === 'creator' && creatorTool === 'tube' && creatorTubeDraft) {
-                const last = creatorTubeDraft[creatorTubeDraft.length - 1];
-                const d = Math.hypot(mousePos.x - last.x, mousePos.y - last.y);
-                if (d >= 6) {
-                    creatorTubeDraft.push({ x: mousePos.x, y: mousePos.y });
-                }
-            }
-        },
-        onMouseDown: (e) => {
-            if (!creatorMode || state !== 'creator') return;
-            if (creatorTool === 'wall' || creatorTool === 'duplicatorWall' || creatorTool === 'dangerWall' || creatorTool === 'orbCatcher' || creatorTool === 'obstacle') {
-                const rect = canvas.getBoundingClientRect();
-                creatorDragStart = {
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top
-                };
-            } else if (creatorTool === 'tube') {
-                const rect = canvas.getBoundingClientRect();
-                creatorTubeDraft = [{
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top
-                }];
-            }
-        },
-        onMouseUp: (e) => {
-            if (!creatorMode || state !== 'creator') return;
-            if (creatorTool === 'tube' && creatorTubeDraft) {
-                finalizeTubeDraft();
-                return;
-            }
-            if (!creatorDragStart) return;
-            const rect = canvas.getBoundingClientRect();
-            finalizeCreatorDrag(e.clientX - rect.left, e.clientY - rect.top);
-        },
-        onClick: (e) => {
-            if (creatorMode && state === 'creator') {
-                const rect = canvas.getBoundingClientRect();
-                placeCreatorClick(e.clientX - rect.left, e.clientY - rect.top);
-                return;
-            }
-            engine.shoot();
-        },
-        onKeyDown: (e) => {
-            if (e.key === 'r' || e.key === 'R') resetLevel();
-            if (e.key === ' ' && state === 'aiming') {
-                e.preventDefault();
-                engine.shoot();
-            }
-            if (e.key === 'Enter' && state === 'won') nextLevel();
-        }
+        onMouseMove: (event) => dispatchInputAction({ type: InputActionType.CANVAS_MOUSE_MOVE, event }),
+        onMouseDown: (event) => dispatchInputAction({ type: InputActionType.CANVAS_MOUSE_DOWN, event }),
+        onMouseUp: (event) => dispatchInputAction({ type: InputActionType.CANVAS_MOUSE_UP, event }),
+        onClick: (event) => dispatchInputAction({ type: InputActionType.CANVAS_CLICK, event }),
+        onKeyDown: (event) => dispatchInputAction({ type: InputActionType.KEY_DOWN, event })
     });
 
     class GameEngine {
@@ -3331,6 +3296,103 @@
                 this.engine.tick();
                 requestAnimationFrame(this.boundFrame);
             };
+        }
+
+        dispatch(action) {
+            if (!action || !action.type) return;
+            if (action.type === InputActionType.CANVAS_MOUSE_MOVE) {
+                this.handleCanvasMouseMove(action.event);
+                return;
+            }
+            if (action.type === InputActionType.CANVAS_MOUSE_DOWN) {
+                this.handleCanvasMouseDown(action.event);
+                return;
+            }
+            if (action.type === InputActionType.CANVAS_MOUSE_UP) {
+                this.handleCanvasMouseUp(action.event);
+                return;
+            }
+            if (action.type === InputActionType.CANVAS_CLICK) {
+                this.handleCanvasClick(action.event);
+                return;
+            }
+            if (action.type === InputActionType.KEY_DOWN) {
+                this.handleKeyDown(action.event);
+            }
+        }
+
+        getCanvasPoint(event) {
+            if (!event) return { x: 0, y: 0 };
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        }
+
+        handleCanvasMouseMove(event) {
+            const point = this.getCanvasPoint(event);
+            mousePos.x = point.x;
+            mousePos.y = point.y;
+
+            if (creatorMode && state === 'creator' && creatorTool === 'tube' && creatorTubeDraft) {
+                const last = creatorTubeDraft[creatorTubeDraft.length - 1];
+                const d = Math.hypot(mousePos.x - last.x, mousePos.y - last.y);
+                if (d >= 6) {
+                    creatorTubeDraft.push({ x: mousePos.x, y: mousePos.y });
+                }
+            }
+        }
+
+        handleCanvasMouseDown(event) {
+            if (!creatorMode || state !== 'creator') return;
+
+            if (creatorTool === 'wall' || creatorTool === 'duplicatorWall' || creatorTool === 'dangerWall' || creatorTool === 'orbCatcher' || creatorTool === 'obstacle') {
+                const point = this.getCanvasPoint(event);
+                creatorDragStart = {
+                    x: point.x,
+                    y: point.y
+                };
+                return;
+            }
+
+            if (creatorTool === 'tube') {
+                const point = this.getCanvasPoint(event);
+                creatorTubeDraft = [{
+                    x: point.x,
+                    y: point.y
+                }];
+            }
+        }
+
+        handleCanvasMouseUp(event) {
+            if (!creatorMode || state !== 'creator') return;
+            if (creatorTool === 'tube' && creatorTubeDraft) {
+                finalizeTubeDraft();
+                return;
+            }
+            if (!creatorDragStart) return;
+            const point = this.getCanvasPoint(event);
+            finalizeCreatorDrag(point.x, point.y);
+        }
+
+        handleCanvasClick(event) {
+            if (creatorMode && state === 'creator') {
+                const point = this.getCanvasPoint(event);
+                placeCreatorClick(point.x, point.y);
+                return;
+            }
+            this.engine.shoot();
+        }
+
+        handleKeyDown(event) {
+            if (!event) return;
+            if (event.key === 'r' || event.key === 'R') resetLevel();
+            if (event.key === ' ' && state === 'aiming') {
+                event.preventDefault();
+                this.engine.shoot();
+            }
+            if (event.key === 'Enter' && state === 'won') nextLevel();
         }
 
         bootstrap() {
@@ -3373,7 +3435,7 @@
         }
     }
 
-    const app = new AppController({ engine });
+    app = new AppController({ engine });
     app.bootstrap();
     </script>
 </body>
