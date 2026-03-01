@@ -380,71 +380,110 @@
         return Number.isFinite(value) ? value : null;
     }
 
+    class UrlStateService {
+        parseStartupOptions() {
+            const params = new URLSearchParams(window.location.search);
+
+            const seedMultiplier = parseIntParam(params, 'seedMultiplier');
+            const seedOffset = parseIntParam(params, 'seedOffset');
+            const lcgMultiplier = parseIntParam(params, 'lcgMultiplier');
+            const lcgModulus = parseIntParam(params, 'lcgModulus');
+
+            if (seedMultiplier !== null) proceduralConfig.seedMultiplier = seedMultiplier;
+            if (seedOffset !== null) proceduralConfig.seedOffset = seedOffset;
+            if (lcgMultiplier !== null) proceduralConfig.lcgMultiplier = Math.max(2, Math.floor(lcgMultiplier));
+            if (lcgModulus !== null) proceduralConfig.lcgModulus = Math.max(3, Math.floor(lcgModulus));
+
+            const mode = (params.get('mode') || '').toLowerCase();
+            creatorUseLiveSnapshot = params.get('editCurrent') === '1';
+
+            const inspectorStart = parseIntParam(params, 'inspectorStart');
+            if (inspectorStart !== null) {
+                inspectorStartLevel = Math.max(1, inspectorStart);
+            }
+
+            const levelParam = parseIntParam(params, 'level');
+            const idxParam = parseIntParam(params, 'idx');
+
+            inspectorMode = mode === 'inspector';
+            creatorMode = mode === 'creator';
+            menuMode = mode === 'menu' || (mode === '' && levelParam === null && idxParam === null);
+
+            if (levelParam !== null) {
+                return Math.max(0, levelParam - 1);
+            }
+
+            if (idxParam !== null) {
+                return Math.max(0, idxParam);
+            }
+
+            return 0;
+        }
+
+        appendProceduralParams(params) {
+            params.set('seedMultiplier', String(proceduralConfig.seedMultiplier));
+            params.set('seedOffset', String(proceduralConfig.seedOffset));
+            params.set('lcgMultiplier', String(proceduralConfig.lcgMultiplier));
+            params.set('lcgModulus', String(proceduralConfig.lcgModulus));
+        }
+
+        navigateWithParams(params) {
+            window.location.search = params.toString();
+        }
+
+        navigateToMode(mode) {
+            const params = new URLSearchParams();
+            params.set('mode', mode);
+
+            const levelValue = String(Math.max(1, currentLevel + 1));
+            if (mode === 'play' || mode === 'creator') {
+                params.set('level', levelValue);
+            }
+            if (mode === 'inspector') {
+                params.set('inspectorStart', levelValue);
+            }
+
+            if (mode === 'creator' && !creatorMode && !inspectorMode && !menuMode) {
+                try {
+                    sessionStorage.setItem(CREATOR_SNAPSHOT_KEY, JSON.stringify(getCurrentSceneLevelConfig()));
+                    params.set('editCurrent', '1');
+                } catch {
+                }
+            }
+
+            this.appendProceduralParams(params);
+            this.navigateWithParams(params);
+        }
+
+        navigateToLevel(levelNumber) {
+            const params = new URLSearchParams();
+            params.set('level', String(levelNumber));
+            this.appendProceduralParams(params);
+            this.navigateWithParams(params);
+        }
+
+        navigateFromMenu(mode, levelNumber) {
+            const params = new URLSearchParams();
+            params.set('mode', mode);
+
+            if (mode === 'inspector') {
+                params.set('inspectorStart', String(levelNumber));
+            } else {
+                params.set('level', String(levelNumber));
+            }
+
+            this.navigateWithParams(params);
+        }
+    }
+
+    const urlStateService = new UrlStateService();
+
     function parseUrlOptions() {
-        const params = new URLSearchParams(window.location.search);
-
-        const seedMultiplier = parseIntParam(params, 'seedMultiplier');
-        const seedOffset = parseIntParam(params, 'seedOffset');
-        const lcgMultiplier = parseIntParam(params, 'lcgMultiplier');
-        const lcgModulus = parseIntParam(params, 'lcgModulus');
-
-        if (seedMultiplier !== null) proceduralConfig.seedMultiplier = seedMultiplier;
-        if (seedOffset !== null) proceduralConfig.seedOffset = seedOffset;
-        if (lcgMultiplier !== null) proceduralConfig.lcgMultiplier = Math.max(2, Math.floor(lcgMultiplier));
-        if (lcgModulus !== null) proceduralConfig.lcgModulus = Math.max(3, Math.floor(lcgModulus));
-
-        const mode = (params.get('mode') || '').toLowerCase();
-        creatorUseLiveSnapshot = params.get('editCurrent') === '1';
-
-        const inspectorStart = parseIntParam(params, 'inspectorStart');
-        if (inspectorStart !== null) {
-            inspectorStartLevel = Math.max(1, inspectorStart);
-        }
-
-        const levelParam = parseIntParam(params, 'level');
-        const idxParam = parseIntParam(params, 'idx');
-
-        inspectorMode = mode === 'inspector';
-        creatorMode = mode === 'creator';
-        menuMode = mode === 'menu' || (mode === '' && levelParam === null && idxParam === null);
-
-        if (levelParam !== null) {
-            return Math.max(0, levelParam - 1);
-        }
-
-        if (idxParam !== null) {
-            return Math.max(0, idxParam);
-        }
-
-        return 0;
+        return urlStateService.parseStartupOptions();
     }
 
     function goToMode(mode) {
-        const params = new URLSearchParams();
-        params.set('mode', mode);
-
-        const levelValue = String(Math.max(1, currentLevel + 1));
-        if (mode === 'play' || mode === 'creator') {
-            params.set('level', levelValue);
-        }
-        if (mode === 'inspector') {
-            params.set('inspectorStart', levelValue);
-        }
-
-        if (mode === 'creator' && !creatorMode && !inspectorMode && !menuMode) {
-            try {
-                sessionStorage.setItem(CREATOR_SNAPSHOT_KEY, JSON.stringify(getCurrentSceneLevelConfig()));
-                params.set('editCurrent', '1');
-            } catch {
-            }
-        }
-
-        params.set('seedMultiplier', String(proceduralConfig.seedMultiplier));
-        params.set('seedOffset', String(proceduralConfig.seedOffset));
-        params.set('lcgMultiplier', String(proceduralConfig.lcgMultiplier));
-        params.set('lcgModulus', String(proceduralConfig.lcgModulus));
-
-        window.location.search = params.toString();
+        urlStateService.navigateToMode(mode);
     }
 
     function getCurrentSceneLevelConfig() {
@@ -2614,13 +2653,7 @@
                 card.style.cursor = 'pointer';
                 card.title = 'Click to play this level';
                 card.addEventListener('click', () => {
-                    const params = new URLSearchParams();
-                    params.set('level', String(levelNumber));
-                    params.set('seedMultiplier', String(proceduralConfig.seedMultiplier));
-                    params.set('seedOffset', String(proceduralConfig.seedOffset));
-                    params.set('lcgMultiplier', String(proceduralConfig.lcgMultiplier));
-                    params.set('lcgModulus', String(proceduralConfig.lcgModulus));
-                    window.location.search = params.toString();
+                    urlStateService.navigateToLevel(levelNumber);
                 });
 
                 const titleEl = document.createElement('div');
@@ -2671,28 +2704,22 @@
         const playBtn = document.createElement('button');
         playBtn.textContent = 'Play';
         playBtn.addEventListener('click', () => {
-            const params = new URLSearchParams();
-            params.set('mode', 'play');
-            params.set('level', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
-            window.location.search = params.toString();
+            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
+            urlStateService.navigateFromMenu('play', levelNumber);
         });
 
         const inspectorBtn = document.createElement('button');
         inspectorBtn.textContent = 'Inspector';
         inspectorBtn.addEventListener('click', () => {
-            const params = new URLSearchParams();
-            params.set('mode', 'inspector');
-            params.set('inspectorStart', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
-            window.location.search = params.toString();
+            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
+            urlStateService.navigateFromMenu('inspector', levelNumber);
         });
 
         const creatorBtn = document.createElement('button');
         creatorBtn.textContent = 'Edit';
         creatorBtn.addEventListener('click', () => {
-            const params = new URLSearchParams();
-            params.set('mode', 'creator');
-            params.set('level', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
-            window.location.search = params.toString();
+            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
+            urlStateService.navigateFromMenu('creator', levelNumber);
         });
 
         const help = document.createElement('span');
