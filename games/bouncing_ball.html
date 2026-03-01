@@ -2497,8 +2497,6 @@
             ctx.fill();
         }
         ctx.globalAlpha = 1;
-
-        drawCreatorOverlay();
     }
 
     function drawPortal(x, y, radius, phase) {
@@ -2707,7 +2705,7 @@
                 previewCanvas.style.width = '100%';
                 previewCanvas.style.border = '1px solid #1f2d56';
                 previewCanvas.style.borderRadius = '6px';
-                drawLevelPreview(previewCanvas, level, levelNumber);
+                renderer.renderPreview(level, { levelNumber }, previewCanvas);
                 card.appendChild(previewCanvas);
 
                 const stat = document.createElement('div');
@@ -3349,13 +3347,33 @@
         onKeyDown: (event) => dispatchInputAction({ type: InputActionType.KEY_DOWN, event })
     });
 
+    class GameRenderer {
+        renderMain() {
+            draw();
+        }
+
+        renderPreview(scene, previewConfig = {}, targetCanvas) {
+            const levelNumber = previewConfig.levelNumber || 1;
+            drawLevelPreview(targetCanvas, scene, levelNumber);
+        }
+
+        renderOverlay() {
+            drawCreatorOverlay();
+        }
+    }
+
     class GameEngine {
+        constructor(renderer) {
+            this.renderer = renderer;
+        }
+
         tick() {
             if (inspectorMode) return;
             if (state !== 'creator') updateObstacles();
             if (state === 'shooting') updateBall();
             updateParticles();
-            draw();
+            this.renderer.renderMain();
+            this.renderer.renderOverlay();
         }
 
         shoot() {
@@ -3363,7 +3381,8 @@
         }
     }
 
-    const engine = new GameEngine();
+    const renderer = new GameRenderer();
+    const engine = new GameEngine(renderer);
 
     class AppController {
         constructor({ engine }) {
