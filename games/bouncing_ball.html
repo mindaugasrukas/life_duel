@@ -165,6 +165,66 @@
     const message = document.getElementById('message');
     const nextBtn = document.getElementById('nextBtn');
 
+    class UIController {
+        constructor() {
+            this.message = message;
+            this.nextBtn = nextBtn;
+            this.title = document.querySelector('#header h1');
+            this.levelNum = document.getElementById('levelNum');
+            this.shotCount = document.getElementById('shotCount');
+            this.maxShots = document.getElementById('maxShots');
+            this.score = document.getElementById('score');
+        }
+
+        setTitle(text) {
+            if (this.title) this.title.textContent = text;
+        }
+
+        setLevel(value) {
+            this.levelNum.textContent = value;
+        }
+
+        setShotCount(value) {
+            this.shotCount.textContent = String(value);
+        }
+
+        setMaxShots(value, unlimited = false) {
+            this.maxShots.textContent = formatMaxShots(value, unlimited);
+        }
+
+        setScore(value) {
+            this.score.textContent = String(value);
+        }
+
+        showNextButton() {
+            this.nextBtn.style.display = 'inline-block';
+        }
+
+        hideNextButton() {
+            this.nextBtn.style.display = 'none';
+        }
+
+        showMessage(text, duration = 2000) {
+            this.message.textContent = text;
+            this.message.className = 'show';
+            setTimeout(() => { this.message.className = ''; }, duration);
+        }
+
+        bindInputListeners({ canvas, onMouseMove, onMouseDown, onMouseUp, onClick, onKeyDown }) {
+            if (canvas) {
+                if (onMouseMove) canvas.addEventListener('mousemove', onMouseMove);
+                if (onMouseDown) canvas.addEventListener('mousedown', onMouseDown);
+                if (onMouseUp) canvas.addEventListener('mouseup', onMouseUp);
+                if (onClick) canvas.addEventListener('click', onClick);
+            }
+            if (onKeyDown) {
+                document.addEventListener('keydown', onKeyDown);
+            }
+        }
+    }
+
+    const ui = new UIController();
+
     // Game state
     const gameState = {
         phase: 'aiming', // aiming, shooting, won, lost
@@ -237,6 +297,37 @@
     bindGameStateAlias('trail', () => gameState.scene.trail, (value) => { gameState.scene.trail = value; });
     bindGameStateAlias('particles', () => gameState.scene.particles, (value) => { gameState.scene.particles = value; });
     bindGameStateAlias('levelFeatures', () => gameState.scene.levelFeatures, (value) => { gameState.scene.levelFeatures = value; });
+
+    function resetFeatureBuckets() {
+        walls = [];
+        duplicatorWalls = [];
+        dangerWalls = [];
+        obstacles = [];
+        portals = [];
+        orbCatchers = [];
+        gravityWells = [];
+    }
+
+    function syncFeatureBucketsFromLevelFeatures() {
+        resetFeatureBuckets();
+
+        for (const feature of levelFeatures) {
+            const bucket = feature.plugin ? feature.plugin.bucket : null;
+            if (bucket === 'walls') walls.push(feature);
+            if (bucket === 'duplicatorWalls') duplicatorWalls.push(feature);
+            if (bucket === 'dangerWalls') dangerWalls.push(feature);
+            if (bucket === 'obstacles') {
+                if (!Number.isFinite(feature.originalY)) feature.originalY = feature.y;
+                obstacles.push(feature);
+            }
+            if (bucket === 'portals') {
+                if (!Number.isFinite(feature.phase)) feature.phase = 0;
+                portals.push(feature);
+            }
+            if (bucket === 'orbCatchers') orbCatchers.push(feature);
+            if (bucket === 'gravityWells') gravityWells.push(feature);
+        }
+    }
 
     let inspectorMode = false;
     let creatorMode = false;
@@ -698,6 +789,17 @@
     }
 
     class ObstacleFeature extends BallFeature {
+        collidesWithBall(ballObj) {
+            return rectCircleCollision(ballObj, this);
+        }
+
+        intersectsBallPath(prevX, prevY, ballObj) {
+            return lineRectIntersection(prevX, prevY, ballObj.x, ballObj.y, this, ballObj.radius);
+        }
+
+        resolveBallCollision(ballObj) {
+            resolveRectCollision(ballObj, this);
+        }
     }
 
     class PluginBackedFeature extends BallFeature {
@@ -866,6 +968,9 @@
     }
 
     class WallFeature extends ObstacleFeature {
+        isSolid() {
+            return true;
+        }
     }
 
     class DuplicatorWallFeature extends ObstacleFeature {
@@ -1447,78 +1552,82 @@
         };
     }
 
+    class LevelManager {
+        getLevel(idx) {
+            const levelDef = idx < levels.length ? levels[idx] : generateLevel(idx);
+            const resolved = resolveLevelDefinition(levelDef, idx);
+            return normalizeLevelConfig(resolved);
+        }
+
+        applyLevelConfig(level, mode = 'aiming') {
+            launcher = { ...level.launcher };
+            ball = null;
+            balls = [];
+            trail = [];
+            particles = [];
+            shotsFired = 0;
+            bounceCount = 0;
+            hitTargets = 0;
+            state = mode;
+
+            targets = level.targets.map(t => ({ ...t, hit: false, alpha: 1, pulsePhase: Math.random() * Math.PI * 2 }));
+            totalTargets = targets.length;
+            levelFeatures = instantiateLevelFeatures(level.features);
+            syncFeatureBucketsFromLevelFeatures();
+
+            activeMaxShots = level.maxShots;
+            activeUnlimitedShots = !!(level.launcher && level.launcher.special);
+            ui.hideNextButton();
+            ui.setShotCount(0);
+            ui.setMaxShots(activeMaxShots, activeUnlimitedShots);
+            ui.setScore(score);
+        }
+
+        loadLevel(idx) {
+            const level = this.getLevel(idx);
+            this.applyLevelConfig(level, 'aiming');
+            ui.setLevel(idx + 1);
+        }
+
+        resetLevel() {
+            if (creatorMode && creatorLevel) {
+                refreshCreatorScene(state === 'creator' ? 'creator' : 'aiming');
+                return;
+            }
+            this.loadLevel(currentLevel);
+        }
+
+        nextLevel() {
+            if (creatorMode) return;
+            currentLevel++;
+            this.loadLevel(currentLevel);
+        }
+    }
+
+    const levelManager = new LevelManager();
+
     function getLevel(idx) {
-        const levelDef = idx < levels.length ? levels[idx] : generateLevel(idx);
-        const l = resolveLevelDefinition(levelDef, idx);
-        return normalizeLevelConfig(l);
+        return levelManager.getLevel(idx);
     }
 
     function applyLevelConfig(level, mode = 'aiming') {
-        launcher = { ...level.launcher };
-        ball = null;
-        balls = [];
-        trail = [];
-        particles = [];
-        shotsFired = 0;
-        bounceCount = 0;
-        hitTargets = 0;
-        state = mode;
-
-        targets = level.targets.map(t => ({ ...t, hit: false, alpha: 1, pulsePhase: Math.random() * Math.PI * 2 }));
-        totalTargets = targets.length;
-        levelFeatures = instantiateLevelFeatures(level.features);
-
-        walls = [];
-        duplicatorWalls = [];
-        dangerWalls = [];
-        obstacles = [];
-        portals = [];
-        orbCatchers = [];
-        gravityWells = [];
-
-        for (const feature of levelFeatures) {
-            const bucket = feature.plugin ? feature.plugin.bucket : null;
-            if (bucket === 'walls') walls.push({ ...feature });
-            if (bucket === 'duplicatorWalls') duplicatorWalls.push({ ...feature });
-            if (bucket === 'dangerWalls') dangerWalls.push({ ...feature });
-            if (bucket === 'obstacles') obstacles.push({ ...feature, originalY: feature.y });
-            if (bucket === 'portals') portals.push({ ...feature, phase: 0 });
-            if (bucket === 'orbCatchers') orbCatchers.push({ ...feature });
-            if (bucket === 'gravityWells') gravityWells.push({ ...feature });
-        }
-
-        activeMaxShots = level.maxShots;
-        activeUnlimitedShots = !!(level.launcher && level.launcher.special);
-        nextBtn.style.display = 'none';
-        document.getElementById('shotCount').textContent = '0';
-        document.getElementById('maxShots').textContent = formatMaxShots(activeMaxShots, activeUnlimitedShots);
-        document.getElementById('score').textContent = score;
+        levelManager.applyLevelConfig(level, mode);
     }
 
     function loadLevel(idx) {
-        const level = getLevel(idx);
-        applyLevelConfig(level, 'aiming');
-        document.getElementById('levelNum').textContent = idx + 1;
+        levelManager.loadLevel(idx);
     }
 
     function resetLevel() {
-        if (creatorMode && creatorLevel) {
-            refreshCreatorScene(state === 'creator' ? 'creator' : 'aiming');
-            return;
-        }
-        loadLevel(currentLevel);
+        levelManager.resetLevel();
     }
 
     function nextLevel() {
-        if (creatorMode) return;
-        currentLevel++;
-        loadLevel(currentLevel);
+        levelManager.nextLevel();
     }
 
     function showMessage(text, duration = 2000) {
-        message.textContent = text;
-        message.className = 'show';
-        setTimeout(() => { message.className = ''; }, duration);
+        ui.showMessage(text, duration);
     }
 
     // Shooting
@@ -1572,7 +1681,7 @@
 
         shotsFired++;
         state = 'shooting';
-        document.getElementById('shotCount').textContent = shotsFired;
+        ui.setShotCount(shotsFired);
     }
 
     // Physics update — uses substeps to prevent tunneling through thin walls
@@ -1696,8 +1805,8 @@
                     for (let pass = 0; pass < 3; pass++) {
                         let collided = false;
                         for (const w of walls) {
-                            if (rectCircleCollision(currentBall, w)) {
-                                resolveRectCollision(currentBall, w);
+                            if (w.collidesWithBall(currentBall)) {
+                                w.resolveBallCollision(currentBall);
                                 currentBall.bounceCount++;
                                 spawnBounceParticles(currentBall.x, currentBall.y);
                                 collided = true;
@@ -1712,8 +1821,8 @@
                     for (let pass = 0; pass < 2; pass++) {
                         let collided = false;
                         for (const w of duplicatorWalls) {
-                            if (rectCircleCollision(currentBall, w)) {
-                                resolveRectCollision(currentBall, w);
+                            if (w.collidesWithBall(currentBall)) {
+                                w.resolveBallCollision(currentBall);
                                 currentBall.bounceCount++;
                                 spawnBounceParticles(currentBall.x, currentBall.y);
                                 collided = true;
@@ -1759,7 +1868,7 @@
                 // Orb catcher collision — destroys this orb only
                 let caughtOrb = false;
                 for (const catcher of orbCatchers) {
-                    if (rectCircleCollision(currentBall, catcher) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, catcher, currentBall.radius)) {
+                    if (catcher.collidesWithBall(currentBall) || catcher.intersectsBallPath(prevX, prevY, currentBall)) {
                         currentBall.alive = false;
                         spawnDangerParticles(currentBall.x, currentBall.y);
                         caughtOrb = true;
@@ -1772,7 +1881,7 @@
                 // Check both current position AND swept line from previous position
                 let hitDanger = false;
                 for (const dw of dangerWalls) {
-                    if (rectCircleCollision(currentBall, dw) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, dw, currentBall.radius)) {
+                    if (dw.collidesWithBall(currentBall) || dw.intersectsBallPath(prevX, prevY, currentBall)) {
                         hitDanger = true;
                         break;
                     }
@@ -1780,7 +1889,7 @@
                 // Moving obstacles (red) also kill
                 if (!hitDanger) {
                     for (const o of obstacles) {
-                        if (rectCircleCollision(currentBall, o) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, o, currentBall.radius)) {
+                        if (o.collidesWithBall(currentBall) || o.intersectsBallPath(prevX, prevY, currentBall)) {
                             hitDanger = true;
                             break;
                         }
@@ -1813,14 +1922,14 @@
                         t.hit = true;
                         hitTargets++;
                         score += 100 + currentBall.bounceCount * 10;
-                        document.getElementById('score').textContent = score;
+                        ui.setScore(score);
                         spawnTargetParticles(t.x, t.y);
 
                         if (hitTargets === totalTargets) {
                             state = 'won';
                             currentBall.alive = false;
                             showMessage('Clear!');
-                            nextBtn.style.display = 'inline-block';
+                            ui.showNextButton();
                         }
                     }
                 }
@@ -2430,9 +2539,7 @@
     function initInspectorMode() {
         state = 'inspector';
         document.body.style.overflow = 'auto';
-
-        const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Bouncing Ball Inspector';
+        ui.setTitle('Bouncing Ball Inspector');
 
         const controls = document.getElementById('controls');
         controls.innerHTML = '';
@@ -2538,9 +2645,7 @@
 
     function initModeMenu() {
         state = 'menu';
-
-        const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Bouncing Ball';
+        ui.setTitle('Bouncing Ball');
 
         const controls = document.getElementById('controls');
         controls.innerHTML = '';
@@ -2610,7 +2715,7 @@
 
     function refreshCreatorScene(mode = 'creator') {
         applyLevelConfig(normalizeLevelConfig(creatorLevel), mode);
-        document.getElementById('levelNum').textContent = 'C';
+        ui.setLevel('C');
     }
 
     function getRectFromPoints(a, b) {
@@ -3033,8 +3138,7 @@
 
     function initCreatorMode() {
         state = 'creator';
-        const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Bouncing Ball Creator';
+        ui.setTitle('Bouncing Ball Creator');
 
         let loadedFromSnapshot = false;
         if (creatorUseLiveSnapshot) {
@@ -3143,77 +3247,89 @@
     }
 
     // Input
-    canvas.addEventListener('mousemove', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        mousePos.x = e.clientX - rect.left;
-        mousePos.y = e.clientY - rect.top;
+    ui.bindInputListeners({
+        canvas,
+        onMouseMove: (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mousePos.x = e.clientX - rect.left;
+            mousePos.y = e.clientY - rect.top;
 
-        if (creatorMode && state === 'creator' && creatorTool === 'tube' && creatorTubeDraft) {
-            const last = creatorTubeDraft[creatorTubeDraft.length - 1];
-            const d = Math.hypot(mousePos.x - last.x, mousePos.y - last.y);
-            if (d >= 6) {
-                creatorTubeDraft.push({ x: mousePos.x, y: mousePos.y });
+            if (creatorMode && state === 'creator' && creatorTool === 'tube' && creatorTubeDraft) {
+                const last = creatorTubeDraft[creatorTubeDraft.length - 1];
+                const d = Math.hypot(mousePos.x - last.x, mousePos.y - last.y);
+                if (d >= 6) {
+                    creatorTubeDraft.push({ x: mousePos.x, y: mousePos.y });
+                }
             }
-        }
-    });
-
-    canvas.addEventListener('mousedown', (e) => {
-        if (!creatorMode || state !== 'creator') return;
-        if (creatorTool === 'wall' || creatorTool === 'duplicatorWall' || creatorTool === 'dangerWall' || creatorTool === 'orbCatcher' || creatorTool === 'obstacle') {
+        },
+        onMouseDown: (e) => {
+            if (!creatorMode || state !== 'creator') return;
+            if (creatorTool === 'wall' || creatorTool === 'duplicatorWall' || creatorTool === 'dangerWall' || creatorTool === 'orbCatcher' || creatorTool === 'obstacle') {
+                const rect = canvas.getBoundingClientRect();
+                creatorDragStart = {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            } else if (creatorTool === 'tube') {
+                const rect = canvas.getBoundingClientRect();
+                creatorTubeDraft = [{
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                }];
+            }
+        },
+        onMouseUp: (e) => {
+            if (!creatorMode || state !== 'creator') return;
+            if (creatorTool === 'tube' && creatorTubeDraft) {
+                finalizeTubeDraft();
+                return;
+            }
+            if (!creatorDragStart) return;
             const rect = canvas.getBoundingClientRect();
-            creatorDragStart = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-        } else if (creatorTool === 'tube') {
-            const rect = canvas.getBoundingClientRect();
-            creatorTubeDraft = [{
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            }];
+            finalizeCreatorDrag(e.clientX - rect.left, e.clientY - rect.top);
+        },
+        onClick: (e) => {
+            if (creatorMode && state === 'creator') {
+                const rect = canvas.getBoundingClientRect();
+                placeCreatorClick(e.clientX - rect.left, e.clientY - rect.top);
+                return;
+            }
+            engine.shoot();
+        },
+        onKeyDown: (e) => {
+            if (e.key === 'r' || e.key === 'R') resetLevel();
+            if (e.key === ' ' && state === 'aiming') {
+                e.preventDefault();
+                engine.shoot();
+            }
+            if (e.key === 'Enter' && state === 'won') nextLevel();
         }
     });
 
-    canvas.addEventListener('mouseup', (e) => {
-        if (!creatorMode || state !== 'creator') return;
-        if (creatorTool === 'tube' && creatorTubeDraft) {
-            finalizeTubeDraft();
-            return;
+    class GameEngine {
+        tick() {
+            if (inspectorMode) return;
+            if (state !== 'creator') updateObstacles();
+            if (state === 'shooting') updateBall();
+            updateParticles();
+            draw();
         }
-        if (!creatorDragStart) return;
-        const rect = canvas.getBoundingClientRect();
-        finalizeCreatorDrag(e.clientX - rect.left, e.clientY - rect.top);
-    });
 
-    canvas.addEventListener('click', (e) => {
-        if (creatorMode && state === 'creator') {
-            const rect = canvas.getBoundingClientRect();
-            placeCreatorClick(e.clientX - rect.left, e.clientY - rect.top);
-            return;
+        runFrame() {
+            this.tick();
+            requestAnimationFrame(() => this.runFrame());
         }
-        shoot();
-    });
 
-    // Keyboard
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'r' || e.key === 'R') resetLevel();
-        if (e.key === ' ' && state === 'aiming') {
-            e.preventDefault();
+        shoot() {
             shoot();
         }
-        if (e.key === 'Enter' && state === 'won') nextLevel();
-    });
+    }
+
+    const engine = new GameEngine();
 
     // Game loop
     function gameLoop() {
-        if (inspectorMode) return;
-        if (state !== 'creator') updateObstacles();
-        if (state === 'shooting') {
-            updateBall();
-        }
-        updateParticles();
-        draw();
-        requestAnimationFrame(gameLoop);
+        engine.runFrame();
     }
 
     // Start
