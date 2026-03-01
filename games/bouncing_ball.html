@@ -1689,28 +1689,47 @@
     }
 
     const levelManager = new LevelManager(levelService);
+    let engine = null;
 
     function getLevel(idx) {
+        if (engine) return engine.getLevel(idx);
         return levelManager.getLevel(idx);
     }
 
     function getLevelSnapshot(idx) {
+        if (engine) return engine.getLevelSnapshot(idx);
         return levelService.getLevelSnapshot(idx);
     }
 
     function applyLevelConfig(level, mode = 'aiming') {
+        if (engine) {
+            engine.applyLevelConfig(level, mode);
+            return;
+        }
         levelManager.applyLevelConfig(level, mode);
     }
 
     function loadLevel(idx) {
+        if (engine) {
+            engine.loadLevel(idx);
+            return;
+        }
         levelManager.loadLevel(idx);
     }
 
     function resetLevel() {
+        if (engine) {
+            engine.resetLevel();
+            return;
+        }
         levelManager.resetLevel();
     }
 
     function nextLevel() {
+        if (engine) {
+            engine.nextLevel();
+            return;
+        }
         levelManager.nextLevel();
     }
 
@@ -3363,8 +3382,34 @@
     }
 
     class GameEngine {
-        constructor(renderer) {
+        constructor(renderer, levelManagerInstance, levelServiceInstance) {
             this.renderer = renderer;
+            this.levelManager = levelManagerInstance;
+            this.levelService = levelServiceInstance;
+        }
+
+        getLevel(idx) {
+            return this.levelManager.getLevel(idx);
+        }
+
+        getLevelSnapshot(idx) {
+            return this.levelService.getLevelSnapshot(idx);
+        }
+
+        applyLevelConfig(level, mode = 'aiming') {
+            this.levelManager.applyLevelConfig(level, mode);
+        }
+
+        loadLevel(idx) {
+            this.levelManager.loadLevel(idx);
+        }
+
+        resetLevel() {
+            this.levelManager.resetLevel();
+        }
+
+        nextLevel() {
+            this.levelManager.nextLevel();
         }
 
         tick() {
@@ -3382,7 +3427,7 @@
     }
 
     const renderer = new GameRenderer();
-    const engine = new GameEngine(renderer);
+    engine = new GameEngine(renderer, levelManager, levelService);
 
     class AppController {
         constructor({ engine }) {
@@ -3492,20 +3537,20 @@
 
         handleKeyDown(event) {
             if (!event) return;
-            if (event.key === 'r' || event.key === 'R') resetLevel();
+            if (event.key === 'r' || event.key === 'R') this.engine.resetLevel();
             if (event.key === ' ' && state === 'aiming') {
                 event.preventDefault();
                 this.engine.shoot();
             }
-            if (event.key === 'Enter' && state === 'won') nextLevel();
+            if (event.key === 'Enter' && state === 'won') this.engine.nextLevel();
         }
 
         handleResetButtonClick() {
-            resetLevel();
+            this.engine.resetLevel();
         }
 
         handleNextButtonClick() {
-            nextLevel();
+            this.engine.nextLevel();
         }
 
         bootstrap() {
@@ -3530,7 +3575,7 @@
         switchMode(nextMode) {
             this.mode = nextMode;
             if (nextMode === 'menu') {
-                loadLevel(currentLevel);
+                this.engine.loadLevel(currentLevel);
                 initModeMenu();
                 return;
             }
@@ -3542,7 +3587,7 @@
                 initCreatorMode();
                 return;
             }
-            loadLevel(currentLevel);
+            this.engine.loadLevel(currentLevel);
         }
 
         startLoop() {
