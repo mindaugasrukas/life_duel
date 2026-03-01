@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ricochet</title>
+    <title>Bouncing Ball</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -144,7 +144,7 @@
     <a href="../index.html" class="back-link">← BACK</a>
     <div id="gameContainer">
         <div id="header">
-            <h1>Ricochet</h1>
+            <h1>Bouncing Ball</h1>
             <div style="display:flex; gap:30px;">
                 <div class="stat">Level <span id="levelNum">1</span></div>
                 <div class="stat">Shots <span id="shotCount">0</span> / <span id="maxShots">1</span></div>
@@ -166,36 +166,82 @@
     const nextBtn = document.getElementById('nextBtn');
 
     // Game state
-    let state = 'aiming'; // aiming, shooting, won, lost
-    let currentLevel = 0;
-    let score = 0;
-    let shotsFired = 0;
-    let ball = null;
-    let balls = [];
-    let targets = [];
-    let walls = [];
-    let duplicatorWalls = [];
-    let dangerWalls = [];
-    let obstacles = [];
-    let portals = [];
-    let orbCatchers = [];
-    let gravityWells = [];
-    let launcher = { x: 100, y: 500 };
-    let aimAngle = -Math.PI / 4;
-    let aimPower = 12;
-    let mousePos = { x: 400, y: 300 };
-    let trail = [];
-    let particles = [];
-    let hitTargets = 0;
-    let totalTargets = 0;
-    let bounceCount = 0;
-    let maxBounces = 50;
-    let levelFeatures = [];
+    const gameState = {
+        phase: 'aiming', // aiming, shooting, won, lost
+        progress: {
+            currentLevel: 0,
+            score: 0,
+            shotsFired: 0,
+            hitTargets: 0,
+            totalTargets: 0,
+            bounceCount: 0,
+            maxBounces: 50,
+            activeMaxShots: 1,
+            activeUnlimitedShots: false
+        },
+        scene: {
+            ball: null,
+            balls: [],
+            targets: [],
+            walls: [],
+            duplicatorWalls: [],
+            dangerWalls: [],
+            obstacles: [],
+            portals: [],
+            orbCatchers: [],
+            gravityWells: [],
+            launcher: { x: 100, y: 500 },
+            aimAngle: -Math.PI / 4,
+            aimPower: 12,
+            mousePos: { x: 400, y: 300 },
+            trail: [],
+            particles: [],
+            levelFeatures: []
+        }
+    };
+
+    function bindGameStateAlias(name, getter, setter) {
+        Object.defineProperty(window, name, {
+            configurable: true,
+            enumerable: false,
+            get: getter,
+            set: setter
+        });
+    }
+
+    bindGameStateAlias('state', () => gameState.phase, (value) => { gameState.phase = value; });
+    bindGameStateAlias('currentLevel', () => gameState.progress.currentLevel, (value) => { gameState.progress.currentLevel = value; });
+    bindGameStateAlias('score', () => gameState.progress.score, (value) => { gameState.progress.score = value; });
+    bindGameStateAlias('shotsFired', () => gameState.progress.shotsFired, (value) => { gameState.progress.shotsFired = value; });
+    bindGameStateAlias('hitTargets', () => gameState.progress.hitTargets, (value) => { gameState.progress.hitTargets = value; });
+    bindGameStateAlias('totalTargets', () => gameState.progress.totalTargets, (value) => { gameState.progress.totalTargets = value; });
+    bindGameStateAlias('bounceCount', () => gameState.progress.bounceCount, (value) => { gameState.progress.bounceCount = value; });
+    bindGameStateAlias('maxBounces', () => gameState.progress.maxBounces, (value) => { gameState.progress.maxBounces = value; });
+    bindGameStateAlias('activeMaxShots', () => gameState.progress.activeMaxShots, (value) => { gameState.progress.activeMaxShots = value; });
+    bindGameStateAlias('activeUnlimitedShots', () => gameState.progress.activeUnlimitedShots, (value) => { gameState.progress.activeUnlimitedShots = value; });
+
+    bindGameStateAlias('ball', () => gameState.scene.ball, (value) => { gameState.scene.ball = value; });
+    bindGameStateAlias('balls', () => gameState.scene.balls, (value) => { gameState.scene.balls = value; });
+    bindGameStateAlias('targets', () => gameState.scene.targets, (value) => { gameState.scene.targets = value; });
+    bindGameStateAlias('walls', () => gameState.scene.walls, (value) => { gameState.scene.walls = value; });
+    bindGameStateAlias('duplicatorWalls', () => gameState.scene.duplicatorWalls, (value) => { gameState.scene.duplicatorWalls = value; });
+    bindGameStateAlias('dangerWalls', () => gameState.scene.dangerWalls, (value) => { gameState.scene.dangerWalls = value; });
+    bindGameStateAlias('obstacles', () => gameState.scene.obstacles, (value) => { gameState.scene.obstacles = value; });
+    bindGameStateAlias('portals', () => gameState.scene.portals, (value) => { gameState.scene.portals = value; });
+    bindGameStateAlias('orbCatchers', () => gameState.scene.orbCatchers, (value) => { gameState.scene.orbCatchers = value; });
+    bindGameStateAlias('gravityWells', () => gameState.scene.gravityWells, (value) => { gameState.scene.gravityWells = value; });
+    bindGameStateAlias('launcher', () => gameState.scene.launcher, (value) => { gameState.scene.launcher = value; });
+    bindGameStateAlias('aimAngle', () => gameState.scene.aimAngle, (value) => { gameState.scene.aimAngle = value; });
+    bindGameStateAlias('aimPower', () => gameState.scene.aimPower, (value) => { gameState.scene.aimPower = value; });
+    bindGameStateAlias('mousePos', () => gameState.scene.mousePos, (value) => { gameState.scene.mousePos = value; });
+    bindGameStateAlias('trail', () => gameState.scene.trail, (value) => { gameState.scene.trail = value; });
+    bindGameStateAlias('particles', () => gameState.scene.particles, (value) => { gameState.scene.particles = value; });
+    bindGameStateAlias('levelFeatures', () => gameState.scene.levelFeatures, (value) => { gameState.scene.levelFeatures = value; });
+
     let inspectorMode = false;
     let creatorMode = false;
     let menuMode = false;
     let inspectorStartLevel = 1;
-    let activeMaxShots = 1;
     let creatorLevel = null;
     let creatorTool = 'target';
     let creatorDragStart = null;
@@ -204,7 +250,6 @@
     let creatorDirty = false;
     let creatorToolButtons = [];
     let creatorUseLiveSnapshot = false;
-    let activeUnlimitedShots = false;
     const CREATOR_SNAPSHOT_KEY = 'ricochet_creator_snapshot';
 
     function formatMaxShots(maxShots, unlimited = false) {
@@ -625,11 +670,100 @@
         return normalized;
     }
 
-    const featurePlugins = new Map();
+    class GameFeature {
+        constructor(config = {}, plugin = null) {
+            Object.assign(this, config);
+            this.type = config.type || this.type;
+            this.plugin = plugin;
+            this.bucket = plugin && plugin.bucket ? plugin.bucket : null;
+        }
+
+        update() {
+        }
+
+        draw() {
+        }
+    }
+
+    class BallFeature extends GameFeature {
+        onBallStep() {
+            return null;
+        }
+    }
+
+    class LauncherFeature extends GameFeature {
+        onLaunch() {
+            return null;
+        }
+    }
+
+    class ObstacleFeature extends BallFeature {
+    }
+
+    class PluginBackedFeature extends BallFeature {
+        update(context) {
+            if (this.plugin && this.plugin.update) {
+                this.plugin.update(this, context);
+            }
+        }
+
+        draw(context) {
+            if (this.plugin && this.plugin.draw) {
+                this.plugin.draw(this, context);
+            }
+        }
+
+        onBallStep(context) {
+            if (this.plugin && this.plugin.onBallStep) {
+                return this.plugin.onBallStep(this, context) || null;
+            }
+            return null;
+        }
+
+        onLaunch(context) {
+            if (this.plugin && this.plugin.onLaunch) {
+                return this.plugin.onLaunch(this, context) || null;
+            }
+            return null;
+        }
+    }
+
+    class FeatureRegistry {
+        constructor() {
+            this.plugins = new Map();
+        }
+
+        register(plugin) {
+            if (!plugin || !plugin.type) return;
+            this.plugins.set(plugin.type, {
+                FeatureClass: PluginBackedFeature,
+                ...plugin
+            });
+        }
+
+        get(type) {
+            return this.plugins.get(type) || null;
+        }
+
+        instantiate(cfg, viewport) {
+            if (!cfg || !cfg.type) return null;
+            const plugin = this.get(cfg.type);
+            const source = plugin && plugin.create
+                ? plugin.create({ ...cfg }, viewport)
+                : { ...cfg };
+            const FeatureClass = plugin && plugin.FeatureClass ? plugin.FeatureClass : PluginBackedFeature;
+            const instance = new FeatureClass({ ...source, type: cfg.type }, plugin);
+            instance.plugin = plugin;
+            instance.bucket = plugin && plugin.bucket ? plugin.bucket : null;
+            return instance;
+        }
+    }
+
+    const featureRegistry = new FeatureRegistry();
+    const featurePlugins = featureRegistry.plugins;
 
     function registerFeaturePlugin(plugin) {
-        if (!plugin || !plugin.type) return;
-        featurePlugins.set(plugin.type, plugin);
+        featureRegistry.register(plugin);
     }
 
     function pointInPolygon(x, y, points) {
@@ -731,134 +865,84 @@
         return true;
     }
 
-    registerFeaturePlugin({ type: 'wall', bucket: 'walls' });
-    registerFeaturePlugin({
-        type: 'duplicatorWall',
-        bucket: 'duplicatorWalls',
-        draw(feature, { ctx, time }) {
+    class WallFeature extends ObstacleFeature {
+    }
+
+    class DuplicatorWallFeature extends ObstacleFeature {
+        draw({ ctx, time }) {
             const pulse = 0.65 + Math.sin(time * 5.5) * 0.25;
             ctx.fillStyle = `rgba(144, 95, 255, ${0.45 + pulse * 0.2})`;
-            ctx.fillRect(feature.x, feature.y, feature.w, feature.h);
+            ctx.fillRect(this.x, this.y, this.w, this.h);
             ctx.strokeStyle = `rgba(196, 171, 255, ${0.75 + pulse * 0.2})`;
             ctx.lineWidth = 2;
-            ctx.strokeRect(feature.x, feature.y, feature.w, feature.h);
-        },
-        drawPreview(feature, { ctx, sx, sy }) {
-            ctx.fillStyle = 'rgba(144, 95, 255, 0.7)';
-            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
-            ctx.strokeStyle = 'rgba(208, 188, 255, 0.9)';
-            ctx.lineWidth = 1.2;
-            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeRect(this.x, this.y, this.w, this.h);
         }
-    });
-    registerFeaturePlugin({ type: 'dangerWall', bucket: 'dangerWalls' });
-    registerFeaturePlugin({ type: 'obstacle', bucket: 'obstacles' });
-    registerFeaturePlugin({ type: 'portal', bucket: 'portals' });
-    registerFeaturePlugin({
-        type: 'orbCatcher',
-        bucket: 'orbCatchers',
-        draw(feature, { ctx, time }) {
+    }
+
+    class DangerWallFeature extends ObstacleFeature {
+    }
+
+    class MovingObstacleFeature extends ObstacleFeature {
+    }
+
+    class PortalFeature extends BallFeature {
+    }
+
+    class OrbCatcherFeature extends ObstacleFeature {
+        draw({ ctx, time }) {
             const pulse = 0.65 + Math.sin(time * 5) * 0.25;
             ctx.fillStyle = `rgba(255, 130, 40, ${0.45 + pulse * 0.2})`;
-            ctx.fillRect(feature.x, feature.y, feature.w, feature.h);
+            ctx.fillRect(this.x, this.y, this.w, this.h);
             ctx.strokeStyle = `rgba(255, 185, 100, ${0.7 + pulse * 0.2})`;
             ctx.lineWidth = 2;
-            ctx.strokeRect(feature.x, feature.y, feature.w, feature.h);
-        },
-        drawPreview(feature, { ctx, sx, sy }) {
-            ctx.fillStyle = 'rgba(255, 130, 40, 0.7)';
-            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
-            ctx.strokeStyle = 'rgba(255, 190, 110, 0.9)';
-            ctx.lineWidth = 1.2;
-            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeRect(this.x, this.y, this.w, this.h);
         }
-    });
-    registerFeaturePlugin({
-        type: 'gravityWell',
-        bucket: 'gravityWells',
-        create(cfg) {
-            return {
-                ...cfg,
-                x: Number(cfg.x) || 0,
-                y: Number(cfg.y) || 0,
-                radius: Number.isFinite(cfg.radius) ? cfg.radius : 120,
-                strength: Number.isFinite(cfg.strength) ? cfg.strength : 12000
-            };
-        },
-        draw(feature, { ctx, time }) {
-            const pulse = 0.7 + Math.sin(time * 3.5) * 0.2;
-            const r = feature.radius || 120;
+    }
 
-            const grad = ctx.createRadialGradient(feature.x, feature.y, 0, feature.x, feature.y, r);
+    class GravityWellFeature extends BallFeature {
+        draw({ ctx, time }) {
+            const pulse = 0.7 + Math.sin(time * 3.5) * 0.2;
+            const r = this.radius || 120;
+
+            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r);
             grad.addColorStop(0, 'rgba(255, 235, 160, 0.85)');
             grad.addColorStop(0.22, 'rgba(255, 196, 70, 0.55)');
             grad.addColorStop(1, 'rgba(255, 196, 70, 0)');
             ctx.fillStyle = grad;
             ctx.beginPath();
-            ctx.arc(feature.x, feature.y, r, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.strokeStyle = `rgba(255, 214, 120, ${0.45 + pulse * 0.35})`;
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(feature.x, feature.y, r * (0.45 + pulse * 0.05), 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, r * (0.45 + pulse * 0.05), 0, Math.PI * 2);
             ctx.stroke();
 
             ctx.fillStyle = '#ffd27a';
             ctx.beginPath();
-            ctx.arc(feature.x, feature.y, 6 + pulse * 2, 0, Math.PI * 2);
-            ctx.fill();
-        },
-        drawPreview(feature, { ctx, sx, sy, scale }) {
-            const x = feature.x * sx;
-            const y = feature.y * sy;
-            const r = scale(feature.radius || 120);
-            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-            grad.addColorStop(0, 'rgba(255, 235, 160, 0.9)');
-            grad.addColorStop(0.22, 'rgba(255, 196, 70, 0.55)');
-            grad.addColorStop(1, 'rgba(255, 196, 70, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#ffd27a';
-            ctx.beginPath();
-            ctx.arc(x, y, Math.max(2, r * 0.07), 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 6 + pulse * 2, 0, Math.PI * 2);
             ctx.fill();
         }
-    });
-    registerFeaturePlugin({
-        type: 'tube',
-        create(cfg) {
-            const points = (cfg.points || []).map(p => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }));
-            const geom = computeTubeGeometry(points);
-            return {
-                ...cfg,
-                points,
-                thickness: Number.isFinite(cfg.thickness) ? cfg.thickness : 14,
-                endRadius: Number.isFinite(cfg.endRadius) ? cfg.endRadius : 22,
-                segmentLengths: geom.segmentLengths,
-                totalLength: geom.totalLength
-            };
-        },
-        draw(feature, { ctx }) {
-            if (!feature.points || feature.points.length < 2) return;
-            const outer = feature.thickness || 14;
+    }
+
+    class TubeFeature extends BallFeature {
+        draw({ ctx }) {
+            if (!this.points || this.points.length < 2) return;
+            const outer = this.thickness || 14;
             const inner = Math.max(2, outer - 6);
 
-            // Outer shell
             ctx.strokeStyle = 'rgba(120, 220, 255, 0.85)';
             ctx.lineWidth = outer;
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(feature.points[0].x, feature.points[0].y);
-            for (let i = 1; i < feature.points.length; i++) {
-                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+            for (let i = 1; i < this.points.length; i++) {
+                ctx.lineTo(this.points[i].x, this.points[i].y);
             }
             ctx.stroke();
 
-            // Carve inside to make it hollow
             ctx.save();
             ctx.globalCompositeOperation = 'destination-out';
             ctx.strokeStyle = 'rgba(0,0,0,1)';
@@ -866,74 +950,35 @@
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(feature.points[0].x, feature.points[0].y);
-            for (let i = 1; i < feature.points.length; i++) {
-                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+            for (let i = 1; i < this.points.length; i++) {
+                ctx.lineTo(this.points[i].x, this.points[i].y);
             }
             ctx.stroke();
             ctx.restore();
 
-            // Edge highlight
             ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(feature.points[0].x, feature.points[0].y);
-            for (let i = 1; i < feature.points.length; i++) {
-                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+            for (let i = 1; i < this.points.length; i++) {
+                ctx.lineTo(this.points[i].x, this.points[i].y);
             }
             ctx.stroke();
 
-            const r = feature.endRadius || 22;
+            const endRadius = this.endRadius || 22;
             ctx.strokeStyle = 'rgba(180, 245, 255, 0.9)';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(feature.points[0].x, feature.points[0].y, r, 0, Math.PI * 2);
+            ctx.arc(this.points[0].x, this.points[0].y, endRadius, 0, Math.PI * 2);
             ctx.stroke();
             ctx.beginPath();
-            ctx.arc(feature.points[feature.points.length - 1].x, feature.points[feature.points.length - 1].y, r, 0, Math.PI * 2);
+            ctx.arc(this.points[this.points.length - 1].x, this.points[this.points.length - 1].y, endRadius, 0, Math.PI * 2);
             ctx.stroke();
-        },
-        drawPreview(feature, { ctx, sx, sy }) {
-            if (!feature.points || feature.points.length < 2) return;
-            const outer = Math.max(2, (feature.thickness || 14) * sx * 0.55);
-            const inner = Math.max(1, outer - 2.5);
+        }
 
-            ctx.strokeStyle = 'rgba(120, 220, 255, 0.9)';
-            ctx.lineWidth = outer;
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
-            for (let i = 1; i < feature.points.length; i++) {
-                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
-            }
-            ctx.stroke();
-
-            // Simulate hollow center in preview
-            ctx.strokeStyle = '#0b1222';
-            ctx.lineWidth = inner;
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
-            for (let i = 1; i < feature.points.length; i++) {
-                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
-            }
-            ctx.stroke();
-
-            const r = (feature.endRadius || 22) * sx;
-            ctx.strokeStyle = 'rgba(180, 245, 255, 0.95)';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.arc(feature.points[0].x * sx, feature.points[0].y * sy, r, 0, Math.PI * 2);
-            ctx.stroke();
-            const end = feature.points[feature.points.length - 1];
-            ctx.beginPath();
-            ctx.arc(end.x * sx, end.y * sy, r, 0, Math.PI * 2);
-            ctx.stroke();
-        },
-        onBallStep(feature, context) {
-            const points = feature.points || [];
+        onBallStep(context) {
+            const points = this.points || [];
             if (points.length < 2 || !context.ball || !context.ball.alive) return null;
 
             if (context.ball.tubeCooldown > 0) {
@@ -943,18 +988,18 @@
 
             const start = points[0];
             const end = points[points.length - 1];
-            const catchRadius = feature.endRadius || 22;
+            const catchRadius = this.endRadius || 22;
             const dStart = Math.hypot(context.ball.x - start.x, context.ball.y - start.y);
             const dEnd = Math.hypot(context.ball.x - end.x, context.ball.y - end.y);
 
             if ((context.ball.tubeCooldown || 0) <= 0) {
                 const speed = Math.max(2.5, Math.hypot(context.ball.vx, context.ball.vy));
                 if (dStart <= catchRadius + context.ball.radius) {
-                    context.ball.tubeTransit = { feature, distance: 0, dir: 1, speed };
+                    context.ball.tubeTransit = { feature: this, distance: 0, dir: 1, speed };
                     return { stopProcessing: true };
                 }
                 if (dEnd <= catchRadius + context.ball.radius) {
-                    context.ball.tubeTransit = { feature, distance: feature.totalLength, dir: -1, speed };
+                    context.ball.tubeTransit = { feature: this, distance: this.totalLength, dir: -1, speed };
                     return { stopProcessing: true };
                 }
             }
@@ -969,7 +1014,7 @@
             }
 
             const nearHole = dStart <= catchRadius || dEnd <= catchRadius;
-            const tubeHalf = (feature.thickness || 14) * 0.5;
+            const tubeHalf = (this.thickness || 14) * 0.5;
 
             if (!nearHole && best.point && best.dist < tubeHalf + context.ball.radius) {
                 let nx = context.ball.x - best.point.x;
@@ -1002,41 +1047,161 @@
 
             return null;
         }
+    }
+
+    registerFeaturePlugin({ type: 'wall', bucket: 'walls', FeatureClass: WallFeature });
+    registerFeaturePlugin({
+        type: 'duplicatorWall',
+        bucket: 'duplicatorWalls',
+        FeatureClass: DuplicatorWallFeature,
+        drawPreview(feature, { ctx, sx, sy }) {
+            ctx.fillStyle = 'rgba(144, 95, 255, 0.7)';
+            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeStyle = 'rgba(208, 188, 255, 0.9)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+        }
+    });
+    registerFeaturePlugin({ type: 'dangerWall', bucket: 'dangerWalls', FeatureClass: DangerWallFeature });
+    registerFeaturePlugin({ type: 'obstacle', bucket: 'obstacles', FeatureClass: MovingObstacleFeature });
+    registerFeaturePlugin({ type: 'portal', bucket: 'portals', FeatureClass: PortalFeature });
+    registerFeaturePlugin({
+        type: 'orbCatcher',
+        bucket: 'orbCatchers',
+        FeatureClass: OrbCatcherFeature,
+        drawPreview(feature, { ctx, sx, sy }) {
+            ctx.fillStyle = 'rgba(255, 130, 40, 0.7)';
+            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeStyle = 'rgba(255, 190, 110, 0.9)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+        }
+    });
+    registerFeaturePlugin({
+        type: 'gravityWell',
+        bucket: 'gravityWells',
+        FeatureClass: GravityWellFeature,
+        create(cfg) {
+            return {
+                ...cfg,
+                x: Number(cfg.x) || 0,
+                y: Number(cfg.y) || 0,
+                radius: Number.isFinite(cfg.radius) ? cfg.radius : 120,
+                strength: Number.isFinite(cfg.strength) ? cfg.strength : 12000
+            };
+        },
+        drawPreview(feature, { ctx, sx, sy, scale }) {
+            const x = feature.x * sx;
+            const y = feature.y * sy;
+            const r = scale(feature.radius || 120);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, 'rgba(255, 235, 160, 0.9)');
+            grad.addColorStop(0.22, 'rgba(255, 196, 70, 0.55)');
+            grad.addColorStop(1, 'rgba(255, 196, 70, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffd27a';
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(2, r * 0.07), 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    registerFeaturePlugin({
+        type: 'tube',
+        FeatureClass: TubeFeature,
+        create(cfg) {
+            const points = (cfg.points || []).map(p => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }));
+            const geom = computeTubeGeometry(points);
+            return {
+                ...cfg,
+                points,
+                thickness: Number.isFinite(cfg.thickness) ? cfg.thickness : 14,
+                endRadius: Number.isFinite(cfg.endRadius) ? cfg.endRadius : 22,
+                segmentLengths: geom.segmentLengths,
+                totalLength: geom.totalLength
+            };
+        },
+        drawPreview(feature, { ctx, sx, sy }) {
+            if (!feature.points || feature.points.length < 2) return;
+            const outer = Math.max(2, (feature.thickness || 14) * sx * 0.55);
+            const inner = Math.max(1, outer - 2.5);
+
+            ctx.strokeStyle = 'rgba(120, 220, 255, 0.9)';
+            ctx.lineWidth = outer;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = '#0b1222';
+            ctx.lineWidth = inner;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
+            }
+            ctx.stroke();
+
+            const r = (feature.endRadius || 22) * sx;
+            ctx.strokeStyle = 'rgba(180, 245, 255, 0.95)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(feature.points[0].x * sx, feature.points[0].y * sy, r, 0, Math.PI * 2);
+            ctx.stroke();
+            const end = feature.points[feature.points.length - 1];
+            ctx.beginPath();
+            ctx.arc(end.x * sx, end.y * sy, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     });
 
     function instantiateLevelFeatures(featuresConfig) {
         const instances = [];
         for (const cfg of featuresConfig) {
-            if (!cfg || !cfg.type) continue;
-            const plugin = featurePlugins.get(cfg.type) || null;
-            const instance = plugin && plugin.create
-                ? plugin.create({ ...cfg }, { width: canvas.width, height: canvas.height })
-                : { ...cfg };
-            instances.push({ ...instance, type: cfg.type, plugin });
+            const instance = featureRegistry.instantiate(cfg, { width: canvas.width, height: canvas.height });
+            if (instance) instances.push(instance);
         }
         return instances;
     }
 
     function runFeatureUpdateHooks() {
         for (const feature of levelFeatures) {
-            if (feature.plugin && feature.plugin.update) {
-                feature.plugin.update(feature, { ball, state, canvas, particles, spawnDangerParticles });
+            if (feature && typeof feature.update === 'function') {
+                feature.update({ ball, state, canvas, particles, spawnDangerParticles, gameState });
             }
         }
     }
 
     function runFeatureDrawHooks(time) {
         for (const feature of levelFeatures) {
-            if (feature.plugin && feature.plugin.draw) {
-                feature.plugin.draw(feature, { ctx, time, drawPortal });
+            if (feature && typeof feature.draw === 'function') {
+                feature.draw({ ctx, time, drawPortal, gameState });
             }
         }
     }
 
+    function runFeatureLaunchHooks(context) {
+        for (const feature of levelFeatures) {
+            if (feature instanceof LauncherFeature && typeof feature.onLaunch === 'function') {
+                const res = feature.onLaunch(context);
+                if (res && res.cancel) return res;
+            }
+        }
+        return null;
+    }
+
     function runFeatureBallStepHooks(context) {
         for (const feature of levelFeatures) {
-            if (feature.plugin && feature.plugin.onBallStep) {
-                const res = feature.plugin.onBallStep(feature, context);
+            if (feature instanceof BallFeature && typeof feature.onBallStep === 'function') {
+                const res = feature.onBallStep(context);
                 if (res && res.stopProcessing) return res;
             }
         }
@@ -1368,10 +1533,18 @@
 
         const dx = mousePos.x - launcher.x;
         const dy = mousePos.y - launcher.y;
-        const angle = Math.atan2(dy, dx);
-        const power = Math.min(Math.hypot(dx, dy) / 20, 18);
+        let angle = Math.atan2(dy, dx);
+        let power = Math.min(Math.hypot(dx, dy) / 20, 18);
+        let orbCount = isSpecialLauncher ? normalizeSpecialLauncherOrbCount(launcher.orbCount) : 1;
 
-        const orbCount = isSpecialLauncher ? normalizeSpecialLauncherOrbCount(launcher.orbCount) : 1;
+        const launchContext = { angle, power, orbCount, launcher, mousePos, state, gameState, cancel: false };
+        const launchResult = runFeatureLaunchHooks(launchContext);
+        if (launchResult && launchResult.cancel) return;
+
+        angle = launchContext.angle;
+        power = launchContext.power;
+        orbCount = isSpecialLauncher ? normalizeSpecialLauncherOrbCount(launchContext.orbCount) : 1;
+
         const newBalls = [];
         const spreadStep = orbCount <= 1 ? 0 : Math.min(0.06, 0.7 / (orbCount - 1));
         for (let i = 0; i < orbCount; i++) {
@@ -2259,7 +2432,7 @@
         document.body.style.overflow = 'auto';
 
         const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Ricochet Inspector';
+        if (title) title.textContent = 'Bouncing Ball Inspector';
 
         const controls = document.getElementById('controls');
         controls.innerHTML = '';
@@ -2367,7 +2540,7 @@
         state = 'menu';
 
         const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Ricochet';
+        if (title) title.textContent = 'Bouncing Ball';
 
         const controls = document.getElementById('controls');
         controls.innerHTML = '';
@@ -2861,7 +3034,7 @@
     function initCreatorMode() {
         state = 'creator';
         const title = document.querySelector('#header h1');
-        if (title) title.textContent = 'Ricochet Creator';
+        if (title) title.textContent = 'Bouncing Ball Creator';
 
         let loadedFromSnapshot = false;
         if (creatorUseLiveSnapshot) {
