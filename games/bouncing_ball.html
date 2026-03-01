@@ -271,43 +271,67 @@
         }
     };
 
-    function bindGameStateAlias(name, getter, setter) {
-        Object.defineProperty(window, name, {
-            configurable: true,
-            enumerable: false,
-            get: getter,
-            set: setter
-        });
+    let state = gameState.phase;
+    let currentLevel = gameState.progress.currentLevel;
+    let score = gameState.progress.score;
+    let shotsFired = gameState.progress.shotsFired;
+    let hitTargets = gameState.progress.hitTargets;
+    let totalTargets = gameState.progress.totalTargets;
+    let bounceCount = gameState.progress.bounceCount;
+    let maxBounces = gameState.progress.maxBounces;
+    let activeMaxShots = gameState.progress.activeMaxShots;
+    let activeUnlimitedShots = gameState.progress.activeUnlimitedShots;
+
+    let ball = gameState.scene.ball;
+    let balls = gameState.scene.balls;
+    let targets = gameState.scene.targets;
+    let walls = gameState.scene.walls;
+    let duplicatorWalls = gameState.scene.duplicatorWalls;
+    let dangerWalls = gameState.scene.dangerWalls;
+    let obstacles = gameState.scene.obstacles;
+    let portals = gameState.scene.portals;
+    let orbCatchers = gameState.scene.orbCatchers;
+    let gravityWells = gameState.scene.gravityWells;
+    let launcher = gameState.scene.launcher;
+    let aimAngle = gameState.scene.aimAngle;
+    let aimPower = gameState.scene.aimPower;
+    let mousePos = gameState.scene.mousePos;
+    let trail = gameState.scene.trail;
+    let particles = gameState.scene.particles;
+    let levelFeatures = gameState.scene.levelFeatures;
+
+    function syncGameStateFromLocals() {
+        gameState.phase = state;
+        gameState.progress.currentLevel = currentLevel;
+        gameState.progress.score = score;
+        gameState.progress.shotsFired = shotsFired;
+        gameState.progress.hitTargets = hitTargets;
+        gameState.progress.totalTargets = totalTargets;
+        gameState.progress.bounceCount = bounceCount;
+        gameState.progress.maxBounces = maxBounces;
+        gameState.progress.activeMaxShots = activeMaxShots;
+        gameState.progress.activeUnlimitedShots = activeUnlimitedShots;
+
+        gameState.scene.ball = ball;
+        gameState.scene.balls = balls;
+        gameState.scene.targets = targets;
+        gameState.scene.walls = walls;
+        gameState.scene.duplicatorWalls = duplicatorWalls;
+        gameState.scene.dangerWalls = dangerWalls;
+        gameState.scene.obstacles = obstacles;
+        gameState.scene.portals = portals;
+        gameState.scene.orbCatchers = orbCatchers;
+        gameState.scene.gravityWells = gravityWells;
+        gameState.scene.launcher = launcher;
+        gameState.scene.aimAngle = aimAngle;
+        gameState.scene.aimPower = aimPower;
+        gameState.scene.mousePos = mousePos;
+        gameState.scene.trail = trail;
+        gameState.scene.particles = particles;
+        gameState.scene.levelFeatures = levelFeatures;
     }
 
-    bindGameStateAlias('state', () => gameState.phase, (value) => { gameState.phase = value; });
-    bindGameStateAlias('currentLevel', () => gameState.progress.currentLevel, (value) => { gameState.progress.currentLevel = value; });
-    bindGameStateAlias('score', () => gameState.progress.score, (value) => { gameState.progress.score = value; });
-    bindGameStateAlias('shotsFired', () => gameState.progress.shotsFired, (value) => { gameState.progress.shotsFired = value; });
-    bindGameStateAlias('hitTargets', () => gameState.progress.hitTargets, (value) => { gameState.progress.hitTargets = value; });
-    bindGameStateAlias('totalTargets', () => gameState.progress.totalTargets, (value) => { gameState.progress.totalTargets = value; });
-    bindGameStateAlias('bounceCount', () => gameState.progress.bounceCount, (value) => { gameState.progress.bounceCount = value; });
-    bindGameStateAlias('maxBounces', () => gameState.progress.maxBounces, (value) => { gameState.progress.maxBounces = value; });
-    bindGameStateAlias('activeMaxShots', () => gameState.progress.activeMaxShots, (value) => { gameState.progress.activeMaxShots = value; });
-    bindGameStateAlias('activeUnlimitedShots', () => gameState.progress.activeUnlimitedShots, (value) => { gameState.progress.activeUnlimitedShots = value; });
-
-    bindGameStateAlias('ball', () => gameState.scene.ball, (value) => { gameState.scene.ball = value; });
-    bindGameStateAlias('balls', () => gameState.scene.balls, (value) => { gameState.scene.balls = value; });
-    bindGameStateAlias('targets', () => gameState.scene.targets, (value) => { gameState.scene.targets = value; });
-    bindGameStateAlias('walls', () => gameState.scene.walls, (value) => { gameState.scene.walls = value; });
-    bindGameStateAlias('duplicatorWalls', () => gameState.scene.duplicatorWalls, (value) => { gameState.scene.duplicatorWalls = value; });
-    bindGameStateAlias('dangerWalls', () => gameState.scene.dangerWalls, (value) => { gameState.scene.dangerWalls = value; });
-    bindGameStateAlias('obstacles', () => gameState.scene.obstacles, (value) => { gameState.scene.obstacles = value; });
-    bindGameStateAlias('portals', () => gameState.scene.portals, (value) => { gameState.scene.portals = value; });
-    bindGameStateAlias('orbCatchers', () => gameState.scene.orbCatchers, (value) => { gameState.scene.orbCatchers = value; });
-    bindGameStateAlias('gravityWells', () => gameState.scene.gravityWells, (value) => { gameState.scene.gravityWells = value; });
-    bindGameStateAlias('launcher', () => gameState.scene.launcher, (value) => { gameState.scene.launcher = value; });
-    bindGameStateAlias('aimAngle', () => gameState.scene.aimAngle, (value) => { gameState.scene.aimAngle = value; });
-    bindGameStateAlias('aimPower', () => gameState.scene.aimPower, (value) => { gameState.scene.aimPower = value; });
-    bindGameStateAlias('mousePos', () => gameState.scene.mousePos, (value) => { gameState.scene.mousePos = value; });
-    bindGameStateAlias('trail', () => gameState.scene.trail, (value) => { gameState.scene.trail = value; });
-    bindGameStateAlias('particles', () => gameState.scene.particles, (value) => { gameState.scene.particles = value; });
-    bindGameStateAlias('levelFeatures', () => gameState.scene.levelFeatures, (value) => { gameState.scene.levelFeatures = value; });
+    syncGameStateFromLocals();
 
     function resetFeatureBuckets() {
         walls = [];
@@ -1648,6 +1672,7 @@
             ui.setShotCount(0);
             ui.setMaxShots(activeMaxShots, activeUnlimitedShots);
             ui.setScore(score);
+            syncGameStateFromLocals();
         }
 
         loadLevel(idx) {
@@ -1722,6 +1747,7 @@
 
     // Shooting
     function shoot() {
+        syncGameStateFromLocals();
         const isSpecialLauncher = !!(launcher && launcher.special);
         if (!isSpecialLauncher) {
             if (shotsFired >= activeMaxShots) return;
@@ -1773,6 +1799,7 @@
         shotsFired++;
         state = 'shooting';
         ui.setShotCount(shotsFired);
+        syncGameStateFromLocals();
     }
 
     // Physics update — uses substeps to prevent tunneling through thin walls
@@ -3389,11 +3416,13 @@
 
         tick() {
             if (inspectorMode) return;
+            syncGameStateFromLocals();
             if (state !== 'creator') updateObstacles();
             if (state === 'shooting') updateBall();
             updateParticles();
             this.renderer.renderMain();
             this.renderer.renderOverlay();
+            syncGameStateFromLocals();
         }
 
         shoot() {
