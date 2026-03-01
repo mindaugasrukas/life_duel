@@ -106,6 +106,29 @@
             transition: color 0.3s;
         }
         .back-link:hover { color: #00e5ff; }
+        .mode-switcher {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 60;
+            display: flex;
+            gap: 6px;
+            padding: 6px;
+            border: 1px solid #2b3c66;
+            background: rgba(8, 14, 30, 0.85);
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+        }
+        .mode-switcher button {
+            padding: 6px 10px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: none;
+        }
+        .mode-switcher button.active {
+            background: rgba(0, 229, 255, 0.2);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+        }
     </style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-5Q8WV6YPBP"></script>
@@ -148,11 +171,15 @@
     let score = 0;
     let shotsFired = 0;
     let ball = null;
+    let balls = [];
     let targets = [];
     let walls = [];
+    let duplicatorWalls = [];
     let dangerWalls = [];
     let obstacles = [];
     let portals = [];
+    let orbCatchers = [];
+    let gravityWells = [];
     let launcher = { x: 100, y: 500 };
     let aimAngle = -Math.PI / 4;
     let aimPower = 12;
@@ -163,9 +190,212 @@
     let totalTargets = 0;
     let bounceCount = 0;
     let maxBounces = 50;
-    let portalCooldown = 0;
+    let levelFeatures = [];
+    let inspectorMode = false;
+    let creatorMode = false;
+    let menuMode = false;
+    let inspectorStartLevel = 1;
+    let activeMaxShots = 1;
+    let creatorLevel = null;
+    let creatorTool = 'target';
+    let creatorDragStart = null;
+    let creatorPortalStart = null;
+    let creatorTubeDraft = null;
+    let creatorDirty = false;
+    let creatorToolButtons = [];
+    let creatorUseLiveSnapshot = false;
+    let activeUnlimitedShots = false;
+    const CREATOR_SNAPSHOT_KEY = 'ricochet_creator_snapshot';
+
+    function formatMaxShots(maxShots, unlimited = false) {
+        if (unlimited) return '∞';
+        return String(Math.max(1, Math.floor(Number(maxShots) || 1)));
+    }
+
+    function normalizeSpecialLauncherOrbCount(rawValue) {
+        const count = Math.floor(Number(rawValue));
+        if (!Number.isFinite(count)) return 1;
+        return Math.max(1, Math.min(99, count));
+    }
+
+    const defaultProceduralConfig = {
+        seedMultiplier: 7919,
+        seedOffset: 1337,
+        lcgMultiplier: 16807,
+        lcgModulus: 2147483647
+    };
+    const proceduralConfig = { ...defaultProceduralConfig };
+
+    function parseIntParam(params, key) {
+        const raw = params.get(key);
+        if (raw === null) return null;
+        const value = parseInt(raw, 10);
+        return Number.isFinite(value) ? value : null;
+    }
+
+    function parseUrlOptions() {
+        const params = new URLSearchParams(window.location.search);
+
+        const seedMultiplier = parseIntParam(params, 'seedMultiplier');
+        const seedOffset = parseIntParam(params, 'seedOffset');
+        const lcgMultiplier = parseIntParam(params, 'lcgMultiplier');
+        const lcgModulus = parseIntParam(params, 'lcgModulus');
+
+        if (seedMultiplier !== null) proceduralConfig.seedMultiplier = seedMultiplier;
+        if (seedOffset !== null) proceduralConfig.seedOffset = seedOffset;
+        if (lcgMultiplier !== null) proceduralConfig.lcgMultiplier = Math.max(2, Math.floor(lcgMultiplier));
+        if (lcgModulus !== null) proceduralConfig.lcgModulus = Math.max(3, Math.floor(lcgModulus));
+
+        const mode = (params.get('mode') || '').toLowerCase();
+        creatorUseLiveSnapshot = params.get('editCurrent') === '1';
+
+        const inspectorStart = parseIntParam(params, 'inspectorStart');
+        if (inspectorStart !== null) {
+            inspectorStartLevel = Math.max(1, inspectorStart);
+        }
+
+        const levelParam = parseIntParam(params, 'level');
+        const idxParam = parseIntParam(params, 'idx');
+
+        inspectorMode = mode === 'inspector';
+        creatorMode = mode === 'creator';
+        menuMode = mode === 'menu' || (mode === '' && levelParam === null && idxParam === null);
+
+        if (levelParam !== null) {
+            return Math.max(0, levelParam - 1);
+        }
+
+        if (idxParam !== null) {
+            return Math.max(0, idxParam);
+        }
+
+        return 0;
+    }
+
+    function goToMode(mode) {
+        const params = new URLSearchParams();
+        params.set('mode', mode);
+
+        const levelValue = String(Math.max(1, currentLevel + 1));
+        if (mode === 'play' || mode === 'creator') {
+            params.set('level', levelValue);
+        }
+        if (mode === 'inspector') {
+            params.set('inspectorStart', levelValue);
+        }
+
+        if (mode === 'creator' && !creatorMode && !inspectorMode && !menuMode) {
+            try {
+                sessionStorage.setItem(CREATOR_SNAPSHOT_KEY, JSON.stringify(getCurrentSceneLevelConfig()));
+                params.set('editCurrent', '1');
+            } catch {
+            }
+        }
+
+        params.set('seedMultiplier', String(proceduralConfig.seedMultiplier));
+        params.set('seedOffset', String(proceduralConfig.seedOffset));
+        params.set('lcgMultiplier', String(proceduralConfig.lcgMultiplier));
+        params.set('lcgModulus', String(proceduralConfig.lcgModulus));
+
+        window.location.search = params.toString();
+    }
+
+    function getCurrentSceneLevelConfig() {
+        const launcherConfig = {
+            x: Math.round(launcher.x),
+            y: Math.round(launcher.y)
+        };
+        if (activeUnlimitedShots) {
+            launcherConfig.special = true;
+            launcherConfig.orbCount = normalizeSpecialLauncherOrbCount(launcher.orbCount);
+        }
+
+        return {
+            launcher: launcherConfig,
+            maxShots: Math.max(1, activeMaxShots),
+            targets: targets.map(t => ({ x: Math.round(t.x), y: Math.round(t.y), radius: t.radius })),
+            features: [
+                ...walls.map(w => ({ type: 'wall', x: Math.round(w.x), y: Math.round(w.y), w: Math.round(w.w), h: Math.round(w.h) })),
+                ...duplicatorWalls.map(w => ({ type: 'duplicatorWall', x: Math.round(w.x), y: Math.round(w.y), w: Math.round(w.w), h: Math.round(w.h) })),
+                ...dangerWalls.map(w => ({ type: 'dangerWall', x: Math.round(w.x), y: Math.round(w.y), w: Math.round(w.w), h: Math.round(w.h) })),
+                ...orbCatchers.map(c => ({ type: 'orbCatcher', x: Math.round(c.x), y: Math.round(c.y), w: Math.round(c.w), h: Math.round(c.h) })),
+                ...gravityWells.map(g => ({
+                    type: 'gravityWell',
+                    x: Math.round(g.x),
+                    y: Math.round(g.y),
+                    radius: Number.isFinite(g.radius) ? g.radius : 120,
+                    strength: Number.isFinite(g.strength) ? g.strength : 12000
+                })),
+                ...obstacles.map(o => ({
+                    type: 'obstacle',
+                    x: Math.round(o.x),
+                    y: Math.round(o.y),
+                    w: Math.round(o.w),
+                    h: Math.round(o.h),
+                    vy: Number.isFinite(o.vy) ? o.vy : 0,
+                    minY: Number.isFinite(o.minY) ? Math.round(o.minY) : Math.round(o.y),
+                    maxY: Number.isFinite(o.maxY) ? Math.round(o.maxY) : Math.round(o.y + (o.h || 0))
+                })),
+                ...portals.map(p => ({
+                    type: 'portal',
+                    x1: Math.round(p.x1),
+                    y1: Math.round(p.y1),
+                    x2: Math.round(p.x2),
+                    y2: Math.round(p.y2),
+                    radius: Number.isFinite(p.radius) ? p.radius : 22
+                }))
+            ]
+        };
+    }
+
+    function initGlobalModeSwitcher() {
+        const existing = document.getElementById('modeSwitcher');
+        if (existing) existing.remove();
+
+        const wrapper = document.createElement('div');
+        wrapper.id = 'modeSwitcher';
+        wrapper.className = 'mode-switcher';
+
+        const modes = [
+            { id: 'play', label: 'Play' },
+            { id: 'inspector', label: 'Inspector' },
+            { id: 'creator', label: 'Edit' },
+            { id: 'menu', label: 'Menu' }
+        ];
+
+        for (const mode of modes) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = mode.label;
+
+            const isActive =
+                (mode.id === 'play' && !inspectorMode && !creatorMode && !menuMode) ||
+                (mode.id === 'inspector' && inspectorMode) ||
+                (mode.id === 'creator' && creatorMode) ||
+                (mode.id === 'menu' && menuMode);
+
+            if (isActive) btn.classList.add('active');
+            btn.addEventListener('click', () => goToMode(mode.id));
+            wrapper.appendChild(btn);
+        }
+
+        document.body.appendChild(wrapper);
+    }
+
+    function computeProceduralSeed(idx) {
+        return idx * proceduralConfig.seedMultiplier + proceduralConfig.seedOffset;
+    }
 
     // Levels
+    // Supported entry formats:
+    // 1) Full handcrafted level object (launcher/targets/walls/...)
+    //    Use launcher.special = true for a special launcher with infinite shots.
+    //    You can also use plugin-based features instead of walls/obstacles/portals:
+    //    { launcher, maxShots, targets, features: [{ type: 'wall', ... }, { type: 'portal', ... }] }
+    // 2) Procedural reference object:
+    //    { proceduralLevel: 37 }  -> uses seeded procedural level #37 (1-based)
+    //    { proceduralIdx: 36 }    -> uses seeded procedural level index 36 (0-based)
+    //    Aliases: seedLevel / seedIdx
     const levels = [
         // Level 1: Simple - one target, straight-ish shot
         {
@@ -341,20 +571,605 @@
             portals: [
                 { x1: 750, y1: 550, x2: 50, y2: 300, radius: 22 }
             ]
-        }
+        },
+        { proceduralIdx: 36 }
     ];
+
+    function resolveLevelDefinition(levelDef, fallbackIdx) {
+        if (!levelDef || typeof levelDef !== 'object') return generateLevel(fallbackIdx);
+
+        const proceduralLevel = levelDef.proceduralLevel ?? levelDef.seedLevel;
+        if (Number.isFinite(proceduralLevel)) {
+            const proceduralIdx = Math.max(0, Math.floor(proceduralLevel) - 1);
+            return generateLevel(proceduralIdx);
+        }
+
+        const proceduralIdx = levelDef.proceduralIdx ?? levelDef.seedIdx;
+        if (Number.isFinite(proceduralIdx)) {
+            return generateLevel(Math.max(0, Math.floor(proceduralIdx)));
+        }
+
+        return levelDef;
+    }
+
+    function buildLegacyFeatures(level) {
+        const out = [];
+        for (const w of (level.walls || [])) out.push({ type: 'wall', ...w });
+        for (const dw of (level.duplicatorWalls || [])) out.push({ type: 'duplicatorWall', ...dw });
+        for (const dw of (level.dangerWalls || [])) out.push({ type: 'dangerWall', ...dw });
+        for (const o of (level.obstacles || [])) out.push({ type: 'obstacle', ...o });
+        for (const p of (level.portals || [])) out.push({ type: 'portal', ...p });
+        for (const c of (level.orbCatchers || [])) out.push({ type: 'orbCatcher', ...c });
+        for (const g of (level.gravityWells || [])) out.push({ type: 'gravityWell', ...g });
+        return out;
+    }
+
+    function normalizeLevelConfig(level) {
+        const normalized = {
+            launcher: {
+                ...(level.launcher || { x: 100, y: 500 }),
+                special: !!(level.launcher && level.launcher.special),
+                orbCount: normalizeSpecialLauncherOrbCount(level && level.launcher ? level.launcher.orbCount : 1)
+            },
+            maxShots: Number.isFinite(level.maxShots) ? level.maxShots : 2,
+            targets: (level.targets || []).map(t => ({ ...t })),
+            features: []
+        };
+
+        if (Array.isArray(level.features) && level.features.length > 0) {
+            normalized.features = level.features.map(f => ({ ...f }));
+        } else {
+            normalized.features = buildLegacyFeatures(level);
+        }
+
+        return normalized;
+    }
+
+    const featurePlugins = new Map();
+
+    function registerFeaturePlugin(plugin) {
+        if (!plugin || !plugin.type) return;
+        featurePlugins.set(plugin.type, plugin);
+    }
+
+    function pointInPolygon(x, y, points) {
+        let inside = false;
+        for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+            const xi = points[i].x;
+            const yi = points[i].y;
+            const xj = points[j].x;
+            const yj = points[j].y;
+            const intersect = ((yi > y) !== (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / ((yj - yi) || 0.0001) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    function closestPointOnSegment(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len2 = dx * dx + dy * dy;
+        if (len2 < 0.0001) {
+            return { x: x1, y: y1, t: 0 };
+        }
+        const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+        return { x: x1 + t * dx, y: y1 + t * dy, t };
+    }
+
+    function computeTubeGeometry(points) {
+        const segmentLengths = [];
+        let totalLength = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+            const a = points[i];
+            const b = points[i + 1];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            segmentLengths.push(len);
+            totalLength += len;
+        }
+        return { segmentLengths, totalLength };
+    }
+
+    function pointAtTubeDistance(feature, distance) {
+        const points = feature.points || [];
+        const lengths = feature.segmentLengths || [];
+        if (points.length === 0) return { x: 0, y: 0, tx: 1, ty: 0 };
+        if (points.length === 1) return { x: points[0].x, y: points[0].y, tx: 1, ty: 0 };
+
+        let d = Math.max(0, Math.min(feature.totalLength || 0, distance));
+        for (let i = 0; i < lengths.length; i++) {
+            const segLen = lengths[i] || 0;
+            const a = points[i];
+            const b = points[i + 1];
+            if (d <= segLen || i === lengths.length - 1) {
+                const t = segLen < 0.0001 ? 0 : d / segLen;
+                const x = a.x + (b.x - a.x) * t;
+                const y = a.y + (b.y - a.y) * t;
+                const tx = segLen < 0.0001 ? 1 : (b.x - a.x) / segLen;
+                const ty = segLen < 0.0001 ? 0 : (b.y - a.y) / segLen;
+                return { x, y, tx, ty };
+            }
+            d -= segLen;
+        }
+
+        const last = points[points.length - 1];
+        return { x: last.x, y: last.y, tx: 1, ty: 0 };
+    }
+
+    function advanceBallTubeTransit(ballObj, dt) {
+        if (!ballObj || !ballObj.tubeTransit) return false;
+        const transit = ballObj.tubeTransit;
+        const feature = transit.feature;
+        if (!feature || !feature.points || feature.points.length < 2) {
+            ballObj.tubeTransit = null;
+            return false;
+        }
+
+        const speed = transit.speed;
+        transit.distance += transit.dir * speed * dt;
+
+        const reachedStart = transit.distance <= 0;
+        const reachedEnd = transit.distance >= feature.totalLength;
+        if (!reachedStart && !reachedEnd) {
+            const p = pointAtTubeDistance(feature, transit.distance);
+            ballObj.x = p.x;
+            ballObj.y = p.y;
+            ballObj.vx = p.tx * speed * transit.dir;
+            ballObj.vy = p.ty * speed * transit.dir;
+            return true;
+        }
+
+        const edgeDistance = reachedStart ? 0 : feature.totalLength;
+        const p = pointAtTubeDistance(feature, edgeDistance);
+        const outDir = reachedStart ? -1 : 1;
+        ballObj.x = p.x + p.tx * outDir * (ballObj.radius + 4);
+        ballObj.y = p.y + p.ty * outDir * (ballObj.radius + 4);
+        ballObj.vx = p.tx * speed * outDir;
+        ballObj.vy = p.ty * speed * outDir;
+        ballObj.tubeTransit = null;
+        ballObj.tubeCooldown = 14;
+        return true;
+    }
+
+    registerFeaturePlugin({ type: 'wall', bucket: 'walls' });
+    registerFeaturePlugin({
+        type: 'duplicatorWall',
+        bucket: 'duplicatorWalls',
+        draw(feature, { ctx, time }) {
+            const pulse = 0.65 + Math.sin(time * 5.5) * 0.25;
+            ctx.fillStyle = `rgba(144, 95, 255, ${0.45 + pulse * 0.2})`;
+            ctx.fillRect(feature.x, feature.y, feature.w, feature.h);
+            ctx.strokeStyle = `rgba(196, 171, 255, ${0.75 + pulse * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(feature.x, feature.y, feature.w, feature.h);
+        },
+        drawPreview(feature, { ctx, sx, sy }) {
+            ctx.fillStyle = 'rgba(144, 95, 255, 0.7)';
+            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeStyle = 'rgba(208, 188, 255, 0.9)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+        }
+    });
+    registerFeaturePlugin({ type: 'dangerWall', bucket: 'dangerWalls' });
+    registerFeaturePlugin({ type: 'obstacle', bucket: 'obstacles' });
+    registerFeaturePlugin({ type: 'portal', bucket: 'portals' });
+    registerFeaturePlugin({
+        type: 'orbCatcher',
+        bucket: 'orbCatchers',
+        draw(feature, { ctx, time }) {
+            const pulse = 0.65 + Math.sin(time * 5) * 0.25;
+            ctx.fillStyle = `rgba(255, 130, 40, ${0.45 + pulse * 0.2})`;
+            ctx.fillRect(feature.x, feature.y, feature.w, feature.h);
+            ctx.strokeStyle = `rgba(255, 185, 100, ${0.7 + pulse * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(feature.x, feature.y, feature.w, feature.h);
+        },
+        drawPreview(feature, { ctx, sx, sy }) {
+            ctx.fillStyle = 'rgba(255, 130, 40, 0.7)';
+            ctx.fillRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+            ctx.strokeStyle = 'rgba(255, 190, 110, 0.9)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(feature.x * sx, feature.y * sy, feature.w * sx, feature.h * sy);
+        }
+    });
+    registerFeaturePlugin({
+        type: 'gravityWell',
+        bucket: 'gravityWells',
+        create(cfg) {
+            return {
+                ...cfg,
+                x: Number(cfg.x) || 0,
+                y: Number(cfg.y) || 0,
+                radius: Number.isFinite(cfg.radius) ? cfg.radius : 120,
+                strength: Number.isFinite(cfg.strength) ? cfg.strength : 12000
+            };
+        },
+        draw(feature, { ctx, time }) {
+            const pulse = 0.7 + Math.sin(time * 3.5) * 0.2;
+            const r = feature.radius || 120;
+
+            const grad = ctx.createRadialGradient(feature.x, feature.y, 0, feature.x, feature.y, r);
+            grad.addColorStop(0, 'rgba(255, 235, 160, 0.85)');
+            grad.addColorStop(0.22, 'rgba(255, 196, 70, 0.55)');
+            grad.addColorStop(1, 'rgba(255, 196, 70, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(feature.x, feature.y, r, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(255, 214, 120, ${0.45 + pulse * 0.35})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(feature.x, feature.y, r * (0.45 + pulse * 0.05), 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffd27a';
+            ctx.beginPath();
+            ctx.arc(feature.x, feature.y, 6 + pulse * 2, 0, Math.PI * 2);
+            ctx.fill();
+        },
+        drawPreview(feature, { ctx, sx, sy, scale }) {
+            const x = feature.x * sx;
+            const y = feature.y * sy;
+            const r = scale(feature.radius || 120);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, 'rgba(255, 235, 160, 0.9)');
+            grad.addColorStop(0.22, 'rgba(255, 196, 70, 0.55)');
+            grad.addColorStop(1, 'rgba(255, 196, 70, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffd27a';
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(2, r * 0.07), 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    registerFeaturePlugin({
+        type: 'tube',
+        create(cfg) {
+            const points = (cfg.points || []).map(p => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }));
+            const geom = computeTubeGeometry(points);
+            return {
+                ...cfg,
+                points,
+                thickness: Number.isFinite(cfg.thickness) ? cfg.thickness : 14,
+                endRadius: Number.isFinite(cfg.endRadius) ? cfg.endRadius : 22,
+                segmentLengths: geom.segmentLengths,
+                totalLength: geom.totalLength
+            };
+        },
+        draw(feature, { ctx }) {
+            if (!feature.points || feature.points.length < 2) return;
+            const outer = feature.thickness || 14;
+            const inner = Math.max(2, outer - 6);
+
+            // Outer shell
+            ctx.strokeStyle = 'rgba(120, 220, 255, 0.85)';
+            ctx.lineWidth = outer;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x, feature.points[0].y);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            }
+            ctx.stroke();
+
+            // Carve inside to make it hollow
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+            ctx.lineWidth = inner;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x, feature.points[0].y);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            }
+            ctx.stroke();
+            ctx.restore();
+
+            // Edge highlight
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x, feature.points[0].y);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x, feature.points[i].y);
+            }
+            ctx.stroke();
+
+            const r = feature.endRadius || 22;
+            ctx.strokeStyle = 'rgba(180, 245, 255, 0.9)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(feature.points[0].x, feature.points[0].y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(feature.points[feature.points.length - 1].x, feature.points[feature.points.length - 1].y, r, 0, Math.PI * 2);
+            ctx.stroke();
+        },
+        drawPreview(feature, { ctx, sx, sy }) {
+            if (!feature.points || feature.points.length < 2) return;
+            const outer = Math.max(2, (feature.thickness || 14) * sx * 0.55);
+            const inner = Math.max(1, outer - 2.5);
+
+            ctx.strokeStyle = 'rgba(120, 220, 255, 0.9)';
+            ctx.lineWidth = outer;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
+            }
+            ctx.stroke();
+
+            // Simulate hollow center in preview
+            ctx.strokeStyle = '#0b1222';
+            ctx.lineWidth = inner;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(feature.points[0].x * sx, feature.points[0].y * sy);
+            for (let i = 1; i < feature.points.length; i++) {
+                ctx.lineTo(feature.points[i].x * sx, feature.points[i].y * sy);
+            }
+            ctx.stroke();
+
+            const r = (feature.endRadius || 22) * sx;
+            ctx.strokeStyle = 'rgba(180, 245, 255, 0.95)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(feature.points[0].x * sx, feature.points[0].y * sy, r, 0, Math.PI * 2);
+            ctx.stroke();
+            const end = feature.points[feature.points.length - 1];
+            ctx.beginPath();
+            ctx.arc(end.x * sx, end.y * sy, r, 0, Math.PI * 2);
+            ctx.stroke();
+        },
+        onBallStep(feature, context) {
+            const points = feature.points || [];
+            if (points.length < 2 || !context.ball || !context.ball.alive) return null;
+
+            if (context.ball.tubeCooldown > 0) {
+                context.ball.tubeCooldown--;
+            }
+            if (context.ball.tubeTransit) return null;
+
+            const start = points[0];
+            const end = points[points.length - 1];
+            const catchRadius = feature.endRadius || 22;
+            const dStart = Math.hypot(context.ball.x - start.x, context.ball.y - start.y);
+            const dEnd = Math.hypot(context.ball.x - end.x, context.ball.y - end.y);
+
+            if ((context.ball.tubeCooldown || 0) <= 0) {
+                const speed = Math.max(2.5, Math.hypot(context.ball.vx, context.ball.vy));
+                if (dStart <= catchRadius + context.ball.radius) {
+                    context.ball.tubeTransit = { feature, distance: 0, dir: 1, speed };
+                    return { stopProcessing: true };
+                }
+                if (dEnd <= catchRadius + context.ball.radius) {
+                    context.ball.tubeTransit = { feature, distance: feature.totalLength, dir: -1, speed };
+                    return { stopProcessing: true };
+                }
+            }
+
+            let best = { dist: Infinity, point: null, a: null, b: null };
+            for (let i = 0; i < points.length - 1; i++) {
+                const a = points[i];
+                const b = points[i + 1];
+                const cp = closestPointOnSegment(context.ball.x, context.ball.y, a.x, a.y, b.x, b.y);
+                const dist = Math.hypot(context.ball.x - cp.x, context.ball.y - cp.y);
+                if (dist < best.dist) best = { dist, point: cp, a, b };
+            }
+
+            const nearHole = dStart <= catchRadius || dEnd <= catchRadius;
+            const tubeHalf = (feature.thickness || 14) * 0.5;
+
+            if (!nearHole && best.point && best.dist < tubeHalf + context.ball.radius) {
+                let nx = context.ball.x - best.point.x;
+                let ny = context.ball.y - best.point.y;
+                let nlen = Math.hypot(nx, ny);
+                if (nlen < 0.0001 && best.a && best.b) {
+                    const sx = best.b.x - best.a.x;
+                    const sy = best.b.y - best.a.y;
+                    nx = -sy;
+                    ny = sx;
+                    nlen = Math.hypot(nx, ny);
+                }
+                if (nlen > 0.0001) {
+                    nx /= nlen;
+                    ny /= nlen;
+                    const overlap = tubeHalf + context.ball.radius - best.dist + 0.2;
+                    context.ball.x += nx * overlap;
+                    context.ball.y += ny * overlap;
+
+                    const dot = context.ball.vx * nx + context.ball.vy * ny;
+                    context.ball.vx -= 2 * dot * nx;
+                    context.ball.vy -= 2 * dot * ny;
+                    context.ball.vx *= 0.98;
+                    context.ball.vy *= 0.98;
+                    if (context.spawnBounceParticles) {
+                        context.spawnBounceParticles(context.ball.x, context.ball.y);
+                    }
+                }
+            }
+
+            return null;
+        }
+    });
+
+    function instantiateLevelFeatures(featuresConfig) {
+        const instances = [];
+        for (const cfg of featuresConfig) {
+            if (!cfg || !cfg.type) continue;
+            const plugin = featurePlugins.get(cfg.type) || null;
+            const instance = plugin && plugin.create
+                ? plugin.create({ ...cfg }, { width: canvas.width, height: canvas.height })
+                : { ...cfg };
+            instances.push({ ...instance, type: cfg.type, plugin });
+        }
+        return instances;
+    }
+
+    function runFeatureUpdateHooks() {
+        for (const feature of levelFeatures) {
+            if (feature.plugin && feature.plugin.update) {
+                feature.plugin.update(feature, { ball, state, canvas, particles, spawnDangerParticles });
+            }
+        }
+    }
+
+    function runFeatureDrawHooks(time) {
+        for (const feature of levelFeatures) {
+            if (feature.plugin && feature.plugin.draw) {
+                feature.plugin.draw(feature, { ctx, time, drawPortal });
+            }
+        }
+    }
+
+    function runFeatureBallStepHooks(context) {
+        for (const feature of levelFeatures) {
+            if (feature.plugin && feature.plugin.onBallStep) {
+                const res = feature.plugin.onBallStep(feature, context);
+                if (res && res.stopProcessing) return res;
+            }
+        }
+        return null;
+    }
 
     // Seeded random for reproducible procedural levels
     function seededRandom(seed) {
         let s = seed;
+        const mult = Math.max(2, Math.floor(proceduralConfig.lcgMultiplier));
+        const mod = Math.max(3, Math.floor(proceduralConfig.lcgModulus));
         return function() {
-            s = (s * 16807 + 0) % 2147483647;
-            return (s - 1) / 2147483646;
+            s = (s * mult + 0) % mod;
+            return (s - 1) / (mod - 1);
         };
     }
 
+    function segmentIntersectsRect(x1, y1, x2, y2, rect, pad = 0) {
+        const rx = rect.x - pad;
+        const ry = rect.y - pad;
+        const rw = rect.w + pad * 2;
+        const rh = rect.h + pad * 2;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+
+        let tmin = 0;
+        let tmax = 1;
+
+        if (Math.abs(dx) > 0.0001) {
+            let t1 = (rx - x1) / dx;
+            let t2 = (rx + rw - x1) / dx;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+            tmin = Math.max(tmin, t1);
+            tmax = Math.min(tmax, t2);
+            if (tmin > tmax) return false;
+        } else if (x1 < rx || x1 > rx + rw) {
+            return false;
+        }
+
+        if (Math.abs(dy) > 0.0001) {
+            let t1 = (ry - y1) / dy;
+            let t2 = (ry + rh - y1) / dy;
+            if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+            tmin = Math.max(tmin, t1);
+            tmax = Math.min(tmax, t2);
+            if (tmin > tmax) return false;
+        } else if (y1 < ry || y1 > ry + rh) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function circleIntersectsRect(cx, cy, radius, rect) {
+        const px = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+        const py = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+        return Math.hypot(cx - px, cy - py) < radius;
+    }
+
+    function rectsOverlap(a, b) {
+        return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+    }
+
+    function enforceStraightShotChallenge(launcherPos, targetsList, wallsList, dangerList, rng, difficulty, margin, W, H) {
+        if (difficulty < 2) return;
+
+        const blockers = () => [...wallsList, ...dangerList];
+        const pad = 10;
+
+        for (const t of targetsList) {
+            const openLine = !blockers().some(b => segmentIntersectsRect(launcherPos.x, launcherPos.y, t.x, t.y, b, pad));
+            if (!openLine) continue;
+
+            const dx = t.x - launcherPos.x;
+            const dy = t.y - launcherPos.y;
+            const needsVertical = Math.abs(dx) >= Math.abs(dy);
+
+            let inserted = false;
+            for (let attempt = 0; attempt < 8; attempt++) {
+                const progress = 0.35 + rng() * 0.3;
+                const jitter = (rng() - 0.5) * 110;
+                const mx = launcherPos.x + dx * progress;
+                const my = launcherPos.y + dy * progress;
+
+                let candidate;
+                if (needsVertical) {
+                    const h = 130 + rng() * 170;
+                    candidate = {
+                        x: Math.round(Math.max(margin, Math.min(W - margin - 24, mx + jitter - 12))),
+                        y: Math.round(Math.max(margin, Math.min(H - margin - h, my - h / 2))),
+                        w: 24,
+                        h: Math.round(h)
+                    };
+                } else {
+                    const w = 130 + rng() * 170;
+                    candidate = {
+                        x: Math.round(Math.max(margin, Math.min(W - margin - w, mx - w / 2))),
+                        y: Math.round(Math.max(margin, Math.min(H - margin - 24, my + jitter - 12))),
+                        w: Math.round(w),
+                        h: 24
+                    };
+                }
+
+                const hitsLauncher = circleIntersectsRect(launcherPos.x, launcherPos.y, 26, candidate);
+                const hitsTarget = circleIntersectsRect(t.x, t.y, t.radius + 12, candidate);
+                if (hitsLauncher || hitsTarget) continue;
+
+                if (blockers().some(b => rectsOverlap(candidate, b))) {
+                    continue;
+                }
+
+                if (segmentIntersectsRect(launcherPos.x, launcherPos.y, t.x, t.y, candidate, 8)) {
+                    wallsList.push(candidate);
+                    inserted = true;
+                    break;
+                }
+            }
+
+            if (!inserted) {
+                const fallback = {
+                    x: Math.round(Math.max(margin, Math.min(W - margin - 24, launcherPos.x + dx * 0.5 - 12))),
+                    y: Math.round(Math.max(margin, Math.min(H - margin - 120, launcherPos.y + dy * 0.5 - 60))),
+                    w: 24,
+                    h: 120
+                };
+                wallsList.push(fallback);
+            }
+        }
+    }
+
     function generateLevel(idx) {
-        const rng = seededRandom(idx * 7919 + 1337);
+        const rng = seededRandom(computeProceduralSeed(idx));
         const difficulty = Math.min(idx - 10, 40); // 0-40 difficulty scale
         const margin = 60;
         const W = canvas.width;
@@ -451,6 +1266,8 @@
             });
         }
 
+        enforceStraightShotChallenge(lp, targs, wls, dws, rng, difficulty, margin, W, H);
+
         // Shots: more for more targets, fewer as difficulty rises
         const maxShots = Math.max(1, numTargets + 1 - Math.floor(difficulty / 15));
 
@@ -466,45 +1283,69 @@
     }
 
     function getLevel(idx) {
-        if (idx < levels.length) {
-            const l = levels[idx];
-            l.dangerWalls = l.dangerWalls || [];
-            return l;
-        }
-        return generateLevel(idx);
+        const levelDef = idx < levels.length ? levels[idx] : generateLevel(idx);
+        const l = resolveLevelDefinition(levelDef, idx);
+        return normalizeLevelConfig(l);
     }
 
-    function loadLevel(idx) {
-        const level = getLevel(idx);
+    function applyLevelConfig(level, mode = 'aiming') {
         launcher = { ...level.launcher };
         ball = null;
+        balls = [];
         trail = [];
         particles = [];
         shotsFired = 0;
         bounceCount = 0;
         hitTargets = 0;
-        portalCooldown = 0;
-        state = 'aiming';
+        state = mode;
 
         targets = level.targets.map(t => ({ ...t, hit: false, alpha: 1, pulsePhase: Math.random() * Math.PI * 2 }));
         totalTargets = targets.length;
-        walls = level.walls.map(w => ({ ...w }));
-        dangerWalls = (level.dangerWalls || []).map(w => ({ ...w }));
-        obstacles = level.obstacles.map(o => ({ ...o, originalY: o.x !== undefined ? o.y : 0 }));
-        portals = level.portals.map(p => ({ ...p, phase: 0 }));
+        levelFeatures = instantiateLevelFeatures(level.features);
 
+        walls = [];
+        duplicatorWalls = [];
+        dangerWalls = [];
+        obstacles = [];
+        portals = [];
+        orbCatchers = [];
+        gravityWells = [];
+
+        for (const feature of levelFeatures) {
+            const bucket = feature.plugin ? feature.plugin.bucket : null;
+            if (bucket === 'walls') walls.push({ ...feature });
+            if (bucket === 'duplicatorWalls') duplicatorWalls.push({ ...feature });
+            if (bucket === 'dangerWalls') dangerWalls.push({ ...feature });
+            if (bucket === 'obstacles') obstacles.push({ ...feature, originalY: feature.y });
+            if (bucket === 'portals') portals.push({ ...feature, phase: 0 });
+            if (bucket === 'orbCatchers') orbCatchers.push({ ...feature });
+            if (bucket === 'gravityWells') gravityWells.push({ ...feature });
+        }
+
+        activeMaxShots = level.maxShots;
+        activeUnlimitedShots = !!(level.launcher && level.launcher.special);
         nextBtn.style.display = 'none';
-        document.getElementById('levelNum').textContent = idx + 1;
         document.getElementById('shotCount').textContent = '0';
-        document.getElementById('maxShots').textContent = level.maxShots;
+        document.getElementById('maxShots').textContent = formatMaxShots(activeMaxShots, activeUnlimitedShots);
         document.getElementById('score').textContent = score;
     }
 
+    function loadLevel(idx) {
+        const level = getLevel(idx);
+        applyLevelConfig(level, 'aiming');
+        document.getElementById('levelNum').textContent = idx + 1;
+    }
+
     function resetLevel() {
+        if (creatorMode && creatorLevel) {
+            refreshCreatorScene(state === 'creator' ? 'creator' : 'aiming');
+            return;
+        }
         loadLevel(currentLevel);
     }
 
     function nextLevel() {
+        if (creatorMode) return;
         currentLevel++;
         loadLevel(currentLevel);
     }
@@ -517,27 +1358,45 @@
 
     // Shooting
     function shoot() {
-        const level = getLevel(currentLevel);
-        if (shotsFired >= level.maxShots) return;
-        if (state !== 'aiming') return;
+        const isSpecialLauncher = !!(launcher && launcher.special);
+        if (!isSpecialLauncher) {
+            if (shotsFired >= activeMaxShots) return;
+            if (state !== 'aiming') return;
+        } else {
+            if (state === 'won' || state === 'lost' || state === 'creator') return;
+        }
 
         const dx = mousePos.x - launcher.x;
         const dy = mousePos.y - launcher.y;
         const angle = Math.atan2(dy, dx);
         const power = Math.min(Math.hypot(dx, dy) / 20, 18);
 
-        ball = {
-            x: launcher.x,
-            y: launcher.y,
-            vx: Math.cos(angle) * power,
-            vy: Math.sin(angle) * power,
-            radius: 6,
-            alive: true
-        };
+        const orbCount = isSpecialLauncher ? normalizeSpecialLauncherOrbCount(launcher.orbCount) : 1;
+        const newBalls = [];
+        const spreadStep = orbCount <= 1 ? 0 : Math.min(0.06, 0.7 / (orbCount - 1));
+        for (let i = 0; i < orbCount; i++) {
+            const angleOffset = orbCount <= 1 ? 0 : (i - (orbCount - 1) / 2) * spreadStep;
+            const shotAngle = angle + angleOffset;
+            newBalls.push({
+                x: launcher.x,
+                y: launcher.y,
+                vx: Math.cos(shotAngle) * power,
+                vy: Math.sin(shotAngle) * power,
+                radius: 6,
+                alive: true,
+                portalCooldown: 0,
+                bounceCount: 0
+            });
+        }
 
-        trail = [];
-        bounceCount = 0;
-        portalCooldown = 0;
+        if (isSpecialLauncher) {
+            balls.push(...newBalls);
+        } else {
+            balls = newBalls;
+            trail = [];
+        }
+        ball = balls[0] || null;
+
         shotsFired++;
         state = 'shooting';
         document.getElementById('shotCount').textContent = shotsFired;
@@ -545,174 +1404,332 @@
 
     // Physics update — uses substeps to prevent tunneling through thin walls
     function updateBall() {
-        if (!ball || !ball.alive) return;
+        if (!balls.length) return;
 
-        // Determine how many substeps we need based on ball speed
-        const speed = Math.hypot(ball.vx, ball.vy);
         const maxStep = 2; // never move more than 2px per substep — prevents tunneling through thin walls
-        const substeps = Math.max(1, Math.ceil(speed / maxStep));
-        const dt = 1 / substeps;
+        const spawnedBalls = [];
+        const maxActiveOrbs = 600;
 
-        // Apply gravity once per frame (split across substeps)
-        const gravityPerStep = 0.04 * dt;
+        for (let i = 0; i < balls.length; i++) {
+            const currentBall = balls[i];
+            if (!currentBall.alive || state === 'won' || state === 'lost') continue;
 
-        for (let step = 0; step < substeps; step++) {
-            if (!ball.alive) break;
+            // Determine how many substeps we need based on ball speed
+            const speed = Math.hypot(currentBall.vx, currentBall.vy);
+            const substeps = Math.max(1, Math.ceil(speed / maxStep));
+            const dt = 1 / substeps;
 
-            const prevX = ball.x;
-            const prevY = ball.y;
+            // Apply gravity once per frame (split across substeps)
+            const gravityPerStep = 0.04 * dt;
 
-            ball.vy += gravityPerStep;
-            ball.x += ball.vx * dt;
-            ball.y += ball.vy * dt;
+            for (let step = 0; step < substeps; step++) {
+                if (!currentBall.alive || state === 'won' || state === 'lost') break;
 
-            // Bounce off canvas edges
-            if (ball.x - ball.radius <= 0) {
-                ball.x = ball.radius;
-                ball.vx = Math.abs(ball.vx) * 0.98;
-                bounceCount++;
-                spawnBounceParticles(ball.x, ball.y);
-            } else if (ball.x + ball.radius >= canvas.width) {
-                ball.x = canvas.width - ball.radius;
-                ball.vx = -Math.abs(ball.vx) * 0.98;
-                bounceCount++;
-                spawnBounceParticles(ball.x, ball.y);
-            }
-            if (ball.y - ball.radius <= 0) {
-                ball.y = ball.radius;
-                ball.vy = Math.abs(ball.vy) * 0.98;
-                bounceCount++;
-                spawnBounceParticles(ball.x, ball.y);
-            } else if (ball.y + ball.radius >= canvas.height) {
-                ball.y = canvas.height - ball.radius;
-                ball.vy = -Math.abs(ball.vy) * 0.98;
-                bounceCount++;
-                spawnBounceParticles(ball.x, ball.y);
-            }
-
-            // Portal check FIRST — so walls near portals don't steal the ball
-            if (portalCooldown > 0) {
-                portalCooldown--;
-            } else {
-                let teleported = false;
-                for (const p of portals) {
-                    const d1 = Math.hypot(ball.x - p.x1, ball.y - p.y1);
-                    if (d1 < p.radius) {
-                        ball.x = p.x2;
-                        ball.y = p.y2;
-                        portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
-                        spawnPortalParticles(p.x2, p.y2);
-                        teleported = true;
-                        break;
-                    }
-                    const d2 = Math.hypot(ball.x - p.x2, ball.y - p.y2);
-                    if (d2 < p.radius) {
-                        ball.x = p.x1;
-                        ball.y = p.y1;
-                        portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
-                        spawnPortalParticles(p.x1, p.y1);
-                        teleported = true;
-                        break;
-                    }
+                if (currentBall.tubeTransit) {
+                    advanceBallTubeTransit(currentBall, dt);
+                    continue;
                 }
-                if (teleported) continue; // skip wall checks this substep after teleporting
-            }
 
-            // Check if ball is inside a portal zone — skip wall collision there
-            let inPortalZone = false;
-            for (const p of portals) {
-                if (Math.hypot(ball.x - p.x1, ball.y - p.y1) < p.radius * 1.5 ||
-                    Math.hypot(ball.x - p.x2, ball.y - p.y2) < p.radius * 1.5) {
-                    inPortalZone = true;
-                    break;
+                if (currentBall.dupCooldown > 0) {
+                    currentBall.dupCooldown--;
                 }
-            }
 
-            // Bounce off walls (may need multiple passes to resolve overlaps)
-            if (!inPortalZone) {
-                for (let pass = 0; pass < 3; pass++) {
-                    let collided = false;
-                    for (const w of walls) {
-                        if (rectCircleCollision(ball, w)) {
-                            resolveRectCollision(ball, w);
-                            bounceCount++;
-                            spawnBounceParticles(ball.x, ball.y);
-                            collided = true;
+                const prevX = currentBall.x;
+                const prevY = currentBall.y;
+
+                // Gravity wells pull orbs like stars
+                for (const gw of gravityWells) {
+                    const dxg = gw.x - currentBall.x;
+                    const dyg = gw.y - currentBall.y;
+                    const distSq = dxg * dxg + dyg * dyg;
+                    if (distSq < 1) continue;
+                    const dist = Math.sqrt(distSq);
+                    const radius = Math.max(20, gw.radius || 120);
+                    if (dist > radius) continue;
+                    const influence = 1 - (dist / radius);
+                    const accelMag = ((gw.strength || 12000) * (0.35 + influence * 1.35)) / Math.max(40, distSq);
+                    currentBall.vx += (dxg / dist) * accelMag * dt;
+                    currentBall.vy += (dyg / dist) * accelMag * dt;
+                }
+
+                currentBall.vy += gravityPerStep;
+                currentBall.x += currentBall.vx * dt;
+                currentBall.y += currentBall.vy * dt;
+
+                // Bounce off canvas edges
+                if (currentBall.x - currentBall.radius <= 0) {
+                    currentBall.x = currentBall.radius;
+                    currentBall.vx = Math.abs(currentBall.vx) * 0.98;
+                    currentBall.bounceCount++;
+                    spawnBounceParticles(currentBall.x, currentBall.y);
+                } else if (currentBall.x + currentBall.radius >= canvas.width) {
+                    currentBall.x = canvas.width - currentBall.radius;
+                    currentBall.vx = -Math.abs(currentBall.vx) * 0.98;
+                    currentBall.bounceCount++;
+                    spawnBounceParticles(currentBall.x, currentBall.y);
+                }
+                if (currentBall.y - currentBall.radius <= 0) {
+                    currentBall.y = currentBall.radius;
+                    currentBall.vy = Math.abs(currentBall.vy) * 0.98;
+                    currentBall.bounceCount++;
+                    spawnBounceParticles(currentBall.x, currentBall.y);
+                } else if (currentBall.y + currentBall.radius >= canvas.height) {
+                    currentBall.y = canvas.height - currentBall.radius;
+                    currentBall.vy = -Math.abs(currentBall.vy) * 0.98;
+                    currentBall.bounceCount++;
+                    spawnBounceParticles(currentBall.x, currentBall.y);
+                }
+
+                // Portal check FIRST — so walls near portals don't steal the ball
+                if (currentBall.portalCooldown > 0) {
+                    currentBall.portalCooldown--;
+                } else {
+                    let teleported = false;
+                    for (const p of portals) {
+                        const d1 = Math.hypot(currentBall.x - p.x1, currentBall.y - p.y1);
+                        if (d1 < p.radius) {
+                            currentBall.x = p.x2;
+                            currentBall.y = p.y2;
+                            currentBall.portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
+                            spawnPortalParticles(p.x2, p.y2);
+                            teleported = true;
+                            break;
+                        }
+                        const d2 = Math.hypot(currentBall.x - p.x2, currentBall.y - p.y2);
+                        if (d2 < p.radius) {
+                            currentBall.x = p.x1;
+                            currentBall.y = p.y1;
+                            currentBall.portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
+                            spawnPortalParticles(p.x1, p.y1);
+                            teleported = true;
+                            break;
                         }
                     }
-                    if (!collided) break;
+                    if (teleported) continue; // skip wall checks this substep after teleporting
                 }
-            }
 
-            // Danger wall collision — instant level restart
-            // Check both current position AND swept line from previous position
-            let hitDanger = false;
-            for (const dw of dangerWalls) {
-                if (rectCircleCollision(ball, dw) || lineRectIntersection(prevX, prevY, ball.x, ball.y, dw)) {
-                    hitDanger = true;
-                    break;
+                // Check if ball is inside a portal zone — skip wall collision there
+                let inPortalZone = false;
+                for (const p of portals) {
+                    if (Math.hypot(currentBall.x - p.x1, currentBall.y - p.y1) < p.radius * 1.5 ||
+                        Math.hypot(currentBall.x - p.x2, currentBall.y - p.y2) < p.radius * 1.5) {
+                        inPortalZone = true;
+                        break;
+                    }
                 }
-            }
-            // Moving obstacles (red) also kill
-            if (!hitDanger) {
-                for (const o of obstacles) {
-                    if (rectCircleCollision(ball, o) || lineRectIntersection(prevX, prevY, ball.x, ball.y, o)) {
+
+                // Bounce off walls (may need multiple passes to resolve overlaps)
+                if (!inPortalZone) {
+                    for (let pass = 0; pass < 3; pass++) {
+                        let collided = false;
+                        for (const w of walls) {
+                            if (rectCircleCollision(currentBall, w)) {
+                                resolveRectCollision(currentBall, w);
+                                currentBall.bounceCount++;
+                                spawnBounceParticles(currentBall.x, currentBall.y);
+                                collided = true;
+                            }
+                        }
+                        if (!collided) break;
+                    }
+                }
+
+                // Duplicator walls: bounce and spawn a cloned orb on hit
+                if (!inPortalZone) {
+                    for (let pass = 0; pass < 2; pass++) {
+                        let collided = false;
+                        for (const w of duplicatorWalls) {
+                            if (rectCircleCollision(currentBall, w)) {
+                                resolveRectCollision(currentBall, w);
+                                currentBall.bounceCount++;
+                                spawnBounceParticles(currentBall.x, currentBall.y);
+                                collided = true;
+
+                                if ((currentBall.dupCooldown || 0) <= 0 && balls.length + spawnedBalls.length < maxActiveOrbs) {
+                                    const speed = Math.hypot(currentBall.vx, currentBall.vy);
+                                    const baseAngle = Math.atan2(currentBall.vy, currentBall.vx);
+                                    const jitter = (Math.random() * 0.24) - 0.12;
+                                    const cloneAngle = baseAngle + jitter;
+                                    const clone = {
+                                        x: currentBall.x,
+                                        y: currentBall.y,
+                                        vx: Math.cos(cloneAngle) * speed,
+                                        vy: Math.sin(cloneAngle) * speed,
+                                        radius: currentBall.radius,
+                                        alive: true,
+                                        portalCooldown: currentBall.portalCooldown || 0,
+                                        bounceCount: currentBall.bounceCount,
+                                        dupCooldown: 14
+                                    };
+                                    currentBall.dupCooldown = 10;
+                                    spawnedBalls.push(clone);
+                                }
+                            }
+                        }
+                        if (!collided) break;
+                    }
+                }
+
+                // Orb-to-orb collisions
+                if (!currentBall.tubeTransit) {
+                    for (let j = i + 1; j < balls.length; j++) {
+                        const otherBall = balls[j];
+                        if (!otherBall.alive || otherBall.tubeTransit) continue;
+                        if (resolveOrbCollision(currentBall, otherBall)) {
+                            currentBall.bounceCount++;
+                            otherBall.bounceCount++;
+                            spawnBounceParticles((currentBall.x + otherBall.x) * 0.5, (currentBall.y + otherBall.y) * 0.5);
+                        }
+                    }
+                }
+
+                // Orb catcher collision — destroys this orb only
+                let caughtOrb = false;
+                for (const catcher of orbCatchers) {
+                    if (rectCircleCollision(currentBall, catcher) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, catcher, currentBall.radius)) {
+                        currentBall.alive = false;
+                        spawnDangerParticles(currentBall.x, currentBall.y);
+                        caughtOrb = true;
+                        break;
+                    }
+                }
+                if (caughtOrb) break;
+
+                // Danger wall collision — instant level restart
+                // Check both current position AND swept line from previous position
+                let hitDanger = false;
+                for (const dw of dangerWalls) {
+                    if (rectCircleCollision(currentBall, dw) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, dw, currentBall.radius)) {
                         hitDanger = true;
                         break;
                     }
                 }
-            }
-            if (hitDanger) {
-                ball.alive = false;
-                spawnDangerParticles(ball.x, ball.y);
-                state = 'lost';
-                showMessage('Danger!', 1500);
-                setTimeout(() => resetLevel(), 1500);
-            }
-            if (!ball.alive) break;
+                // Moving obstacles (red) also kill
+                if (!hitDanger) {
+                    for (const o of obstacles) {
+                        if (rectCircleCollision(currentBall, o) || lineRectIntersection(prevX, prevY, currentBall.x, currentBall.y, o, currentBall.radius)) {
+                            hitDanger = true;
+                            break;
+                        }
+                    }
+                }
+                if (hitDanger) {
+                    currentBall.alive = false;
+                    spawnDangerParticles(currentBall.x, currentBall.y);
+                    state = 'lost';
+                    showMessage('Danger!', 1500);
+                    setTimeout(() => resetLevel(), 1500);
+                }
+                if (!currentBall.alive || state === 'lost') break;
 
-            // Target collision
-            for (const t of targets) {
-                if (t.hit) continue;
-                const dist = Math.hypot(ball.x - t.x, ball.y - t.y);
-                if (dist < t.radius + ball.radius) {
-                    t.hit = true;
-                    hitTargets++;
-                    score += 100 + bounceCount * 10;
-                    document.getElementById('score').textContent = score;
-                    spawnTargetParticles(t.x, t.y);
+                const pluginResult = runFeatureBallStepHooks({ ball: currentBall, prevX, prevY, state, canvas, particles, spawnBounceParticles });
+                if (pluginResult && pluginResult.kill) {
+                    currentBall.alive = false;
+                    state = 'lost';
+                    showMessage(pluginResult.message || 'Danger!', 1500);
+                    setTimeout(() => resetLevel(), 1500);
+                    break;
+                }
+                if (!currentBall.alive || state === 'lost') break;
 
-                    if (hitTargets === totalTargets) {
-                        state = 'won';
-                        ball.alive = false;
-                        showMessage('Clear!');
-                        nextBtn.style.display = 'inline-block';
+                // Target collision
+                for (const t of targets) {
+                    if (t.hit) continue;
+                    const dist = Math.hypot(currentBall.x - t.x, currentBall.y - t.y);
+                    if (dist < t.radius + currentBall.radius) {
+                        t.hit = true;
+                        hitTargets++;
+                        score += 100 + currentBall.bounceCount * 10;
+                        document.getElementById('score').textContent = score;
+                        spawnTargetParticles(t.x, t.y);
+
+                        if (hitTargets === totalTargets) {
+                            state = 'won';
+                            currentBall.alive = false;
+                            showMessage('Clear!');
+                            nextBtn.style.display = 'inline-block';
+                        }
                     }
                 }
             }
-        }
 
-        // Trail (once per frame)
-        if (ball.alive) {
-            trail.push({ x: ball.x, y: ball.y, age: 0 });
-            if (trail.length > 80) trail.shift();
-        }
+            if (!currentBall.alive || state === 'won' || state === 'lost') {
+                continue;
+            }
 
-        // Ball too slow or too many bounces -> die
-        const finalSpeed = Math.hypot(ball.vx, ball.vy);
-        if (finalSpeed < 0.3 || bounceCount > maxBounces) {
-            ball.alive = false;
-            if (hitTargets < totalTargets) {
-                const level = getLevel(currentLevel);
-                if (shotsFired >= level.maxShots) {
-                    state = 'lost';
-                    showMessage('Try Again');
-                    setTimeout(() => resetLevel(), 2000);
-                } else {
-                    state = 'aiming';
-                }
+            // Trail (once per frame)
+            trail.push({ x: currentBall.x, y: currentBall.y, age: 0 });
+            if (trail.length > 200) trail.shift();
+
+            // Ball too slow or too many bounces -> die
+            const finalSpeed = Math.hypot(currentBall.vx, currentBall.vy);
+            if (finalSpeed < 0.3 || currentBall.bounceCount > maxBounces) {
+                currentBall.alive = false;
             }
         }
+
+        if (spawnedBalls.length > 0) {
+            balls.push(...spawnedBalls);
+        }
+
+        balls = balls.filter(b => b.alive);
+        ball = balls.length > 0 ? balls[0] : null;
+
+        if (state === 'won' || state === 'lost') return;
+
+        if (balls.length === 0 && hitTargets < totalTargets) {
+            if (!activeUnlimitedShots && shotsFired >= activeMaxShots) {
+                state = 'lost';
+                showMessage('Try Again');
+                setTimeout(() => resetLevel(), 2000);
+            } else {
+                state = 'aiming';
+            }
+        }
+    }
+
+    function resolveOrbCollision(a, b) {
+        if (!a || !b || !a.alive || !b.alive) return false;
+
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        const minDist = (a.radius || 0) + (b.radius || 0);
+        let dist = Math.hypot(dx, dy);
+
+        if (dist >= minDist) return false;
+
+        if (dist < 0.0001) {
+            dx = 1;
+            dy = 0;
+            dist = 1;
+        }
+
+        const nx = dx / dist;
+        const ny = dy / dist;
+
+        const overlap = minDist - dist;
+        a.x -= nx * overlap * 0.5;
+        a.y -= ny * overlap * 0.5;
+        b.x += nx * overlap * 0.5;
+        b.y += ny * overlap * 0.5;
+
+        const relVx = b.vx - a.vx;
+        const relVy = b.vy - a.vy;
+        const velAlongNormal = relVx * nx + relVy * ny;
+
+        if (velAlongNormal > 0) return true;
+
+        const restitution = 0.98;
+        const impulse = -((1 + restitution) * velAlongNormal) / 2;
+        const impulseX = impulse * nx;
+        const impulseY = impulse * ny;
+
+        a.vx -= impulseX;
+        a.vy -= impulseY;
+        b.vx += impulseX;
+        b.vy += impulseY;
+
+        return true;
     }
 
     function rectCircleCollision(circle, rect) {
@@ -723,9 +1740,9 @@
     }
 
     // Ray-cast: did the line from (x1,y1)->(x2,y2) cross through the rect?
-    function lineRectIntersection(x1, y1, x2, y2, rect) {
+    function lineRectIntersection(x1, y1, x2, y2, rect, radius = 6) {
         // Expand rect by ball radius for swept collision
-        const r = ball ? ball.radius : 6;
+        const r = radius;
         const rx = rect.x - r;
         const ry = rect.y - r;
         const rw = rect.w + r * 2;
@@ -822,6 +1839,7 @@
                 o.vy *= -1;
             }
         }
+        runFeatureUpdateHooks();
     }
 
     // Particles
@@ -963,6 +1981,8 @@
             ctx.setLineDash([]);
         }
 
+        runFeatureDrawHooks(time);
+
         // Draw targets
         for (const t of targets) {
             if (t.hit) continue;
@@ -1004,18 +2024,32 @@
 
         // Draw launcher
         const launcherPulse = 1 + Math.sin(time * 3) * 0.1;
-        ctx.fillStyle = '#00e5ff';
+        const launcherColor = launcher.special ? '#ffe083' : '#00e5ff';
+        ctx.fillStyle = launcherColor;
         ctx.beginPath();
         ctx.arc(launcher.x, launcher.y, 8 * launcherPulse, 0, Math.PI * 2);
         ctx.fill();
 
         const launcherGrad = ctx.createRadialGradient(launcher.x, launcher.y, 0, launcher.x, launcher.y, 20);
-        launcherGrad.addColorStop(0, 'rgba(0, 229, 255, 0.3)');
-        launcherGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+        if (launcher.special) {
+            launcherGrad.addColorStop(0, 'rgba(255, 224, 131, 0.4)');
+            launcherGrad.addColorStop(1, 'rgba(255, 224, 131, 0)');
+        } else {
+            launcherGrad.addColorStop(0, 'rgba(0, 229, 255, 0.3)');
+            launcherGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+        }
         ctx.fillStyle = launcherGrad;
         ctx.beginPath();
         ctx.arc(launcher.x, launcher.y, 20, 0, Math.PI * 2);
         ctx.fill();
+
+        if (launcher.special) {
+            ctx.strokeStyle = 'rgba(255, 224, 131, 0.95)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(launcher.x, launcher.y, 13, 0, Math.PI * 2);
+            ctx.stroke();
+        }
 
         // Draw aim line
         if (state === 'aiming') {
@@ -1066,20 +2100,21 @@
             ctx.fill();
         }
 
-        // Draw ball
-        if (ball && ball.alive) {
-            // Ball glow
-            const ballGrad = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius * 3);
+        // Draw balls
+        for (const currentBall of balls) {
+            if (!currentBall.alive) continue;
+
+            const ballGrad = ctx.createRadialGradient(currentBall.x, currentBall.y, 0, currentBall.x, currentBall.y, currentBall.radius * 3);
             ballGrad.addColorStop(0, 'rgba(0, 229, 255, 0.5)');
             ballGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
             ctx.fillStyle = ballGrad;
             ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius * 3, 0, Math.PI * 2);
+            ctx.arc(currentBall.x, currentBall.y, currentBall.radius * 3, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.arc(currentBall.x, currentBall.y, currentBall.radius, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -1092,6 +2127,8 @@
             ctx.fill();
         }
         ctx.globalAlpha = 1;
+
+        drawCreatorOverlay();
     }
 
     function drawPortal(x, y, radius, phase) {
@@ -1142,17 +2179,846 @@
         }
     }
 
+    function drawLevelPreview(previewCanvas, level, levelNumber) {
+        const previewCtx = previewCanvas.getContext('2d');
+        const pw = previewCanvas.width;
+        const ph = previewCanvas.height;
+        const sx = pw / canvas.width;
+        const sy = ph / canvas.height;
+        const scale = (v) => v * sx;
+
+        previewCtx.clearRect(0, 0, pw, ph);
+        previewCtx.fillStyle = '#0b1222';
+        previewCtx.fillRect(0, 0, pw, ph);
+
+        previewCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+        for (let gx = 0; gx < pw; gx += 20) {
+            previewCtx.beginPath();
+            previewCtx.moveTo(gx, 0);
+            previewCtx.lineTo(gx, ph);
+            previewCtx.stroke();
+        }
+        for (let gy = 0; gy < ph; gy += 20) {
+            previewCtx.beginPath();
+            previewCtx.moveTo(0, gy);
+            previewCtx.lineTo(pw, gy);
+            previewCtx.stroke();
+        }
+
+        for (const f of level.features) {
+            const plugin = featurePlugins.get(f.type);
+            if (plugin && plugin.drawPreview) {
+                plugin.drawPreview(f, { ctx: previewCtx, sx, sy, scale, width: pw, height: ph });
+                continue;
+            }
+            if (f.type === 'wall') {
+                previewCtx.fillStyle = '#2a2a5a';
+                previewCtx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+            } else if (f.type === 'dangerWall') {
+                previewCtx.fillStyle = 'rgba(220, 45, 45, 0.8)';
+                previewCtx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+            } else if (f.type === 'obstacle') {
+                previewCtx.fillStyle = '#7f3838';
+                previewCtx.fillRect(f.x * sx, f.y * sy, f.w * sx, f.h * sy);
+            } else if (f.type === 'portal') {
+                previewCtx.strokeStyle = 'rgba(255, 80, 255, 0.4)';
+                previewCtx.lineWidth = 1;
+                previewCtx.beginPath();
+                previewCtx.moveTo(f.x1 * sx, f.y1 * sy);
+                previewCtx.lineTo(f.x2 * sx, f.y2 * sy);
+                previewCtx.stroke();
+                previewCtx.beginPath();
+                previewCtx.arc(f.x1 * sx, f.y1 * sy, scale(f.radius), 0, Math.PI * 2);
+                previewCtx.stroke();
+                previewCtx.beginPath();
+                previewCtx.arc(f.x2 * sx, f.y2 * sy, scale(f.radius), 0, Math.PI * 2);
+                previewCtx.stroke();
+            }
+        }
+
+        previewCtx.fillStyle = level.launcher && level.launcher.special ? '#ffe083' : '#00e5ff';
+        previewCtx.beginPath();
+        previewCtx.arc(level.launcher.x * sx, level.launcher.y * sy, 4, 0, Math.PI * 2);
+        previewCtx.fill();
+
+        previewCtx.strokeStyle = '#00e5ff';
+        previewCtx.lineWidth = 1.1;
+        for (const t of level.targets) {
+            previewCtx.beginPath();
+            previewCtx.arc(t.x * sx, t.y * sy, scale(t.radius), 0, Math.PI * 2);
+            previewCtx.stroke();
+        }
+
+        previewCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        previewCtx.font = '11px sans-serif';
+        previewCtx.fillText(`#${levelNumber}`, 6, 14);
+    }
+
+    function initInspectorMode() {
+        state = 'inspector';
+        document.body.style.overflow = 'auto';
+
+        const title = document.querySelector('#header h1');
+        if (title) title.textContent = 'Ricochet Inspector';
+
+        const controls = document.getElementById('controls');
+        controls.innerHTML = '';
+
+        const startInput = document.createElement('input');
+        startInput.type = 'number';
+        startInput.min = '1';
+        startInput.value = String(inspectorStartLevel);
+        startInput.style.width = '110px';
+        startInput.title = 'Start level';
+
+        const countInput = document.createElement('input');
+        countInput.type = 'number';
+        countInput.min = '1';
+        countInput.max = '120';
+        countInput.value = '18';
+        countInput.style.width = '110px';
+        countInput.title = 'How many levels';
+
+        const renderBtn = document.createElement('button');
+        renderBtn.textContent = 'Render';
+
+        const help = document.createElement('span');
+        help.textContent = 'Tip: add ?mode=inspector to URL. Click a card to play that level.';
+        help.style.fontSize = '12px';
+        help.style.color = '#9cc4d3';
+
+        controls.appendChild(startInput);
+        controls.appendChild(countInput);
+        controls.appendChild(renderBtn);
+        controls.appendChild(help);
+
+        const container = document.getElementById('gameContainer');
+        const grid = document.createElement('div');
+        grid.id = 'inspectorGrid';
+        grid.style.width = '800px';
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(250px, 1fr))';
+        grid.style.gap = '10px';
+        grid.style.marginTop = '10px';
+        container.appendChild(grid);
+
+        function renderInspector() {
+            const start = Math.max(1, parseInt(startInput.value, 10) || 1);
+            const count = Math.max(1, Math.min(120, parseInt(countInput.value, 10) || 18));
+            startInput.value = String(start);
+            countInput.value = String(count);
+
+            grid.innerHTML = '';
+
+            for (let levelNumber = start; levelNumber < start + count; levelNumber++) {
+                const idx = levelNumber - 1;
+                const level = getLevel(idx);
+                const source = idx < levels.length ? 'Defined' : `Seeded #${idx + 1}`;
+
+                const card = document.createElement('article');
+                card.style.background = '#10182f';
+                card.style.border = '1px solid #23345f';
+                card.style.borderRadius = '10px';
+                card.style.padding = '10px';
+                card.style.cursor = 'pointer';
+                card.title = 'Click to play this level';
+                card.addEventListener('click', () => {
+                    const params = new URLSearchParams();
+                    params.set('level', String(levelNumber));
+                    params.set('seedMultiplier', String(proceduralConfig.seedMultiplier));
+                    params.set('seedOffset', String(proceduralConfig.seedOffset));
+                    params.set('lcgMultiplier', String(proceduralConfig.lcgMultiplier));
+                    params.set('lcgModulus', String(proceduralConfig.lcgModulus));
+                    window.location.search = params.toString();
+                });
+
+                const titleEl = document.createElement('div');
+                titleEl.style.fontSize = '13px';
+                titleEl.style.color = '#9ce8ff';
+                titleEl.style.marginBottom = '6px';
+                titleEl.textContent = `Level ${levelNumber} · ${source}`;
+                card.appendChild(titleEl);
+
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = 240;
+                previewCanvas.height = 180;
+                previewCanvas.style.width = '100%';
+                previewCanvas.style.border = '1px solid #1f2d56';
+                previewCanvas.style.borderRadius = '6px';
+                drawLevelPreview(previewCanvas, level, levelNumber);
+                card.appendChild(previewCanvas);
+
+                const stat = document.createElement('div');
+                stat.style.marginTop = '6px';
+                stat.style.fontSize = '12px';
+                stat.style.color = '#afcddf';
+                stat.textContent = `Targets ${level.targets.length} · Features ${level.features.length} · Max shots ${formatMaxShots(level.maxShots, !!(level.launcher && level.launcher.special))}`;
+                card.appendChild(stat);
+
+                grid.appendChild(card);
+            }
+        }
+
+        renderBtn.addEventListener('click', renderInspector);
+        renderInspector();
+    }
+
+    function initModeMenu() {
+        state = 'menu';
+
+        const title = document.querySelector('#header h1');
+        if (title) title.textContent = 'Ricochet';
+
+        const controls = document.getElementById('controls');
+        controls.innerHTML = '';
+
+        const levelInput = document.createElement('input');
+        levelInput.type = 'number';
+        levelInput.min = '1';
+        levelInput.value = String(currentLevel + 1);
+        levelInput.style.width = '90px';
+        levelInput.title = 'Start level';
+
+        const playBtn = document.createElement('button');
+        playBtn.textContent = 'Play';
+        playBtn.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            params.set('mode', 'play');
+            params.set('level', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
+            window.location.search = params.toString();
+        });
+
+        const inspectorBtn = document.createElement('button');
+        inspectorBtn.textContent = 'Inspector';
+        inspectorBtn.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            params.set('mode', 'inspector');
+            params.set('inspectorStart', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
+            window.location.search = params.toString();
+        });
+
+        const creatorBtn = document.createElement('button');
+        creatorBtn.textContent = 'Edit';
+        creatorBtn.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            params.set('mode', 'creator');
+            params.set('level', String(Math.max(1, parseInt(levelInput.value, 10) || 1)));
+            window.location.search = params.toString();
+        });
+
+        const help = document.createElement('span');
+        help.textContent = 'Choose a mode and starting level';
+        help.style.fontSize = '12px';
+        help.style.color = '#9cc4d3';
+
+        controls.appendChild(levelInput);
+        controls.appendChild(playBtn);
+        controls.appendChild(inspectorBtn);
+        controls.appendChild(creatorBtn);
+        controls.appendChild(help);
+    }
+
+    function cloneCreatorLevel(level) {
+        return {
+            launcher: {
+                ...level.launcher,
+                special: !!level.launcher.special,
+                orbCount: normalizeSpecialLauncherOrbCount(level.launcher.orbCount)
+            },
+            maxShots: level.maxShots,
+            targets: level.targets.map(t => ({ ...t })),
+            features: level.features.map(f => {
+                const c = { ...f };
+                delete c.plugin;
+                return c;
+            })
+        };
+    }
+
+    function refreshCreatorScene(mode = 'creator') {
+        applyLevelConfig(normalizeLevelConfig(creatorLevel), mode);
+        document.getElementById('levelNum').textContent = 'C';
+    }
+
+    function getRectFromPoints(a, b) {
+        const x = Math.min(a.x, b.x);
+        const y = Math.min(a.y, b.y);
+        const w = Math.max(12, Math.abs(a.x - b.x));
+        const h = Math.max(12, Math.abs(a.y - b.y));
+        return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+    }
+
+    function featureCenter(f) {
+        if (f.type === 'portal') return { x: (f.x1 + f.x2) / 2, y: (f.y1 + f.y2) / 2 };
+        if (f.type === 'tube' && Array.isArray(f.points) && f.points.length > 0) {
+            let sx = 0;
+            let sy = 0;
+            for (const p of f.points) {
+                sx += p.x;
+                sy += p.y;
+            }
+            return { x: sx / f.points.length, y: sy / f.points.length };
+        }
+        return { x: f.x + (f.w || 0) / 2, y: f.y + (f.h || 0) / 2 };
+    }
+
+    function distancePointToSegment(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len2 = dx * dx + dy * dy;
+        if (len2 < 0.0001) return Math.hypot(px - x1, py - y1);
+        const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+        const cx = x1 + t * dx;
+        const cy = y1 + t * dy;
+        return Math.hypot(px - cx, py - cy);
+    }
+
+    function removeNearestCreatorObject(x, y) {
+        let best = { kind: null, idx: -1, dist: Infinity };
+        for (let i = 0; i < creatorLevel.targets.length; i++) {
+            const t = creatorLevel.targets[i];
+            const d = Math.hypot(x - t.x, y - t.y);
+            if (d < best.dist) best = { kind: 'target', idx: i, dist: d };
+        }
+        for (let i = 0; i < creatorLevel.features.length; i++) {
+            const feature = creatorLevel.features[i];
+            let d;
+            if (feature.type === 'portal') {
+                const r = feature.radius || 22;
+                const d1 = Math.hypot(x - feature.x1, y - feature.y1) - r;
+                const d2 = Math.hypot(x - feature.x2, y - feature.y2) - r;
+                const ds = distancePointToSegment(x, y, feature.x1, feature.y1, feature.x2, feature.y2) - 10;
+                d = Math.min(d1, d2, ds);
+            } else if (feature.type === 'tube' && Array.isArray(feature.points) && feature.points.length > 1) {
+                d = Infinity;
+                for (let j = 0; j < feature.points.length - 1; j++) {
+                    const a = feature.points[j];
+                    const b = feature.points[j + 1];
+                    const ds = distancePointToSegment(x, y, a.x, a.y, b.x, b.y) - ((feature.thickness || 14) * 0.5 + 8);
+                    if (ds < d) d = ds;
+                }
+            } else {
+                const c = featureCenter(feature);
+                d = Math.hypot(x - c.x, y - c.y);
+            }
+            if (d < best.dist) best = { kind: 'feature', idx: i, dist: d };
+        }
+        if (Math.hypot(x - creatorLevel.launcher.x, y - creatorLevel.launcher.y) < best.dist) {
+            best = { kind: 'launcher', idx: -1, dist: Math.hypot(x - creatorLevel.launcher.x, y - creatorLevel.launcher.y) };
+        }
+
+        if (best.dist > 40) return;
+        if (best.kind === 'target') creatorLevel.targets.splice(best.idx, 1);
+        if (best.kind === 'feature') creatorLevel.features.splice(best.idx, 1);
+        if (best.kind === 'launcher') creatorLevel.launcher = { x: 100, y: 500, special: false, orbCount: 1 };
+    }
+
+    function placeCreatorClick(x, y) {
+        const currentOrbCount = normalizeSpecialLauncherOrbCount(creatorLevel.launcher && creatorLevel.launcher.orbCount);
+        if (creatorTool === 'launcher') {
+            creatorLevel.launcher = { x: Math.round(x), y: Math.round(y), special: false, orbCount: currentOrbCount };
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+            return;
+        }
+        if (creatorTool === 'specialLauncher') {
+            creatorLevel.launcher = { x: Math.round(x), y: Math.round(y), special: true, orbCount: currentOrbCount };
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+            return;
+        }
+        if (creatorTool === 'gravityWell') {
+            creatorLevel.features.push({
+                type: 'gravityWell',
+                x: Math.round(x),
+                y: Math.round(y),
+                radius: 120,
+                strength: 12000
+            });
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+            return;
+        }
+        if (creatorTool === 'target') {
+            creatorLevel.targets.push({ x: Math.round(x), y: Math.round(y), radius: 18 });
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+            return;
+        }
+        if (creatorTool === 'portal') {
+            if (!creatorPortalStart) {
+                creatorPortalStart = { x, y };
+            } else {
+                creatorLevel.features.push({
+                    type: 'portal',
+                    x1: Math.round(creatorPortalStart.x),
+                    y1: Math.round(creatorPortalStart.y),
+                    x2: Math.round(x),
+                    y2: Math.round(y),
+                    radius: 22
+                });
+                creatorPortalStart = null;
+                creatorDirty = true;
+                refreshCreatorScene('creator');
+            }
+            return;
+        }
+        if (creatorTool === 'erase') {
+            removeNearestCreatorObject(x, y);
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+        }
+    }
+
+    function finalizeCreatorDrag(endX, endY) {
+        if (!creatorDragStart) return;
+        const rect = getRectFromPoints(creatorDragStart, { x: endX, y: endY });
+
+        if (creatorTool === 'wall') {
+            creatorLevel.features.push({ type: 'wall', ...rect });
+        } else if (creatorTool === 'duplicatorWall') {
+            creatorLevel.features.push({ type: 'duplicatorWall', ...rect });
+        } else if (creatorTool === 'dangerWall') {
+            creatorLevel.features.push({ type: 'dangerWall', ...rect });
+        } else if (creatorTool === 'orbCatcher') {
+            creatorLevel.features.push({ type: 'orbCatcher', ...rect });
+        } else if (creatorTool === 'obstacle') {
+            creatorLevel.features.push({
+                type: 'obstacle',
+                ...rect,
+                vy: 2,
+                minY: Math.max(0, rect.y - 90),
+                maxY: Math.min(canvas.height - rect.h, rect.y + 90)
+            });
+        }
+
+        creatorDragStart = null;
+        creatorDirty = true;
+        refreshCreatorScene('creator');
+    }
+
+    function finalizeTubeDraft() {
+        if (!creatorTubeDraft || creatorTubeDraft.length < 3) {
+            creatorTubeDraft = null;
+            return;
+        }
+        creatorLevel.features.push({
+            type: 'tube',
+            points: creatorTubeDraft.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })),
+            thickness: 14
+        });
+        creatorTubeDraft = null;
+        creatorDirty = true;
+        refreshCreatorScene('creator');
+    }
+
+    function exportCreatorLevel() {
+        const payload = {
+            launcher: { ...creatorLevel.launcher },
+            maxShots: creatorLevel.maxShots,
+            targets: creatorLevel.targets.map(t => ({ ...t })),
+            features: creatorLevel.features.map(f => ({ ...f }))
+        };
+        const text = JSON.stringify(payload, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => showMessage('Level JSON copied', 1200));
+        } else {
+            window.prompt('Copy level JSON:', text);
+        }
+    }
+
+    function drawCreatorOverlay() {
+        if (!creatorMode || state !== 'creator') return;
+
+        if (creatorDragStart) {
+            const rect = getRectFromPoints(creatorDragStart, mousePos);
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+            ctx.setLineDash([]);
+        }
+
+        if (creatorPortalStart) {
+            ctx.strokeStyle = 'rgba(255, 0, 255, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(creatorPortalStart.x, creatorPortalStart.y);
+            ctx.lineTo(mousePos.x, mousePos.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(creatorPortalStart.x, creatorPortalStart.y, 5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        if (creatorTubeDraft && creatorTubeDraft.length > 0) {
+            ctx.strokeStyle = 'rgba(120, 220, 255, 0.85)';
+            ctx.lineWidth = 14;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(creatorTubeDraft[0].x, creatorTubeDraft[0].y);
+            for (let i = 1; i < creatorTubeDraft.length; i++) {
+                ctx.lineTo(creatorTubeDraft[i].x, creatorTubeDraft[i].y);
+            }
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(8, 8, 420, 60);
+        ctx.fillStyle = '#cfefff';
+        ctx.font = '13px sans-serif';
+        ctx.fillText(`Creator • Tool: ${creatorTool} • Targets: ${creatorLevel.targets.length} • Features: ${creatorLevel.features.length}`, 16, 30);
+        ctx.fillText('Click place. Drag wall/dupe/danger/catcher/obstacle/tube. Gravity well is click-place. Portal uses 2 clicks.', 16, 50);
+    }
+
+    function drawCreatorToolPreview(previewCanvas, tool) {
+        const pctx = previewCanvas.getContext('2d');
+        const w = previewCanvas.width;
+        const h = previewCanvas.height;
+        pctx.clearRect(0, 0, w, h);
+        pctx.fillStyle = '#0f1a33';
+        pctx.fillRect(0, 0, w, h);
+
+        if (tool === 'launcher') {
+            pctx.fillStyle = '#00e5ff';
+            pctx.beginPath();
+            pctx.arc(w / 2, h / 2, 8, 0, Math.PI * 2);
+            pctx.fill();
+        } else if (tool === 'specialLauncher') {
+            pctx.fillStyle = '#ffe083';
+            pctx.beginPath();
+            pctx.arc(w / 2, h / 2, 8, 0, Math.PI * 2);
+            pctx.fill();
+            pctx.strokeStyle = 'rgba(255, 224, 131, 0.95)';
+            pctx.lineWidth = 2;
+            pctx.beginPath();
+            pctx.arc(w / 2, h / 2, 12, 0, Math.PI * 2);
+            pctx.stroke();
+        } else if (tool === 'target') {
+            pctx.strokeStyle = '#00e5ff';
+            pctx.lineWidth = 2;
+            pctx.beginPath();
+            pctx.arc(w / 2, h / 2, 10, 0, Math.PI * 2);
+            pctx.stroke();
+            pctx.fillStyle = '#00e5ff';
+            pctx.beginPath();
+            pctx.arc(w / 2, h / 2, 2.5, 0, Math.PI * 2);
+            pctx.fill();
+        } else if (tool === 'wall') {
+            pctx.fillStyle = '#2a2a5a';
+            pctx.fillRect(14, 11, w - 28, h - 22);
+        } else if (tool === 'duplicatorWall') {
+            pctx.fillStyle = 'rgba(144,95,255,0.82)';
+            pctx.fillRect(14, 11, w - 28, h - 22);
+            pctx.strokeStyle = 'rgba(208,188,255,0.95)';
+            pctx.lineWidth = 1.5;
+            pctx.strokeRect(14, 11, w - 28, h - 22);
+        } else if (tool === 'dangerWall') {
+            pctx.fillStyle = 'rgba(220,45,45,0.85)';
+            pctx.fillRect(14, 11, w - 28, h - 22);
+        } else if (tool === 'orbCatcher') {
+            pctx.fillStyle = 'rgba(255,130,40,0.82)';
+            pctx.fillRect(14, 11, w - 28, h - 22);
+            pctx.strokeStyle = 'rgba(255,190,110,0.95)';
+            pctx.lineWidth = 1.5;
+            pctx.strokeRect(14, 11, w - 28, h - 22);
+        } else if (tool === 'gravityWell') {
+            const gx = w / 2;
+            const gy = h / 2;
+            const gr = Math.min(w, h) * 0.38;
+            const grad = pctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+            grad.addColorStop(0, 'rgba(255,235,160,0.95)');
+            grad.addColorStop(0.3, 'rgba(255,196,70,0.6)');
+            grad.addColorStop(1, 'rgba(255,196,70,0)');
+            pctx.fillStyle = grad;
+            pctx.beginPath();
+            pctx.arc(gx, gy, gr, 0, Math.PI * 2);
+            pctx.fill();
+            pctx.fillStyle = '#ffd27a';
+            pctx.beginPath();
+            pctx.arc(gx, gy, 3.5, 0, Math.PI * 2);
+            pctx.fill();
+        } else if (tool === 'obstacle') {
+            pctx.fillStyle = '#7f3838';
+            pctx.fillRect(22, 8, w - 44, h - 16);
+            pctx.strokeStyle = '#ff4444';
+            pctx.lineWidth = 1.5;
+            pctx.strokeRect(22, 8, w - 44, h - 16);
+        } else if (tool === 'portal') {
+            pctx.strokeStyle = 'rgba(255,80,255,0.8)';
+            pctx.lineWidth = 2;
+            pctx.beginPath();
+            pctx.moveTo(16, h / 2);
+            pctx.lineTo(w - 16, h / 2);
+            pctx.stroke();
+            pctx.beginPath();
+            pctx.arc(16, h / 2, 7, 0, Math.PI * 2);
+            pctx.stroke();
+            pctx.beginPath();
+            pctx.arc(w - 16, h / 2, 7, 0, Math.PI * 2);
+            pctx.stroke();
+        } else if (tool === 'tube') {
+            pctx.strokeStyle = 'rgba(120, 220, 255, 0.95)';
+            pctx.lineWidth = 9;
+            pctx.lineJoin = 'round';
+            pctx.lineCap = 'round';
+            pctx.beginPath();
+            pctx.moveTo(10, h - 8);
+            pctx.lineTo(20, 10);
+            pctx.lineTo(34, 13);
+            pctx.lineTo(44, h - 9);
+            pctx.stroke();
+        } else if (tool === 'erase') {
+            pctx.fillStyle = '#c0c8d8';
+            pctx.fillRect(16, h / 2 - 5, w - 32, 10);
+            pctx.strokeStyle = '#0f1a33';
+            pctx.lineWidth = 3;
+            pctx.beginPath();
+            pctx.moveTo(16, 10);
+            pctx.lineTo(w - 16, h - 10);
+            pctx.stroke();
+        }
+    }
+
+    function updateCreatorToolSelectionUI() {
+        for (const entry of creatorToolButtons) {
+            const active = entry.tool === creatorTool;
+            entry.button.style.borderColor = active ? '#00e5ff' : '#2b3c66';
+            entry.button.style.background = active ? 'rgba(0,229,255,0.14)' : 'rgba(8,14,30,0.9)';
+        }
+    }
+
+    function createCreatorToolSidebar() {
+        const existing = document.getElementById('creatorToolSidebar');
+        if (existing) existing.remove();
+
+        const sidebar = document.createElement('div');
+        sidebar.id = 'creatorToolSidebar';
+        sidebar.style.position = 'fixed';
+        sidebar.style.right = '12px';
+        sidebar.style.top = '58px';
+        sidebar.style.zIndex = '70';
+        sidebar.style.display = 'flex';
+        sidebar.style.flexDirection = 'column';
+        sidebar.style.gap = '8px';
+        sidebar.style.padding = '8px';
+        sidebar.style.background = 'rgba(8,14,30,0.88)';
+        sidebar.style.border = '1px solid #2b3c66';
+        sidebar.style.borderRadius = '10px';
+
+        creatorToolButtons = [];
+        const tools = ['launcher', 'specialLauncher', 'target', 'wall', 'duplicatorWall', 'dangerWall', 'orbCatcher', 'gravityWell', 'obstacle', 'portal', 'tube', 'erase'];
+        for (const tool of tools) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.display = 'flex';
+            btn.style.alignItems = 'center';
+            btn.style.gap = '8px';
+            btn.style.padding = '6px 8px';
+            btn.style.minWidth = '150px';
+            btn.style.textTransform = 'none';
+
+            const preview = document.createElement('canvas');
+            preview.width = 54;
+            preview.height = 34;
+            preview.style.border = '1px solid #2b3c66';
+            preview.style.borderRadius = '4px';
+            drawCreatorToolPreview(preview, tool);
+
+            const label = document.createElement('span');
+            if (tool === 'specialLauncher') {
+                label.textContent = 'special launcher';
+            } else if (tool === 'duplicatorWall') {
+                label.textContent = 'duplicator wall';
+            } else if (tool === 'orbCatcher') {
+                label.textContent = 'orb catcher';
+            } else if (tool === 'gravityWell') {
+                label.textContent = 'gravity well';
+            } else {
+                label.textContent = tool;
+            }
+            label.style.fontSize = '12px';
+
+            btn.appendChild(preview);
+            btn.appendChild(label);
+            btn.addEventListener('click', () => {
+                creatorTool = tool;
+                creatorPortalStart = null;
+                creatorDragStart = null;
+                creatorTubeDraft = null;
+                updateCreatorToolSelectionUI();
+            });
+
+            sidebar.appendChild(btn);
+            creatorToolButtons.push({ tool, button: btn });
+        }
+
+        document.body.appendChild(sidebar);
+        updateCreatorToolSelectionUI();
+    }
+
+    function initCreatorMode() {
+        state = 'creator';
+        const title = document.querySelector('#header h1');
+        if (title) title.textContent = 'Ricochet Creator';
+
+        let loadedFromSnapshot = false;
+        if (creatorUseLiveSnapshot) {
+            try {
+                const raw = sessionStorage.getItem(CREATOR_SNAPSHOT_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    creatorLevel = cloneCreatorLevel(normalizeLevelConfig(parsed));
+                    loadedFromSnapshot = true;
+                }
+                sessionStorage.removeItem(CREATOR_SNAPSHOT_KEY);
+            } catch {
+            }
+        }
+
+        if (!loadedFromSnapshot) {
+            creatorLevel = cloneCreatorLevel(getLevel(currentLevel));
+        }
+        if (!creatorLevel.launcher) creatorLevel.launcher = { x: 100, y: 500, special: false };
+        creatorLevel.launcher.special = !!creatorLevel.launcher.special;
+        creatorLevel.launcher.orbCount = normalizeSpecialLauncherOrbCount(creatorLevel.launcher.orbCount);
+        creatorTool = 'target';
+        creatorPortalStart = null;
+        creatorDragStart = null;
+        creatorTubeDraft = null;
+        creatorDirty = false;
+
+        const controls = document.getElementById('controls');
+        controls.innerHTML = '';
+        createCreatorToolSidebar();
+
+        const shotsInput = document.createElement('input');
+        shotsInput.type = 'number';
+        shotsInput.min = '1';
+        shotsInput.value = String(creatorLevel.maxShots);
+        shotsInput.style.width = '90px';
+        shotsInput.title = 'Max shots';
+        shotsInput.addEventListener('change', () => {
+            creatorLevel.maxShots = Math.max(1, parseInt(shotsInput.value, 10) || 1);
+            refreshCreatorScene(state === 'creator' ? 'creator' : 'aiming');
+        });
+
+        const orbCountInput = document.createElement('input');
+        orbCountInput.type = 'number';
+        orbCountInput.min = '1';
+        orbCountInput.max = '9';
+        orbCountInput.value = String(normalizeSpecialLauncherOrbCount(creatorLevel.launcher.orbCount));
+        orbCountInput.style.width = '110px';
+        orbCountInput.title = 'Special launcher orbs per click (1-99)';
+        orbCountInput.addEventListener('change', () => {
+            creatorLevel.launcher.orbCount = normalizeSpecialLauncherOrbCount(orbCountInput.value);
+            orbCountInput.value = String(creatorLevel.launcher.orbCount);
+            refreshCreatorScene(state === 'creator' ? 'creator' : 'aiming');
+        });
+
+        const playBtn = document.createElement('button');
+        playBtn.textContent = 'Play Test';
+        playBtn.addEventListener('click', () => {
+            if (state === 'creator') {
+                refreshCreatorScene('aiming');
+                playBtn.textContent = 'Back To Edit';
+            } else {
+                refreshCreatorScene('creator');
+                playBtn.textContent = 'Play Test';
+            }
+        });
+
+        const undoBtn = document.createElement('button');
+        undoBtn.textContent = 'Undo Last';
+        undoBtn.addEventListener('click', () => {
+            if (creatorLevel.features.length > 0) {
+                creatorLevel.features.pop();
+                creatorDirty = true;
+                refreshCreatorScene('creator');
+            } else if (creatorLevel.targets.length > 0) {
+                creatorLevel.targets.pop();
+                creatorDirty = true;
+                refreshCreatorScene('creator');
+            }
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = 'Clear';
+        clearBtn.addEventListener('click', () => {
+            creatorLevel.targets = [];
+            creatorLevel.features = [];
+            creatorPortalStart = null;
+            creatorDragStart = null;
+            creatorTubeDraft = null;
+            creatorDirty = true;
+            refreshCreatorScene('creator');
+        });
+
+        const exportBtn = document.createElement('button');
+        exportBtn.textContent = 'Export JSON';
+        exportBtn.addEventListener('click', exportCreatorLevel);
+
+        controls.appendChild(shotsInput);
+        controls.appendChild(orbCountInput);
+        controls.appendChild(playBtn);
+        controls.appendChild(undoBtn);
+        controls.appendChild(clearBtn);
+        controls.appendChild(exportBtn);
+
+        refreshCreatorScene('creator');
+    }
+
     // Input
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
         mousePos.x = e.clientX - rect.left;
         mousePos.y = e.clientY - rect.top;
+
+        if (creatorMode && state === 'creator' && creatorTool === 'tube' && creatorTubeDraft) {
+            const last = creatorTubeDraft[creatorTubeDraft.length - 1];
+            const d = Math.hypot(mousePos.x - last.x, mousePos.y - last.y);
+            if (d >= 6) {
+                creatorTubeDraft.push({ x: mousePos.x, y: mousePos.y });
+            }
+        }
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!creatorMode || state !== 'creator') return;
+        if (creatorTool === 'wall' || creatorTool === 'duplicatorWall' || creatorTool === 'dangerWall' || creatorTool === 'orbCatcher' || creatorTool === 'obstacle') {
+            const rect = canvas.getBoundingClientRect();
+            creatorDragStart = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        } else if (creatorTool === 'tube') {
+            const rect = canvas.getBoundingClientRect();
+            creatorTubeDraft = [{
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            }];
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (!creatorMode || state !== 'creator') return;
+        if (creatorTool === 'tube' && creatorTubeDraft) {
+            finalizeTubeDraft();
+            return;
+        }
+        if (!creatorDragStart) return;
+        const rect = canvas.getBoundingClientRect();
+        finalizeCreatorDrag(e.clientX - rect.left, e.clientY - rect.top);
     });
 
     canvas.addEventListener('click', (e) => {
-        if (state === 'aiming') {
-            shoot();
+        if (creatorMode && state === 'creator') {
+            const rect = canvas.getBoundingClientRect();
+            placeCreatorClick(e.clientX - rect.left, e.clientY - rect.top);
+            return;
         }
+        shoot();
     });
 
     // Keyboard
@@ -1167,7 +3033,8 @@
 
     // Game loop
     function gameLoop() {
-        updateObstacles();
+        if (inspectorMode) return;
+        if (state !== 'creator') updateObstacles();
         if (state === 'shooting') {
             updateBall();
         }
@@ -1177,8 +3044,21 @@
     }
 
     // Start
-    loadLevel(0);
-    gameLoop();
+    currentLevel = parseUrlOptions();
+    initGlobalModeSwitcher();
+    if (menuMode) {
+        loadLevel(currentLevel);
+        initModeMenu();
+        gameLoop();
+    } else if (inspectorMode) {
+        initInspectorMode();
+    } else if (creatorMode) {
+        initCreatorMode();
+        gameLoop();
+    } else {
+        loadLevel(currentLevel);
+        gameLoop();
+    }
     </script>
 </body>
 </html>
