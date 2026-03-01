@@ -342,7 +342,6 @@
 
     let inspectorMode = false;
     let creatorMode = false;
-    let menuMode = false;
     let inspectorStartLevel = 1;
     let creatorLevel = null;
     let creatorTool = 'target';
@@ -407,7 +406,6 @@
 
             inspectorMode = mode === 'inspector';
             creatorMode = mode === 'creator';
-            menuMode = mode === 'menu' || (mode === '' && levelParam === null && idxParam === null);
 
             if (levelParam !== null) {
                 return Math.max(0, levelParam - 1);
@@ -443,7 +441,7 @@
                 params.set('inspectorStart', levelValue);
             }
 
-            if (mode === 'creator' && !creatorMode && !inspectorMode && !menuMode) {
+            if (mode === 'creator' && !creatorMode && !inspectorMode) {
                 try {
                     sessionStorage.setItem(CREATOR_SNAPSHOT_KEY, JSON.stringify(getCurrentSceneLevelConfig()));
                     params.set('editCurrent', '1');
@@ -459,19 +457,6 @@
             const params = new URLSearchParams();
             params.set('level', String(levelNumber));
             this.appendProceduralParams(params);
-            this.navigateWithParams(params);
-        }
-
-        navigateFromMenu(mode, levelNumber) {
-            const params = new URLSearchParams();
-            params.set('mode', mode);
-
-            if (mode === 'inspector') {
-                params.set('inspectorStart', String(levelNumber));
-            } else {
-                params.set('level', String(levelNumber));
-            }
-
             this.navigateWithParams(params);
         }
     }
@@ -545,8 +530,7 @@
         const modes = [
             { id: 'play', label: 'Play' },
             { id: 'inspector', label: 'Inspector' },
-            { id: 'creator', label: 'Edit' },
-            { id: 'menu', label: 'Menu' }
+            { id: 'creator', label: 'Edit' }
         ];
 
         for (const mode of modes) {
@@ -555,10 +539,9 @@
             btn.textContent = mode.label;
 
             const isActive =
-                (mode.id === 'play' && !inspectorMode && !creatorMode && !menuMode) ||
+                (mode.id === 'play' && !inspectorMode && !creatorMode) ||
                 (mode.id === 'inspector' && inspectorMode) ||
-                (mode.id === 'creator' && creatorMode) ||
-                (mode.id === 'menu' && menuMode);
+                (mode.id === 'creator' && creatorMode);
 
             if (isActive) btn.classList.add('active');
             btn.addEventListener('click', () => goToMode(mode.id));
@@ -2781,53 +2764,6 @@
         renderInspector();
     }
 
-    function initModeMenu() {
-        state = 'menu';
-        ui.setTitle('Bouncing Ball');
-
-        const controls = document.getElementById('controls');
-        controls.innerHTML = '';
-
-        const levelInput = document.createElement('input');
-        levelInput.type = 'number';
-        levelInput.min = '1';
-        levelInput.value = String(currentLevel + 1);
-        levelInput.style.width = '90px';
-        levelInput.title = 'Start level';
-
-        const playBtn = document.createElement('button');
-        playBtn.textContent = 'Play';
-        playBtn.addEventListener('click', () => {
-            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
-            urlStateService.navigateFromMenu('play', levelNumber);
-        });
-
-        const inspectorBtn = document.createElement('button');
-        inspectorBtn.textContent = 'Inspector';
-        inspectorBtn.addEventListener('click', () => {
-            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
-            urlStateService.navigateFromMenu('inspector', levelNumber);
-        });
-
-        const creatorBtn = document.createElement('button');
-        creatorBtn.textContent = 'Edit';
-        creatorBtn.addEventListener('click', () => {
-            const levelNumber = Math.max(1, parseInt(levelInput.value, 10) || 1);
-            urlStateService.navigateFromMenu('creator', levelNumber);
-        });
-
-        const help = document.createElement('span');
-        help.textContent = 'Choose a mode and starting level';
-        help.style.fontSize = '12px';
-        help.style.color = '#9cc4d3';
-
-        controls.appendChild(levelInput);
-        controls.appendChild(playBtn);
-        controls.appendChild(inspectorBtn);
-        controls.appendChild(creatorBtn);
-        controls.appendChild(help);
-    }
-
     function cloneCreatorLevel(level) {
         return {
             launcher: {
@@ -3468,12 +3404,70 @@
     const renderer = new GameRenderer();
     engine = new GameEngine(renderer, levelManager, levelService);
 
+    function cleanupModeArtifacts() {
+        const inspectorGrid = document.getElementById('inspectorGrid');
+        if (inspectorGrid) inspectorGrid.remove();
+
+        const creatorSidebar = document.getElementById('creatorToolSidebar');
+        if (creatorSidebar) creatorSidebar.remove();
+
+        document.body.style.overflow = 'hidden';
+    }
+
+    class BaseModeController {
+        constructor(context) {
+            this.context = context;
+        }
+
+        enter() {
+        }
+
+        handleAction() {
+            return false;
+        }
+
+        update() {
+        }
+
+        exit() {
+            cleanupModeArtifacts();
+        }
+    }
+
+    class PlayModeController extends BaseModeController {
+        enter() {
+            this.context.engine.loadLevel(currentLevel);
+            ui.setTitle('Bouncing Ball');
+        }
+    }
+
+    class InspectorModeController extends BaseModeController {
+        enter() {
+            initInspectorMode();
+        }
+    }
+
+    class CreatorModeController extends BaseModeController {
+        enter() {
+            initCreatorMode();
+        }
+    }
+
     class AppController {
         constructor({ engine }) {
             this.engine = engine;
             this.mode = 'play';
+            this.activeModeController = null;
             this.loopRunning = false;
+            this.modeControllers = {
+                play: new PlayModeController({ engine: this.engine }),
+                inspector: new InspectorModeController({ engine: this.engine }),
+                creator: new CreatorModeController({ engine: this.engine })
+            };
             this.boundFrame = () => {
+                if (this.activeModeController && typeof this.activeModeController.update === 'function') {
+                    this.activeModeController.update();
+                }
                 this.engine.tick();
                 requestAnimationFrame(this.boundFrame);
             };
@@ -3605,28 +3599,21 @@
         }
 
         resolveModeFromFlags() {
-            if (menuMode) return 'menu';
             if (inspectorMode) return 'inspector';
             if (creatorMode) return 'creator';
             return 'play';
         }
 
         switchMode(nextMode) {
+            if (this.activeModeController && typeof this.activeModeController.exit === 'function') {
+                this.activeModeController.exit();
+            }
+
             this.mode = nextMode;
-            if (nextMode === 'menu') {
-                this.engine.loadLevel(currentLevel);
-                initModeMenu();
-                return;
+            this.activeModeController = this.modeControllers[nextMode] || this.modeControllers.play;
+            if (this.activeModeController && typeof this.activeModeController.enter === 'function') {
+                this.activeModeController.enter({ mode: nextMode });
             }
-            if (nextMode === 'inspector') {
-                initInspectorMode();
-                return;
-            }
-            if (nextMode === 'creator') {
-                initCreatorMode();
-                return;
-            }
-            this.engine.loadLevel(currentLevel);
         }
 
         startLoop() {
