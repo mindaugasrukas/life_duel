@@ -3315,11 +3315,6 @@
             draw();
         }
 
-        runFrame() {
-            this.tick();
-            requestAnimationFrame(() => this.runFrame());
-        }
-
         shoot() {
             shoot();
         }
@@ -3327,27 +3322,59 @@
 
     const engine = new GameEngine();
 
-    // Game loop
-    function gameLoop() {
-        engine.runFrame();
+    class AppController {
+        constructor({ engine }) {
+            this.engine = engine;
+            this.mode = 'play';
+            this.loopRunning = false;
+            this.boundFrame = () => {
+                this.engine.tick();
+                requestAnimationFrame(this.boundFrame);
+            };
+        }
+
+        bootstrap() {
+            currentLevel = parseUrlOptions();
+            this.mode = this.resolveModeFromFlags();
+            initGlobalModeSwitcher();
+            this.switchMode(this.mode);
+            this.startLoop();
+        }
+
+        resolveModeFromFlags() {
+            if (menuMode) return 'menu';
+            if (inspectorMode) return 'inspector';
+            if (creatorMode) return 'creator';
+            return 'play';
+        }
+
+        switchMode(nextMode) {
+            this.mode = nextMode;
+            if (nextMode === 'menu') {
+                loadLevel(currentLevel);
+                initModeMenu();
+                return;
+            }
+            if (nextMode === 'inspector') {
+                initInspectorMode();
+                return;
+            }
+            if (nextMode === 'creator') {
+                initCreatorMode();
+                return;
+            }
+            loadLevel(currentLevel);
+        }
+
+        startLoop() {
+            if (this.loopRunning || this.mode === 'inspector') return;
+            this.loopRunning = true;
+            this.boundFrame();
+        }
     }
 
-    // Start
-    currentLevel = parseUrlOptions();
-    initGlobalModeSwitcher();
-    if (menuMode) {
-        loadLevel(currentLevel);
-        initModeMenu();
-        gameLoop();
-    } else if (inspectorMode) {
-        initInspectorMode();
-    } else if (creatorMode) {
-        initCreatorMode();
-        gameLoop();
-    } else {
-        loadLevel(currentLevel);
-        gameLoop();
-    }
+    const app = new AppController({ engine });
+    app.bootstrap();
     </script>
 </body>
 </html>
