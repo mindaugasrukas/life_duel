@@ -1602,11 +1602,45 @@
         };
     }
 
-    class LevelManager {
+    class LevelService {
         getLevel(idx) {
-            const levelDef = idx < levels.length ? levels[idx] : generateLevel(idx);
-            const resolved = resolveLevelDefinition(levelDef, idx);
-            return normalizeLevelConfig(resolved);
+            const levelDef = idx < levels.length ? levels[idx] : this.generateLevel(idx);
+            const resolved = this.resolveLevelDefinition(levelDef, idx);
+            return this.normalizeLevelConfig(resolved);
+        }
+
+        getLevelSnapshot(idx) {
+            const level = this.getLevel(idx);
+            return {
+                launcher: { ...level.launcher },
+                maxShots: level.maxShots,
+                targets: level.targets.map(t => ({ ...t })),
+                features: level.features.map(f => ({ ...f }))
+            };
+        }
+
+        generateLevel(idx) {
+            return generateLevel(idx);
+        }
+
+        resolveLevelDefinition(levelDef, fallbackIdx) {
+            return resolveLevelDefinition(levelDef, fallbackIdx);
+        }
+
+        normalizeLevelConfig(level) {
+            return normalizeLevelConfig(level);
+        }
+    }
+
+    const levelService = new LevelService();
+
+    class LevelManager {
+        constructor(levelServiceInstance) {
+            this.levelService = levelServiceInstance;
+        }
+
+        getLevel(idx) {
+            return this.levelService.getLevel(idx);
         }
 
         applyLevelConfig(level, mode = 'aiming') {
@@ -1654,10 +1688,14 @@
         }
     }
 
-    const levelManager = new LevelManager();
+    const levelManager = new LevelManager(levelService);
 
     function getLevel(idx) {
         return levelManager.getLevel(idx);
+    }
+
+    function getLevelSnapshot(idx) {
+        return levelService.getLevelSnapshot(idx);
     }
 
     function applyLevelConfig(level, mode = 'aiming') {
@@ -2752,7 +2790,7 @@
     }
 
     function refreshCreatorScene(mode = 'creator') {
-        applyLevelConfig(normalizeLevelConfig(creatorLevel), mode);
+        applyLevelConfig(levelService.normalizeLevelConfig(creatorLevel), mode);
         ui.setLevel('C');
     }
 
@@ -3184,7 +3222,7 @@
                 const raw = sessionStorage.getItem(CREATOR_SNAPSHOT_KEY);
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    creatorLevel = cloneCreatorLevel(normalizeLevelConfig(parsed));
+                    creatorLevel = cloneCreatorLevel(levelService.normalizeLevelConfig(parsed));
                     loadedFromSnapshot = true;
                 }
                 sessionStorage.removeItem(CREATOR_SNAPSHOT_KEY);
