@@ -611,6 +611,13 @@
     }
 
     class MovingObstacleFeature extends ObstacleFeature {
+        // Config shape:
+        //   x, y       — top-left position (pixels)
+        //   w, h       — width and height (pixels)
+        //   vy         — vertical speed in pixels/frame; positive = moving down,
+        //                negative = moving up, 0 = stationary (acts like a danger wall)
+        //   minY       — upper boundary the obstacle bounces off
+        //   maxY       — lower boundary (obstacle reverses when its top edge hits maxY)
         update() {
             if (this.vy === 0) return;
             this.y += this.vy;
@@ -985,7 +992,7 @@
                     { x: 300, y: 400, w: 20, h: 200 }
                 ],
                 obstacles: [
-                    { x: 400, y: 100, w: 30, h: 120, vy: 2, minY: 100, maxY: 380 }
+                    { x: 400, y: 100, w: 30, h: 120, vy: 1.2, minY: 100, maxY: 380 }
                 ],
                 portals: []
             },
@@ -1081,8 +1088,8 @@
                     { x: 650, y: 250, w: 24, h: 250 }
                 ],
                 obstacles: [
-                    { x: 225, y: 100, w: 25, h: 25, vy: 1.5, minY: 100, maxY: 475 },
-                    { x: 400, y: 300, w: 25, h: 25, vy: -1.5, minY: 100, maxY: 475 }
+                    { x: 225, y: 100, w: 25, h: 25, vy: 0.9, minY: 100, maxY: 475 },
+                    { x: 400, y: 300, w: 25, h: 25, vy: -0.9, minY: 100, maxY: 475 }
                 ],
                 portals: [
                     { x1: 750, y1: 550, x2: 50, y2: 300, radius: 22 }
@@ -1226,7 +1233,7 @@
             for (let i = 0; i < numObs; i++) {
                 const ox = margin + rng() * (W - margin * 2 - 30);
                 const oy = margin + rng() * (H / 2);
-                const spd = 1 + rng() * 1.5;
+                const spd = 0.6 + rng() * 0.9;
                 obs.push({ x: Math.round(ox), y: Math.round(oy), w: 28, h: 80 + rng() * 60, vy: rng() > 0.5 ? spd : -spd, minY: margin, maxY: H - margin - 80 });
             }
 
@@ -1443,7 +1450,7 @@
             const dx = s.mousePos.x - s.launcher.x;
             const dy = s.mousePos.y - s.launcher.y;
             let angle = Math.atan2(dy, dx);
-            let power = Math.min(Math.hypot(dx, dy) / 20, 18);
+            let power = Math.min(Math.hypot(dx, dy) / 25, 8);
             let orbCount = isSpecial ? normalizeSpecialLauncherOrbCount(s.launcher.orbCount) : 1;
 
             const launchContext = {
@@ -1629,7 +1636,7 @@
                 const speed = Math.hypot(b.vx, b.vy);
                 const substeps = Math.max(1, Math.ceil(speed / maxStep));
                 const dt = 1 / substeps;
-                const gravityPerStep = 0.04 * dt;
+                const gravityPerStep = 0.028 * dt;
 
                 for (let step = 0; step < substeps; step++) {
                     if (!b.alive || s.phase === 'won' || s.phase === 'lost') break;
@@ -1870,8 +1877,8 @@
                 const dx = s.mousePos.x - s.launcher.x;
                 const dy = s.mousePos.y - s.launcher.y;
                 const angle = Math.atan2(dy, dx);
-                const power = Math.min(Math.hypot(dx, dy) / 20, 18);
-                const len   = power * 12;
+                const power = Math.min(Math.hypot(dx, dy) / 25, 8);
+                const len   = power * 14;
 
                 ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)'; ctx.lineWidth = 1.5;
                 ctx.setLineDash([4, 8]);
@@ -1881,7 +1888,7 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                const powerPct = power / 18;
+                const powerPct = power / 8;
                 const bW = 60, bH = 4;
                 const bX = s.launcher.x - bW / 2, bY = s.launcher.y + 25;
                 ctx.fillStyle = 'rgba(255,255,255,0.1)';
@@ -2037,7 +2044,7 @@
             let pvx = Math.cos(angle) * power, pvy = Math.sin(angle) * power;
             ctx.fillStyle = 'rgba(0, 229, 255, 0.15)';
             for (let i = 0; i < 40; i++) {
-                pvy += 0.04; px += pvx; py += pvy;
+                pvy += 0.028; px += pvx; py += pvy;
                 if (px <= 0 || px >= cW) pvx *= -1;
                 if (py <= 0 || py >= cH) pvy *= -1;
                 px = Math.max(0, Math.min(cW, px));
