@@ -272,18 +272,18 @@
         const nx = dx / dist, ny = dy / dist;
         circle.x += nx * (overlap + 0.1);
         circle.y += ny * (overlap + 0.1);
+        const speedBefore = Math.hypot(circle.vx, circle.vy);
         const dot = circle.vx * nx + circle.vy * ny;
         if (dot < 0) {
-            const speedBefore = Math.hypot(circle.vx, circle.vy);
             circle.vx -= 2 * dot * nx;
             circle.vy -= 2 * dot * ny;
-            const speedAfter = Math.hypot(circle.vx, circle.vy);
-            const minRetainedSpeed = speedBefore * 0.96;
-            if (speedAfter > 0.0001 && speedAfter < minRetainedSpeed) {
-                const scale = minRetainedSpeed / speedAfter;
-                circle.vx *= scale; circle.vy *= scale;
-            }
             circle.vx *= 0.995; circle.vy *= 0.995;
+        }
+        // Always enforce minimum speed retention after collision (prevents corner energy drain)
+        const speedAfter = Math.hypot(circle.vx, circle.vy);
+        if (speedAfter > 0.0001 && speedAfter < speedBefore * 0.96) {
+            const scale = (speedBefore * 0.96) / speedAfter;
+            circle.vx *= scale; circle.vy *= scale;
         }
     }
 
@@ -363,6 +363,17 @@
         return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
     }
 
+    // Seeded random for reproducible procedural levels — takes config explicitly
+    function seededRandom(seed, lcgMultiplier, lcgModulus) {
+        let s = seed;
+        const mult = Math.max(2, Math.floor(lcgMultiplier));
+        const mod  = Math.max(3, Math.floor(lcgModulus));
+        return function() {
+            s = (s * mult + 0) % mod;
+            return (s - 1) / (mod - 1);
+        };
+    }
+
     // ─── Constants ───────────────────────────────────────────────────────────────
 
     const CREATOR_SNAPSHOT_KEY = 'ricochet_creator_snapshot';
@@ -378,6 +389,8 @@
         RESET_LEVEL:        'RESET_LEVEL',
         NEXT_LEVEL:         'NEXT_LEVEL'
     };
+
+    // ─── Core Game Feature System ────────────────────────────────────────────────
 
     class GameFeature {
         constructor(config = {}, plugin = null) {
@@ -664,26 +677,6 @@
 
             return null;
         }
-    }
-
-    function instantiateLevelFeatures(featuresConfig, featureRegistry, canvasWidth, canvasHeight) {
-        const instances = [];
-        for (const cfg of featuresConfig) {
-            const instance = featureRegistry.instantiate(cfg, { width: canvasWidth, height: canvasHeight });
-            if (instance) instances.push(instance);
-        }
-        return instances;
-    }
-
-    // Seeded random for reproducible procedural levels — takes config explicitly
-    function seededRandom(seed, lcgMultiplier, lcgModulus) {
-        let s = seed;
-        const mult = Math.max(2, Math.floor(lcgMultiplier));
-        const mod  = Math.max(3, Math.floor(lcgModulus));
-        return function() {
-            s = (s * mult + 0) % mod;
-            return (s - 1) / (mod - 1);
-        };
     }
 
     // ─── Level Service ────────────────────────────────────────────────────────────
@@ -1189,7 +1182,7 @@
 
             s.targets       = level.targets.map(t => ({ ...t, hit: false, alpha: 1, pulsePhase: Math.random() * Math.PI * 2 }));
             s.totalTargets  = s.targets.length;
-            s.levelFeatures = instantiateLevelFeatures(level.features, this._featureRegistry, this._canvas.width, this._canvas.height);
+            s.levelFeatures = this._instantiateLevelFeatures(level.features);
             this._syncFeatureBuckets();
 
             s.activeMaxShots      = level.maxShots;
@@ -1307,6 +1300,15 @@
                 activeMaxShots: 1, activeUnlimitedShots: false,
                 score: 0, maxBounces: 500, currentLevel: 0,
             };
+        }
+
+        _instantiateLevelFeatures(featuresConfig) {
+            const instances = [];
+            for (const cfg of featuresConfig) {
+                const instance = this._featureRegistry.instantiate(cfg, { width: this._canvas.width, height: this._canvas.height });
+                if (instance) instances.push(instance);
+            }
+            return instances;
         }
 
         _syncFeatureBuckets() {
@@ -2194,7 +2196,7 @@
                 for (let ln = start; ln < start + count; ln++) {
                     const idx = ln - 1;
                     const level = engine.getLevel(idx);
-                    const source = idx < LEVELS.length ? 'Defined' : `Seeded #${ln}`;
+                    const source = idx < LevelService._levels.length ? 'Defined' : `Seeded #${ln}`;
 
                     const card = document.createElement('article');
                     card.style.background = '#10182f'; card.style.border = '1px solid #23345f';
