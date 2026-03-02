@@ -435,9 +435,18 @@
     }
 
     class BallFeature extends GameFeature {
-        onBallStep() {
-            return null;
-        }
+        // Called each substep before movement. Modify ball.vx / ball.vy in place.
+        applyForces(ball, dt) {}
+
+        // Called in the multi-pass collision loop.
+        // ctx: { pass, prevX, prevY, solidResolved, availableSpawnSlots }
+        // Return null (no collision) or:
+        // { handled, bounce, solid, kill, killMessage, spawnBalls,
+        //   teleported, teleportParticlesAt, passThrough }
+        resolveCollision(ball, ctx) { return null; }
+
+        // Called once per substep after collision resolution.
+        onBallStep() { return null; }
     }
 
     class LauncherFeature extends GameFeature {
@@ -458,6 +467,14 @@
         resolveBallCollision(ballObj) {
             resolveRectCollision(ballObj, this);
         }
+
+        resolveCollision(ball, { pass, prevX, prevY }) {
+            const hitO = this.collidesWithBall(ball);
+            const hitP = pass === 0 && this.intersectsBallPath(prevX, prevY, ball);
+            if (!hitO && !hitP) return null;
+            this.resolveBallCollision(ball);
+            return { handled: true, bounce: true, solid: true };
+        }
     }
 
     class PluginBackedFeature extends BallFeature {
@@ -471,6 +488,19 @@
             if (this.plugin && this.plugin.draw) {
                 this.plugin.draw(this, context);
             }
+        }
+
+        applyForces(ball, dt) {
+            if (this.plugin && this.plugin.applyForces) {
+                this.plugin.applyForces(this, ball, dt);
+            }
+        }
+
+        resolveCollision(ball, ctx) {
+            if (this.plugin && this.plugin.resolveCollision) {
+                return this.plugin.resolveCollision(this, ball, ctx) || null;
+            }
+            return null;
         }
 
         onBallStep(context) {
@@ -534,15 +564,74 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(this.x, this.y, this.w, this.h);
         }
+
+        resolveCollision(ball, { pass, prevX, prevY, availableSpawnSlots }) {
+            const hitO = this.collidesWithBall(ball);
+            const hitP = pass === 0 && this.intersectsBallPath(prevX, prevY, ball);
+            if (!hitO && !hitP) return null;
+            this.resolveBallCollision(ball);
+            const result = { handled: true, bounce: true, solid: true, spawnBalls: [] };
+            if ((ball.dupCooldown || 0) <= 0 && availableSpawnSlots > 0) {
+                const spd = Math.hypot(ball.vx, ball.vy);
+                const baseA = Math.atan2(ball.vy, ball.vx);
+                const jitter = (Math.random() * 0.24) - 0.12;
+                result.spawnBalls.push({
+                    x: ball.x, y: ball.y,
+                    vx: Math.cos(baseA + jitter) * spd,
+                    vy: Math.sin(baseA + jitter) * spd,
+                    radius: ball.radius, alive: true,
+                    portalCooldown: ball.portalCooldown || 0,
+                    bounceCount: ball.bounceCount, slowFrames: 0, dupCooldown: 14
+                });
+                ball.dupCooldown = 10;
+            }
+            return result;
+        }
     }
 
     class DangerWallFeature extends ObstacleFeature {
+        resolveCollision(ball, { pass, prevX, prevY, solidResolved }) {
+            const hitO = this.collidesWithBall(ball);
+            const hitP = !solidResolved && pass === 0 && this.intersectsBallPath(prevX, prevY, ball);
+            if (!hitO && !hitP) return null;
+            return { handled: true, kill: true, killMessage: 'Danger!' };
+        }
     }
 
     class MovingObstacleFeature extends ObstacleFeature {
+        resolveCollision(ball, { pass, prevX, prevY, solidResolved }) {
+            const hitO = this.collidesWithBall(ball);
+            const hitP = !solidResolved && pass === 0 && this.intersectsBallPath(prevX, prevY, ball);
+            if (!hitO && !hitP) return null;
+            return { handled: true, kill: true, killMessage: 'Danger!' };
+        }
     }
 
     class PortalFeature extends BallFeature {
+        resolveCollision(ball, { pass }) {
+            if (pass !== 0) return null;
+            const inZone =
+                Math.hypot(ball.x - this.x1, ball.y - this.y1) < this.radius * 1.5 ||
+                Math.hypot(ball.x - this.x2, ball.y - this.y2) < this.radius * 1.5;
+            if (!inZone) return null;
+
+            if ((ball.portalCooldown || 0) <= 0) {
+                const d1 = Math.hypot(ball.x - this.x1, ball.y - this.y1);
+                if (d1 < this.radius) {
+                    ball.x = this.x2; ball.y = this.y2;
+                    ball.portalCooldown = Math.ceil(this.radius * 2 / 2) + 5;
+                    return { handled: true, teleported: true, teleportParticlesAt: { x: this.x2, y: this.y2 } };
+                }
+                const d2 = Math.hypot(ball.x - this.x2, ball.y - this.y2);
+                if (d2 < this.radius) {
+                    ball.x = this.x1; ball.y = this.y1;
+                    ball.portalCooldown = Math.ceil(this.radius * 2 / 2) + 5;
+                    return { handled: true, teleported: true, teleportParticlesAt: { x: this.x1, y: this.y1 } };
+                }
+            }
+            // In extended zone but not at teleport threshold — suppress solid collision
+            return { handled: true, passThrough: true };
+        }
     }
 
     class OrbCatcherFeature extends ObstacleFeature {
@@ -554,9 +643,29 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(this.x, this.y, this.w, this.h);
         }
+
+        resolveCollision(ball, { pass, prevX, prevY }) {
+            const hitO = this.collidesWithBall(ball);
+            const hitP = pass === 0 && this.intersectsBallPath(prevX, prevY, ball);
+            if (!hitO && !hitP) return null;
+            return { handled: true, kill: true, killMessage: 'Caught!' };
+        }
     }
 
     class GravityWellFeature extends BallFeature {
+        applyForces(ball, dt) {
+            const dxg = this.x - ball.x, dyg = this.y - ball.y;
+            const distSq = dxg * dxg + dyg * dyg;
+            if (distSq < 1) return;
+            const dist = Math.sqrt(distSq);
+            const radius = Math.max(20, this.radius || 120);
+            if (dist > radius) return;
+            const influence = 1 - (dist / radius);
+            const accelMag = ((this.strength || 12000) * (0.35 + influence * 1.35)) / Math.max(40, distSq);
+            ball.vx += (dxg / dist) * accelMag * dt;
+            ball.vy += (dyg / dist) * accelMag * dt;
+        }
+
         draw({ ctx, time }) {
             const pulse = 0.7 + Math.sin(time * 3.5) * 0.2;
             const r = this.radius || 120;
@@ -1489,28 +1598,21 @@
 
                     if (b.tubeTransit) { this._advanceBallTubeTransit(b, dt); continue; }
                     if (b.dupCooldown > 0) b.dupCooldown--;
+                    if (b.portalCooldown > 0) b.portalCooldown--;
 
                     const prevX = b.x, prevY = b.y;
 
-                    // Gravity wells
-                    for (const gw of s.gravityWells) {
-                        const dxg = gw.x - b.x, dyg = gw.y - b.y;
-                        const distSq = dxg * dxg + dyg * dyg;
-                        if (distSq < 1) continue;
-                        const dist = Math.sqrt(distSq);
-                        const radius = Math.max(20, gw.radius || 120);
-                        if (dist > radius) continue;
-                        const influence = 1 - (dist / radius);
-                        const accelMag = ((gw.strength || 12000) * (0.35 + influence * 1.35)) / Math.max(40, distSq);
-                        b.vx += (dxg / dist) * accelMag * dt;
-                        b.vy += (dyg / dist) * accelMag * dt;
+                    // 1. Feature forces (gravity wells, etc.)
+                    for (const f of s.levelFeatures) {
+                        if (f.applyForces) f.applyForces(b, dt);
                     }
 
+                    // 2. Physics step
                     b.vy += gravityPerStep;
                     b.x += b.vx * dt;
                     b.y += b.vy * dt;
 
-                    // Canvas edges
+                    // 3. Canvas edge bouncing (engine-owned)
                     if (b.x - b.radius <= 0) {
                         b.x = b.radius; b.vx = Math.abs(b.vx) * 0.98;
                         b.bounceCount++; this._spawnBounceParticles(b.x, b.y);
@@ -1526,90 +1628,45 @@
                         b.bounceCount++; this._spawnBounceParticles(b.x, b.y);
                     }
 
-                    // Portals
-                    if (b.portalCooldown > 0) {
-                        b.portalCooldown--;
-                    } else {
-                        let teleported = false;
-                        for (const p of s.portals) {
-                            const d1 = Math.hypot(b.x - p.x1, b.y - p.y1);
-                            if (d1 < p.radius) {
-                                b.x = p.x2; b.y = p.y2;
-                                b.portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
-                                this._spawnPortalParticles(p.x2, p.y2);
-                                teleported = true; break;
+                    // 4. Feature collision passes
+                    const collCtx = {
+                        prevX, prevY,
+                        solidResolved: false,
+                        availableSpawnSlots: maxActiveOrbs - s.balls.length - spawnedBalls.length
+                    };
+                    let solidBounced = false;
+                    let teleported = false;
+                    let collisionDone = false;
+
+                    for (let pass = 0; pass < 3 && !collisionDone; pass++) {
+                        collCtx.pass = pass;
+                        let anyHandled = false;
+                        for (const f of s.levelFeatures) {
+                            const r = f.resolveCollision ? f.resolveCollision(b, collCtx) : null;
+                            if (!r || !r.handled) continue;
+                            anyHandled = true;
+                            if (r.spawnBalls && r.spawnBalls.length) spawnedBalls.push(...r.spawnBalls);
+                            if (r.bounce) { solidBounced = true; this._spawnBounceParticles(b.x, b.y); }
+                            if (r.solid) collCtx.solidResolved = true;
+                            if (r.kill) {
+                                b.alive = false;
+                                this._handleLose(b.x, b.y, r.killMessage || 'Danger!', 1500);
+                                collisionDone = true; break;
                             }
-                            const d2 = Math.hypot(b.x - p.x2, b.y - p.y2);
-                            if (d2 < p.radius) {
-                                b.x = p.x1; b.y = p.y1;
-                                b.portalCooldown = Math.ceil(p.radius * 2 / maxStep) + 5;
-                                this._spawnPortalParticles(p.x1, p.y1);
-                                teleported = true; break;
+                            if (r.teleported) {
+                                this._spawnPortalParticles(r.teleportParticlesAt.x, r.teleportParticlesAt.y);
+                                teleported = true; collisionDone = true; break;
                             }
+                            if (r.passThrough) { collisionDone = true; break; }
                         }
-                        if (teleported) continue;
+                        if (!anyHandled) break;
                     }
 
-                    let inPortalZone = false;
-                    for (const p of s.portals) {
-                        if (Math.hypot(b.x - p.x1, b.y - p.y1) < p.radius * 1.5 ||
-                            Math.hypot(b.x - p.x2, b.y - p.y2) < p.radius * 1.5) {
-                            inPortalZone = true; break;
-                        }
-                    }
+                    if (!b.alive || s.phase === 'lost') break;
+                    if (solidBounced) b.bounceCount++;
+                    if (teleported) continue; // skip rest of substep
 
-                    let resolvedSolidThisStep = false;
-                    if (!inPortalZone) {
-                        let wallBounced = false;
-                        for (let pass = 0; pass < 3; pass++) {
-                            let collided = false;
-                            for (const w of s.walls) {
-                                const hitO = w.collidesWithBall(b);
-                                const hitS = pass === 0 && w.intersectsBallPath(prevX, prevY, b);
-                                if (hitO || hitS) {
-                                    w.resolveBallCollision(b);
-                                    this._spawnBounceParticles(b.x, b.y);
-                                    collided = wallBounced = resolvedSolidThisStep = true;
-                                }
-                            }
-                            if (!collided) break;
-                        }
-                        if (wallBounced) b.bounceCount++;
-                    }
-
-                    if (!inPortalZone) {
-                        let dupBounced = false;
-                        for (let pass = 0; pass < 2; pass++) {
-                            let collided = false;
-                            for (const w of s.duplicatorWalls) {
-                                const hitO = w.collidesWithBall(b);
-                                const hitS = pass === 0 && w.intersectsBallPath(prevX, prevY, b);
-                                if (hitO || hitS) {
-                                    w.resolveBallCollision(b);
-                                    this._spawnBounceParticles(b.x, b.y);
-                                    collided = dupBounced = resolvedSolidThisStep = true;
-                                    if ((b.dupCooldown || 0) <= 0 && s.balls.length + spawnedBalls.length < maxActiveOrbs) {
-                                        const spd2 = Math.hypot(b.vx, b.vy);
-                                        const baseA = Math.atan2(b.vy, b.vx);
-                                        const jitter = (Math.random() * 0.24) - 0.12;
-                                        spawnedBalls.push({
-                                            x: b.x, y: b.y,
-                                            vx: Math.cos(baseA + jitter) * spd2,
-                                            vy: Math.sin(baseA + jitter) * spd2,
-                                            radius: b.radius, alive: true,
-                                            portalCooldown: b.portalCooldown || 0,
-                                            bounceCount: b.bounceCount, slowFrames: 0, dupCooldown: 14
-                                        });
-                                        b.dupCooldown = 10;
-                                    }
-                                }
-                            }
-                            if (!collided) break;
-                        }
-                        if (dupBounced) b.bounceCount++;
-                    }
-
-                    // Orb-to-orb
+                    // 5. Orb-to-orb (engine physics)
                     if (!b.tubeTransit) {
                         for (let j = i + 1; j < s.balls.length; j++) {
                             const ob = s.balls[j];
@@ -1621,38 +1678,7 @@
                         }
                     }
 
-                    // Orb catcher
-                    let caughtOrb = false;
-                    for (const catcher of s.orbCatchers) {
-                        if (catcher.collidesWithBall(b) || catcher.intersectsBallPath(prevX, prevY, b)) {
-                            b.alive = false; this._spawnDangerParticles(b.x, b.y);
-                            caughtOrb = true; break;
-                        }
-                    }
-                    if (caughtOrb) break;
-
-                    // Danger + moving obstacles
-                    let hitDanger = false;
-                    for (const dw of s.dangerWalls) {
-                        const hit = resolvedSolidThisStep
-                            ? dw.collidesWithBall(b)
-                            : (dw.collidesWithBall(b) || dw.intersectsBallPath(prevX, prevY, b));
-                        if (hit) { hitDanger = true; break; }
-                    }
-                    if (!hitDanger) {
-                        for (const o of s.obstacles) {
-                            const hit = resolvedSolidThisStep
-                                ? o.collidesWithBall(b)
-                                : (o.collidesWithBall(b) || o.intersectsBallPath(prevX, prevY, b));
-                            if (hit) { hitDanger = true; break; }
-                        }
-                    }
-                    if (hitDanger) {
-                        b.alive = false;
-                        this._handleLose(b.x, b.y, 'Danger!', 1500);
-                    }
-                    if (!b.alive || s.phase === 'lost') break;
-
+                    // 6. onBallStep hooks (TubeFeature, etc.)
                     const pluginResult = this._runFeatureBallStepHooks({
                         ball: b, prevX, prevY, state: s.phase,
                         canvas: this._canvas, particles: s.particles,
@@ -1665,7 +1691,7 @@
                     }
                     if (!b.alive || s.phase === 'lost') break;
 
-                    // Target collision
+                    // 7. Target collision (engine win condition)
                     for (const t of s.targets) {
                         if (t.hit) continue;
                         if (Math.hypot(b.x - t.x, b.y - t.y) < t.radius + b.radius) {
