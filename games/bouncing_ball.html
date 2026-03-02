@@ -258,6 +258,7 @@
         const dx = circle.x - cx, dy = circle.y - cy;
         const dist = Math.hypot(dx, dy);
         if (dist === 0) {
+            // Ball center is fully inside the rect — push out through nearest face
             const leftDist  = circle.x - rect.x,  rightDist = (rect.x + rect.w) - circle.x;
             const topDist   = circle.y - rect.y,  botDist   = (rect.y + rect.h) - circle.y;
             const minDist   = Math.min(leftDist, rightDist, topDist, botDist);
@@ -269,9 +270,35 @@
             return;
         }
         const overlap = circle.radius - dist;
-        const nx = dx / dist, ny = dy / dist;
-        circle.x += nx * (overlap + 0.1);
-        circle.y += ny * (overlap + 0.1);
+        if (overlap <= 0) return;
+
+        // Detect corner hit: closest point is exactly a rect vertex (both x and y are clamped).
+        // Reflecting off the diagonal corner normal can trap the ball — it bounces repeatedly in
+        // the corner as gravity pulls it back. Instead, pick the face the ball arrived from based
+        // on its dominant velocity axis, giving a clean axis-aligned deflection.
+        const onCornerX = (cx === rect.x || cx === rect.x + rect.w);
+        const onCornerY = (cy === rect.y || cy === rect.y + rect.h);
+
+        let nx, ny;
+        if (onCornerX && onCornerY) {
+            if (Math.abs(circle.vx) >= Math.abs(circle.vy)) {
+                // Ball travelling more horizontally — bounce off vertical (side) face
+                nx = cx === rect.x ? -1 : 1;
+                ny = 0;
+                circle.x = cx + nx * (circle.radius + 0.1);
+            } else {
+                // Ball travelling more vertically — bounce off horizontal (top/bottom) face
+                nx = 0;
+                ny = cy === rect.y ? -1 : 1;
+                circle.y = cy + ny * (circle.radius + 0.1);
+            }
+        } else {
+            nx = dx / dist;
+            ny = dy / dist;
+            circle.x += nx * (overlap + 0.1);
+            circle.y += ny * (overlap + 0.1);
+        }
+
         const speedBefore = Math.hypot(circle.vx, circle.vy);
         const dot = circle.vx * nx + circle.vy * ny;
         if (dot < 0) {
@@ -279,7 +306,7 @@
             circle.vy -= 2 * dot * ny;
             circle.vx *= 0.995; circle.vy *= 0.995;
         }
-        // Always enforce minimum speed retention after collision (prevents corner energy drain)
+        // Always enforce minimum speed retention after any collision
         const speedAfter = Math.hypot(circle.vx, circle.vy);
         if (speedAfter > 0.0001 && speedAfter < speedBefore * 0.96) {
             const scale = (speedBefore * 0.96) / speedAfter;
